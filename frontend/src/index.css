@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #264c99;
+  --color-primary-hover: #1e3c7a;
+  --color-primary-light: #e8eef7;
+  --color-secondary: #4a6fad;
+  --color-secondary-light: #edf2fb;
+  --color-tertiary: #A4636E;
+  --color-tertiary-light: #f5e8ea;
+  --color-neutral: #757874;
+  --color-neutral-light: #f0f4fb;
+  --color-bg: #f0f4fb;
+  --font-family-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+}

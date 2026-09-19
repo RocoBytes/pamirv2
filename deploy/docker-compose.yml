@@ -1,0 +1,46 @@
+# Stack de producción de Pamir en el VPS (Contabo).
+# Copia canónica en el repo; el workflow de deploy la sincroniza a /opt/pamir/.
+# La base de datos NO vive aquí: es Neon.tech, vía DATABASE_URL en /opt/pamir/.env.
+name: pamir
+
+services:
+  nginx:
+    image: ghcr.io/rocobytes/pamir-frontend:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Certificado de origen de Cloudflare (origin.pem / origin.key).
+      - /opt/pamir/certs:/etc/nginx/certs:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [pamir]
+
+  backend:
+    image: ghcr.io/rocobytes/pamir-backend:latest
+    restart: unless-stopped
+    env_file: /opt/pamir/.env
+    # Publicación SOLO en localhost: el crontab del host llama a
+    # check-alertas sin que el secreto transite por internet ni por nginx.
+    # El backend NO es accesible públicamente; nginx llega por la red interna.
+    ports:
+      - "127.0.0.1:3001:3001"
+    # El backend no escribe en disco (uploads van por stream a Google Drive).
+    read_only: true
+    tmpfs: [/tmp]
+    networks: [pamir]
+
+  # Migraciones one-shot. Nunca arranca con `up -d` (gateado por profile).
+  # El deploy lo ejecuta explícitamente: docker compose run --rm migrate
+  migrate:
+    image: ghcr.io/rocobytes/pamir-backend:latest
+    profiles: [ops]
+    env_file: /opt/pamir/.env
+    command: ["npx", "prisma", "migrate", "deploy"]
+    networks: [pamir]
+
+# Exactamente UNA réplica de backend, siempre: el rate limiting es en memoria.
+networks:
+  pamir: {}

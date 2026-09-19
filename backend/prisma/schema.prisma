@@ -1,0 +1,489 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum SalidaStatus {
+  BORRADOR
+  CONFIRMADA
+  EN_CURSO
+  COMPLETADA
+  CANCELADA
+  INCIDENTE
+}
+
+enum RolUsuario {
+  SOCIO
+  ADMIN
+}
+
+enum EstadoEvento {
+  BORRADOR
+  PUBLICADO
+  FINALIZADO
+  CANCELADO
+}
+
+enum EstadoInscripcion {
+  POSTULADO
+  RETIRADO
+  SELECCIONADO
+  NO_SELECCIONADO
+}
+
+enum TipoNotificacion {
+  INSCRIPCION_CONFIRMADA
+  SELECCIONADO
+  NO_SELECCIONADO
+  EVENTO_CANCELADO
+}
+
+enum EstadoNotificacion {
+  PENDIENTE
+  ENVIADA
+  ERROR
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  name              String
+  picture           String?
+  passwordHash      String?   @map("password_hash")
+  emailVerified     Boolean   @default(false) @map("email_verified")
+  verificationToken       String?   @unique @map("verification_token")
+  verificationTokenExpiry DateTime? @map("verification_token_expiry")
+  resetToken              String?   @unique @map("reset_token")
+  resetTokenExpiry        DateTime? @map("reset_token_expiry")
+  rol               RolUsuario @default(SOCIO)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  salidas Salida[]
+  cierres Cierre[]
+  dashboardLayouts DashboardLayout[]
+  eventosCreados     Evento[]      @relation("EventoCreador")
+  eventosFinalizados Evento[]      @relation("EventoFinalizador")
+  inscripciones      Inscripcion[]
+  gestorCategorias   GestorCategoria[]
+
+  @@map("users")
+}
+
+// Per-user customizable dashboard layout (react-grid-layout config).
+// dashboardKey discriminates between dashboards so more can be added later
+// without a new table. layout is an array of { widgetId, x, y, w, h, visible? }.
+model DashboardLayout {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  dashboardKey String   @default("admin_analytics") @map("dashboard_key")
+  layout       Json     @default("[]")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dashboardKey])
+  @@map("dashboard_layouts")
+}
+
+// Secretos que un administrador puede rotar desde el panel, sin SSH ni redeploy.
+// Nació para el refresh token de Google: la pantalla de consentimiento OAuth está
+// en estado "Testing", así que Google lo caduca cada 7 días y hay que renovarlo a
+// mano. El contenedor es read_only y env_file se lee sólo al arrancar, de modo que
+// la app no puede reescribir su propio .env: el valor vive aquí.
+// `value` va SIEMPRE cifrado (lib/secret-crypto.ts), nunca en claro.
+model AppSecret {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedBy String?  @map("updated_by")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("app_secrets")
+}
+
+model Salida {
+  id           String  @id @default(uuid())
+  numeroSalida Int     @unique @default(autoincrement()) @map("numero_salida")
+  userId       String? @map("user_id")
+  creatorEmail String? @map("creator_email")
+
+  // Paso 1 – Clasificación de la salida
+  tipoSalida          String @map("tipo_salida")
+  disciplina          String
+  temporada           String?
+  nombreActividad     String @map("nombre_actividad")
+  ubicacionGeografica String @map("ubicacion_geografica")
+
+  // Paso 2 – Cronología y seguridad
+  fechaInicio          DateTime @map("fecha_inicio")
+  horaInicio           String?  @map("hora_inicio")
+  fechaRetornoEstimada DateTime @map("fecha_retorno_estimada")
+  horaRetornoEstimada  String   @map("hora_retorno_estimada")
+  horaAlerta           String   @map("hora_alerta")
+  avisosExternos       Json     @default("[]") @map("avisos_externos")
+  retenCarabineros     String?  @map("reten_carabineros")
+  nombreFamiliar       String?  @map("nombre_familiar")
+  telefonoFamiliar     String?  @map("telefono_familiar")
+
+  // Paso 3 – Equipo humano
+  liderCordada        String  @map("lider_cordada")
+  participantes       Json    @default("[]")
+  // Auditoría de cambios al apartado de integrantes (post-creación).
+  integrantesAuditLog Json    @default("[]") @map("integrantes_audit_log")
+  coordinacionGrupal  Boolean @default(false) @map("coordinacion_grupal")
+  matrizRiesgos       Boolean @default(false) @map("matriz_riesgos")
+
+  // Paso 4 – Comunicaciones y equipo crítico
+  mediosComunicacion      Json    @default("[]") @map("medios_comunicacion")
+  idDispositivoFrecuencia String? @map("id_dispositivo_frecuencia")
+  equipoColectivo         Json    @default("[]") @map("equipo_colectivo")
+  equipoColectivoOtro     String? @map("equipo_colectivo_otro")
+
+  // Paso 5 – Planificación técnica
+  pronosticoMeteorologico String? @map("pronostico_meteorologico")
+  riesgosIdentificados    Json    @default("[]") @map("riesgos_identificados")
+  riesgosOtro             String? @map("riesgos_otro")
+  planEvacuacion          String? @map("plan_evacuacion")
+  pronosticoFileId        String? @map("pronostico_file_id")
+  pronosticoFileName      String? @map("pronostico_file_name")
+  pronosticoFileUrl       String? @map("pronostico_file_url")
+
+  // GPX
+  gpxFileId   String? @map("gpx_file_id")
+  gpxFileName String? @map("gpx_file_name")
+  gpxFileUrl  String? @map("gpx_file_url")
+
+  // Estado
+  status              SalidaStatus @default(EN_CURSO)
+  incidentReport      String?      @map("incident_report")
+  alertaEnviadaAt     DateTime?    @map("alerta_enviada_at")
+  recordatorioCierreEnviadoAt DateTime? @map("recordatorio_cierre_enviado_at")
+  // Registro histórico (solo admin): salida retroactiva que no notifica integrantes
+  esRegistroHistorico Boolean      @default(false) @map("es_registro_historico")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  cierres Cierre[]
+
+  evaluacionTokens     EvaluacionToken[]
+  evaluacionRespuestas EvaluacionRespuesta[]
+
+  @@map("salidas")
+}
+
+model EvaluacionToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  salidaId  String   @map("salida_id")
+  email     String
+  // `used` es boolean (sin timestamp) para que no pueda correlacionarse
+  // temporalmente con EvaluacionRespuesta.createdAt — anonimato by design
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  salida Salida @relation(fields: [salidaId], references: [id], onDelete: Cascade)
+
+  @@map("evaluacion_tokens")
+}
+
+// Sin FK ni campo que vincule a EvaluacionToken: la respuesta es anónima
+model EvaluacionRespuesta {
+  id             String   @id @default(uuid())
+  salidaId       String   @map("salida_id")
+  notaObjetivos  Int      @map("nota_objetivos")
+  notaItinerario Int      @map("nota_itinerario")
+  notaLider      Int      @map("nota_lider")
+  comentario     String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  salida Salida @relation(fields: [salidaId], references: [id], onDelete: Cascade)
+
+  @@map("evaluacion_respuestas")
+}
+
+model Cierre {
+  id      String @id @default(uuid())
+  salidaId String @map("salida_id")
+  userId   String? @map("user_id")
+
+  // Paso 1
+  fechaFinalizacionReal DateTime @map("fecha_finalizacion_real")
+  estadoCierre          String   @map("estado_cierre")
+  altitudMaxima         Int      @default(0) @map("altitud_maxima")
+  motivoAbandono        String?  @map("motivo_abandono")
+
+  // Paso 2
+  huboCambios        String  @map("hubo_cambios")
+  motivosCambios     Json    @default("[]") @map("motivos_cambios")
+  motivosCambiosOtro String? @map("motivos_cambios_otro")
+
+  // Paso 3
+  ocurrioIncidente         String  @map("ocurrio_incidente")
+  ocurrioAccidente         String  @default("NO") @map("ocurrio_accidente")
+  tiposIncidente           Json    @default("[]") @map("tipos_incidente")
+  incidenteOtroDescripcion String? @map("incidente_otro_descripcion")
+  tiposAccidente           Json    @default("[]") @map("tipos_accidente")
+  accidenteOtroDescripcion String? @map("accidente_otro_descripcion")
+  // Columnas legadas — conservadas para no perder datos de cierres antiguos
+  gravedadLesion           String? @map("gravedad_lesion")
+  patologiaMedica          String? @map("patologia_medica")
+  descripcionSuceso        String? @map("descripcion_suceso")
+  causasRaiz               Json    @default("[]") @map("causas_raiz")
+  causaRaizOtro            String? @map("causa_raiz_otro")
+
+  // Paso 4
+  desempenoEquipo    String  @map("desempeno_equipo")
+  detalleFallaEquipo String? @map("detalle_falla_equipo")
+  observacionesRuta  String  @map("observaciones_ruta")
+  precisionPronostico Int    @map("precision_pronostico")
+
+  // Paso 5
+  leccionesAprendidas   String  @map("lecciones_aprendidas")
+  recomendacionesFuturos String? @map("recomendaciones_futuros")
+  sugerenciasClub       String? @map("sugerencias_club")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  salida Salida  @relation(fields: [salidaId], references: [id], onDelete: Cascade)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("cierres")
+}
+
+// Biblioteca de documentos del club (formularios, check-lists, glosario, libros).
+// Visible solo para socios de Andino Club Pamir (membresiaClub SOCIO_ANDINO_PAMIR) y admin.
+model Documento {
+  id           String  @id @default(uuid())
+  categoria    String
+  nombre       String
+  descripcion  String?
+  driveFileId  String? @map("drive_file_id")
+  driveFileUrl String? @map("drive_file_url")
+  orden        Int     @default(0)
+  visible      Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  @@map("documentos")
+}
+
+model Integrante {
+  id String @id @default(uuid())
+
+  // Sección I – Información personal
+  nombreCompleto  String  @map("nombre_completo")
+  rut             String  @unique
+  nacionalidad    String
+  genero          String
+  fechaNacimiento DateTime @map("fecha_nacimiento")
+  direccion       String
+  comuna          String
+  region          String
+  telefonoCelular String   @map("telefono_celular")
+  email           String
+  previsionSalud  String   @map("prevision_salud")
+
+  // Sección II – Contacto de emergencia
+  nombreContacto   String @map("nombre_contacto")
+  parentesco       String
+  telefonoContacto String @map("telefono_contacto")
+
+  // Sección III – Perfil médico
+  grupoSanguineo              String   @map("grupo_sanguineo")
+  alergiasTiene               Boolean  @map("alergias_tiene")
+  alergiasDetalle             String?  @map("alergias_detalle")
+  enfermedadesCronicasTiene   Boolean  @map("enfermedades_cronicas_tiene")
+  enfermedadesCronicasDetalle String?  @map("enfermedades_cronicas_detalle")
+  medicamentosTiene           Boolean  @map("medicamentos_tiene")
+  medicamentosDetalle         String?  @map("medicamentos_detalle")
+  cirugiasLesionesTiene       Boolean  @map("cirugias_lesiones_tiene")
+  cirugiasLesionesDetalle     String?  @map("cirugias_lesiones_detalle")
+  fuma                        Boolean
+  usaLentes                   Boolean  @map("usa_lentes")
+
+  // Membresía
+  membresiaClub String  @map("membresia_club")
+  nombreClub    String? @map("nombre_club")
+
+  // Sección IV – Cláusulas legales
+  declaracionSalud    Boolean @map("declaracion_salud")
+  aceptacionRiesgo    Boolean @map("aceptacion_riesgo")
+  consentimientoDatos Boolean @map("consentimiento_datos")
+  derechoImagen       Boolean @map("derecho_imagen")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  @@map("integrantes")
+}
+
+// ─── Eventos del club ─────────────────────────────────────────────────────────
+
+// Categorías de actividades (tabla en vez de enum: agregar una nueva no
+// requiere migración). color es hex para los chips del calendario.
+model CategoriaEvento {
+  id     Int     @id @default(autoincrement())
+  slug   String  @unique
+  nombre String
+  color  String
+  orden  Int
+  activa Boolean @default(true)
+
+  eventos  Evento[]
+  gestores GestorCategoria[]
+
+  @@map("categorias_evento")
+}
+
+// Gestores por categoría: cada gestor crea y administra eventos solo de sus
+// categorías asignadas (el rol ADMIN mantiene acceso total). Las asignaciones
+// se administran por SQL directo en esta iteración.
+model GestorCategoria {
+  id          Int      @id @default(autoincrement())
+  usuarioId   String   @map("usuario_id")
+  categoriaId Int      @map("categoria_id")
+  creadoAt    DateTime @default(now()) @map("creado_at")
+
+  usuario   User            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  categoria CategoriaEvento @relation(fields: [categoriaId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, categoriaId])
+  @@index([usuarioId])
+  @@map("gestores_categoria")
+}
+
+// Versiones de la declaración jurada del participante. El texto vive una sola
+// vez; cada inscripción referencia la versión que aceptó (evidencia auditable).
+model DeclaracionJuradaVersion {
+  id           Int       @id @default(autoincrement())
+  version      String    @unique
+  titulo       String
+  items        Json // array ordenado de strings
+  hashSha256   String    @map("hash_sha256")
+  vigenteDesde DateTime  @default(now()) @map("vigente_desde")
+  vigenteHasta DateTime? @map("vigente_hasta") // null = vigente
+
+  inscripciones Inscripcion[]
+
+  @@map("declaracion_jurada_versiones")
+}
+
+model Evento {
+  id          String       @id @default(uuid())
+  titulo      String
+  // Nullable: un borrador solo exige titulo (E1); se exige al publicar
+  categoriaId Int?         @map("categoria_id")
+  estado      EstadoEvento @default(BORRADOR)
+
+  // Cabecera (ficha)
+  fechaInicio         DateTime? @map("fecha_inicio")
+  horaInicio          String?  @map("hora_inicio")
+  fechaFin            DateTime? @map("fecha_fin")
+  duracionTexto       String?  @map("duracion_texto")
+  ubicacion           String?
+  reunionCoordinacion String?  @map("reunion_coordinacion")
+  organizadorNombre   String?  @map("organizador_nombre")
+  alturaMaximaMsnm    Int?     @map("altura_maxima_msnm")
+  dificultad          Int?
+
+  // Cupos e inscripción. fechaCorte es un instante UTC; el cierre de
+  // inscripciones se deriva de now() >= fechaCorte (sin cron).
+  cupos      Int?
+  fechaCorte DateTime? @map("fecha_corte")
+
+  // Contenido — la completitud se exige al publicar, no en el borrador
+  objetivo        String?
+  itinerario      String?
+  // Optional itinerary attachment (PDF/JPG/PNG stored in Google Drive)
+  itinerarioFileId   String? @map("itinerario_file_id")
+  itinerarioFileName String? @map("itinerario_file_name")
+  itinerarioFileUrl  String? @map("itinerario_file_url")
+  incluye         String?
+  noIncluye       String? @map("no_incluye")
+  recomendaciones String?
+  avisoDestacado  String? @map("aviso_destacado")
+
+  // Auditoría
+  creadoPor         String    @map("creado_por")
+  creadoAt          DateTime  @default(now()) @map("creado_at")
+  actualizadoAt     DateTime  @updatedAt @map("actualizado_at")
+  publicadoAt       DateTime? @map("publicado_at")
+  finalizadoAt      DateTime? @map("finalizado_at")
+  finalizadoPor     String?   @map("finalizado_por")
+  canceladoAt       DateTime? @map("cancelado_at")
+  motivoCancelacion String?   @map("motivo_cancelacion")
+
+  // Restrict explícito: una categoría en uso no se borra (se reasigna antes)
+  categoria     CategoriaEvento? @relation(fields: [categoriaId], references: [id], onDelete: Restrict)
+  creador       User            @relation("EventoCreador", fields: [creadoPor], references: [id])
+  finalizador   User?           @relation("EventoFinalizador", fields: [finalizadoPor], references: [id])
+  inscripciones Inscripcion[]
+
+  @@index([estado, fechaInicio])
+  @@index([categoriaId])
+  @@map("eventos")
+}
+
+// onDelete Restrict: un evento con postulantes no se borra, se cancela.
+model Inscripcion {
+  id        String            @id @default(uuid())
+  eventoId  String            @map("evento_id")
+  usuarioId String            @map("usuario_id")
+  estado    EstadoInscripcion @default(POSTULADO)
+
+  tieneVehiculo Boolean @map("tiene_vehiculo")
+  cuposVehiculo Int?    @map("cupos_vehiculo")
+
+  declaracionVersionId  Int      @map("declaracion_version_id")
+  declaracionAceptadaAt DateTime @map("declaracion_aceptada_at")
+  declaracionIp         String?  @map("declaracion_ip")
+  declaracionUserAgent  String?  @map("declaracion_user_agent")
+
+  postuladoAt DateTime  @default(now()) @map("postulado_at")
+  retiradoAt  DateTime? @map("retirado_at")
+  resueltoAt  DateTime? @map("resuelto_at")
+
+  evento             Evento                   @relation(fields: [eventoId], references: [id], onDelete: Restrict)
+  usuario            User                     @relation(fields: [usuarioId], references: [id])
+  declaracionVersion DeclaracionJuradaVersion @relation(fields: [declaracionVersionId], references: [id])
+  notificaciones     Notificacion[]
+
+  @@unique([eventoId, usuarioId])
+  @@index([eventoId, estado])
+  @@map("inscripciones")
+}
+
+// Cola mínima de correos en Postgres. El unique (inscripcionId, tipo)
+// garantiza que finalizar dos veces o reenviar jamás duplica un correo.
+model Notificacion {
+  id            String             @id @default(uuid())
+  inscripcionId String             @map("inscripcion_id")
+  tipo          TipoNotificacion
+  estado        EstadoNotificacion @default(PENDIENTE)
+  intentos      Int                @default(0)
+  ultimoError   String?            @map("ultimo_error")
+  proveedorId   String?            @map("proveedor_id")
+  creadaAt      DateTime           @default(now()) @map("creada_at")
+  enviadaAt     DateTime?          @map("enviada_at")
+
+  inscripcion Inscripcion @relation(fields: [inscripcionId], references: [id], onDelete: Cascade)
+
+  @@unique([inscripcionId, tipo])
+  @@index([estado])
+  @@map("notificaciones")
+}
