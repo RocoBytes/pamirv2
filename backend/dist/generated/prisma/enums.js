@@ -17,6 +17,7 @@ export const SalidaStatus = {
 };
 export const RolUsuario = {
     SOCIO: 'SOCIO',
+    LIDER: 'LIDER',
     ADMIN: 'ADMIN'
 };
 export const EstadoEvento = {

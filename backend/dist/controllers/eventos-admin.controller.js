@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { fechaCalendarioField as fechaField } from '../lib/fecha-calendario.js';
 import { instanteSantiago } from '../lib/santiago-time.js';
 import { prisma } from '../lib/prisma.js';
+import { isAdmin } from '../lib/authz.js';
 import { despacharNotificacionesPendientes, DispatchEnCursoError, } from '../lib/notificaciones.js';
 import { uploadToGoogleDrive, deleteFromGoogleDrive } from '../lib/google-drive.js';
 import { ALLOWED_PRONOSTICO_EXT_STRICT, sanitizePronosticoFilename } from './upload.controller.js';
@@ -22,7 +23,7 @@ class HttpError extends Error {
 // (req.gestorCategoriaIds, poblado por requireGestorEventos). Un evento sin
 // categoría solo lo gestiona el admin.
 function puedeGestionarCategoria(req, categoriaId) {
-    if (req.user?.rol === 'ADMIN')
+    if (isAdmin(req.user))
         return true;
     if (categoriaId === null)
         return false;
@@ -161,7 +162,7 @@ export async function createEvento(req, res) {
     try {
         // Un gestor siempre crea dentro de una de sus categorías; solo el admin
         // puede partir un borrador sin categoría.
-        if (req.user.rol !== 'ADMIN' && parsed.data.categoriaId == null) {
+        if (!isAdmin(req.user) && parsed.data.categoriaId == null) {
             res.status(400).json({ error: 'Selecciona la categoría' });
             return;
         }
@@ -219,7 +220,7 @@ export async function updateEvento(req, res) {
         // Cambios de categoría: un gestor no puede dejarla en null ni moverla a
         // una categoría que no gestiona.
         if (parsed.data.categoriaId !== undefined) {
-            if (parsed.data.categoriaId === null && req.user.rol !== 'ADMIN') {
+            if (parsed.data.categoriaId === null && !isAdmin(req.user)) {
                 res.status(400).json({ error: 'Selecciona la categoría' });
                 return;
             }

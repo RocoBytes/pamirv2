@@ -41,6 +41,7 @@ export const AnyNull = runtime.AnyNull;
 export const ModelName = {
     User: 'User',
     DashboardLayout: 'DashboardLayout',
+    Invitacion: 'Invitacion',
     AppSecret: 'AppSecret',
     Salida: 'Salida',
     EvaluacionToken: 'EvaluacionToken',
@@ -85,6 +86,18 @@ export const DashboardLayoutScalarFieldEnum = {
     dashboardKey: 'dashboardKey',
     layout: 'layout',
     updatedAt: 'updatedAt',
+    createdAt: 'createdAt'
+};
+export const InvitacionScalarFieldEnum = {
+    id: 'id',
+    email: 'email',
+    rol: 'rol',
+    tokenHash: 'tokenHash',
+    expiresAt: 'expiresAt',
+    invitadoPorId: 'invitadoPorId',
+    aceptadaAt: 'aceptadaAt',
+    usuarioId: 'usuarioId',
+    revocadaAt: 'revocadaAt',
     createdAt: 'createdAt'
 };
 export const AppSecretScalarFieldEnum = {

@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { sendEmail } from '../lib/google-gmail.js';
 import { buildAlertaSalidaEmail, buildRecordatorioCierreEmail } from '../lib/email-templates.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
+import { ALERT_EMAIL } from '../lib/constants.js';
 import { instanteSantiago } from '../lib/santiago-time.js';
 /**
  * GET /api/cron/check-alertas?secret=<CRON_SECRET>
@@ -82,7 +82,7 @@ export async function checkAlertas(req, res) {
                         data: { alertaEnviadaAt: new Date() },
                     });
                     try {
-                        await sendEmail(ADMIN_EMAIL, `ALERTA: Salida sin cierre — ${salida.nombreActividad}`, buildAlertaSalidaEmail(salida));
+                        await sendEmail(ALERT_EMAIL, `ALERTA: Salida sin cierre — ${salida.nombreActividad}`, buildAlertaSalidaEmail(salida));
                         alerted++;
                     }
                     catch (emailErr) {

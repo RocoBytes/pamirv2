@@ -1,6 +1,6 @@
 import Busboy from 'busboy';
 import { prisma } from '../lib/prisma.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
+import { isAdmin } from '../lib/authz.js';
 import { uploadToGoogleDrive, deleteFromGoogleDrive } from '../lib/google-drive.js';
 const MEMBRESIA_SOCIO_PAMIR = 'SOCIO_ANDINO_PAMIR';
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
@@ -28,7 +28,7 @@ function sanitizeDocFilename(raw) {
 export async function getDocumentos(req, res) {
     try {
         const email = req.user.email;
-        if (email !== ADMIN_EMAIL) {
+        if (!isAdmin(req.user)) {
             const integrante = await prisma.integrante.findFirst({
                 where: { email },
                 select: { membresiaClub: true },

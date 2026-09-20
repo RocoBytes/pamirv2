@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { sendEmail } from '../lib/google-gmail.js';
 import { buildSaludSalidaEmail } from '../lib/email-templates.js';
+import { puedeCambiarRol } from '../lib/invitaciones.js';
 import { getEstadoCredencial, guardarRefreshToken, probarRefreshToken, } from '../lib/google-credentials.js';
 // GET /api/admin/stats
 export async function getStats(_req, res) {
@@ -770,5 +771,53 @@ export async function deleteDashboardLayout(req, res) {
     catch (error) {
         console.error('[deleteDashboardLayout]', error);
         res.status(500).json({ error: 'No se pudo restaurar la configuración del dashboard' });
+    }
+}
+// ─── Gestión de usuarios (sistema cerrado por invitación) ──────────────────────
+// GET /api/admin/users
+export async function listUsers(_req, res) {
+    try {
+        const users = await prisma.user.findMany({
+            select: { id: true, email: true, name: true, rol: true, emailVerified: true, createdAt: true },
+            orderBy: { name: 'asc' },
+        });
+        res.json(users);
+    }
+    catch (error) {
+        console.error('[listUsers]', error);
+        res.status(500).json({ error: 'No se pudieron obtener los usuarios' });
+    }
+}
+const rolSchema = z.object({ rol: z.enum(['SOCIO', 'LIDER', 'ADMIN']) });
+// PATCH /api/admin/users/:id/rol
+export async function updateUserRol(req, res) {
+    try {
+        const parsed = rolSchema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: 'El rol debe ser SOCIO, LIDER o ADMIN' });
+            return;
+        }
+        const id = req.params['id'];
+        // Nadie cambia su propio rol: garantiza que el sistema siempre conserve
+        // al menos un ADMIN (el propio requester).
+        if (!puedeCambiarRol(req.user.id, id)) {
+            res.status(409).json({ error: 'No puedes cambiar tu propio rol' });
+            return;
+        }
+        const existing = await prisma.user.findUnique({ where: { id } });
+        if (!existing) {
+            res.status(404).json({ error: 'Usuario no encontrado' });
+            return;
+        }
+        const updated = await prisma.user.update({
+            where: { id },
+            data: { rol: parsed.data.rol },
+            select: { id: true, email: true, name: true, rol: true, emailVerified: true, createdAt: true },
+        });
+        res.json(updated);
+    }
+    catch (error) {
+        console.error('[updateUserRol]', error);
+        res.status(500).json({ error: 'No se pudo actualizar el rol' });
     }
 }

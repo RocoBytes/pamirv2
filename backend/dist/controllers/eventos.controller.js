@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { encolarNotificacion, despacharNotificacionesPendientes } from '../lib/notificaciones.js';
+import { isAdmin } from '../lib/authz.js';
 const MES_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 // Medianoche UTC de la fecha calendario actual en Santiago — convención Salida:
 // las fechas de eventos se guardan como medianoche UTC del día elegido.
@@ -24,7 +25,7 @@ export async function getCategorias(_req, res) {
 }
 export async function getEventos(req, res) {
     try {
-        const isAdmin = req.user.rol === 'ADMIN';
+        const esAdmin = isAdmin(req.user);
         const mes = req.query['mes'];
         if (mes !== undefined && (typeof mes !== 'string' || !MES_REGEX.test(mes))) {
             res.status(400).json({ error: 'Formato de mes inválido (se espera YYYY-MM)' });
@@ -38,7 +39,7 @@ export async function getEventos(req, res) {
         // consulta indexada por request para no-admins; los socios pagan lo mismo
         // y obtienen lista vacía).
         let gestorIds = [];
-        if (!isAdmin) {
+        if (!esAdmin) {
             const filas = await prisma.gestorCategoria.findMany({
                 where: { usuarioId: req.user.id },
                 select: { categoriaId: true },
@@ -47,7 +48,7 @@ export async function getEventos(req, res) {
         }
         const esGestor = gestorIds.length > 0;
         const condiciones = [];
-        if (!isAdmin) {
+        if (!esAdmin) {
             condiciones.push(esGestor
                 ? {
                     OR: [
@@ -74,7 +75,7 @@ export async function getEventos(req, res) {
             ventana = { fechaFin: { gte: hoySantiagoUtc() } };
         }
         if (ventana) {
-            if (isAdmin) {
+            if (esAdmin) {
                 condiciones.push({ OR: [ventana, { estado: 'BORRADOR', fechaInicio: null }] });
             }
             else if (esGestor) {
@@ -128,7 +129,7 @@ export async function getEventoById(req, res) {
             res.status(404).json({ error: 'Evento no encontrado' });
             return;
         }
-        if (evento.estado === 'BORRADOR' && req.user.rol !== 'ADMIN') {
+        if (evento.estado === 'BORRADOR' && !isAdmin(req.user)) {
             const esGestorDeCategoria = evento.categoriaId !== null &&
                 (await prisma.gestorCategoria.count({
                     where: { usuarioId: req.user.id, categoriaId: evento.categoriaId },
@@ -186,7 +187,7 @@ export async function inscribirse(req, res) {
     const cuposVehiculo = parsed.data.cuposVehiculo ?? null;
     try {
         const evento = await prisma.evento.findUnique({ where: { id } });
-        if (!evento || (evento.estado === 'BORRADOR' && req.user.rol !== 'ADMIN')) {
+        if (!evento || (evento.estado === 'BORRADOR' && !isAdmin(req.user))) {
             res.status(404).json({ error: 'Evento no encontrado' });
             return;
         }

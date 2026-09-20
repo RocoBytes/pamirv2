@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/jwt.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
+import { isAdmin, canInvite } from '../lib/authz.js';
 export async function authMiddleware(req, _res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
@@ -25,18 +25,21 @@ export function requireAuth(req, res, next) {
     }
     next();
 }
+// Autorización por columna rol: promover o degradar a un administrador es un
+// UPDATE en la base de datos (o `npm run db:create-user -- ... --rol ADMIN
+// --force`), sin redeploy.
 export function requireAdmin(req, res, next) {
-    if (!req.user || req.user.email !== ADMIN_EMAIL) {
+    if (!isAdmin(req.user)) {
         res.status(403).json({ error: 'Acceso restringido al administrador' });
         return;
     }
     next();
 }
-// Autorización por columna rol (módulo de eventos): promover a un nuevo
-// administrador es un UPDATE en la base de datos, sin redeploy.
-export function requireRolAdmin(req, res, next) {
-    if (req.user?.rol !== 'ADMIN') {
-        res.status(403).json({ error: 'Acceso restringido al administrador' });
+// Sistema cerrado: solo ADMIN y LIDER pueden invitar cuentas nuevas (un LIDER
+// solo puede invitar SOCIOS — ver lib/invitaciones.ts).
+export function requireCanInvite(req, res, next) {
+    if (!canInvite(req.user)) {
+        res.status(403).json({ error: 'No tienes permiso para invitar' });
         return;
     }
     next();
@@ -49,7 +52,7 @@ export async function requireGestorEventos(req, res, next) {
         res.status(403).json({ error: 'Acceso restringido a gestores de eventos' });
         return;
     }
-    if (req.user.rol === 'ADMIN') {
+    if (isAdmin(req.user)) {
         req.gestorCategoriaIds = null;
         return next();
     }
