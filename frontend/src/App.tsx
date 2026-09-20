@@ -32,7 +32,7 @@ const Spinner = () => (
 )
 
 export default function App() {
-  const { user, token, isLoading, loginWithCredentials, register, logout } = useAuth()
+  const { user, token, isLoading, loginWithCredentials, logout } = useAuth()
   const [route, setRoute] = useState<Route>('dashboard')
   const [actionSalidaId, setActionSalidaId] = useState<string | null>(null)
   const [actionEventoId, setActionEventoId] = useState<string | null>(null)
@@ -96,7 +96,6 @@ export default function App() {
     return (
       <AuthPage
         onLogin={loginWithCredentials}
-        onRegister={register}
         isLoading={isLoading}
         verifiedStatus={verifiedParam === '1' ? 'success' : verifiedParam === 'error' ? 'error' : undefined}
         resetToken={resetToken ?? undefined}

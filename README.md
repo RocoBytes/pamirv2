@@ -74,7 +74,10 @@ que `DATABASE_URL` debe contener. Los comandos `db:push`, `db:deploy`, `db:migra
 base de v1. Con el archivo vacío (como viene por defecto) el guard siempre falla;
 complétalo con el fragmento del proyecto Neon de v2 antes de usar esos comandos.
 
-Las cuentas se crean con el CLI interactivo `db:create-user`:
+El sistema es de acceso cerrado: no existe registro público. La UI no ofrece
+un formulario de creación de cuenta y `POST /api/auth/register` ya no existe
+en la API (responde 404). Las cuentas se crean con el CLI interactivo
+`db:create-user`:
 
 ```bash
 cd backend

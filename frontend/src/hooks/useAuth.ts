@@ -2,11 +2,10 @@ import { useState, useCallback, useEffect } from 'react'
 import type { User, AuthState } from '../types/salida'
 import { saveAuth, loadAuth, clearAuth } from '../lib/storage'
 import { setAuthToken } from '../lib/auth-token'
-import { loginWithCredentials, registerUser, fetchMe } from '../lib/api'
+import { loginWithCredentials, fetchMe } from '../lib/api'
 
 interface UseAuthReturn extends AuthState {
   loginWithCredentials: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string) => Promise<void>
   logout: () => void
 }
 
@@ -58,15 +57,6 @@ export function useAuth(): UseAuthReturn {
     }
   }, [])
 
-  const register = useCallback(async (name: string, email: string, password: string): Promise<void> => {
-    setIsLoading(true)
-    try {
-      await registerUser(name, email, password)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
   const logout = useCallback((): void => {
     clearAuth()
     setAuthToken(null)
@@ -78,7 +68,6 @@ export function useAuth(): UseAuthReturn {
     token: state.token,
     isLoading,
     loginWithCredentials: login,
-    register,
     logout,
   }
 }

@@ -4,17 +4,16 @@ import { Button } from './ui/Button'
 import { forgotPassword, resetPassword } from '../lib/api'
 import logoPamir from '../assets/logo_PAMIR.png'
 
-type View = 'login' | 'register' | 'verify-pending' | 'forgot' | 'reset' | 'verify-success' | 'verify-error'
+type View = 'login' | 'forgot' | 'reset' | 'verify-success' | 'verify-error'
 
 interface AuthPageProps {
   onLogin: (email: string, password: string) => Promise<void>
-  onRegister: (name: string, email: string, password: string) => Promise<void>
   isLoading: boolean
   verifiedStatus?: 'success' | 'error'
   resetToken?: string
 }
 
-export function AuthPage({ onLogin, onRegister, isLoading, verifiedStatus, resetToken }: AuthPageProps) {
+export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken }: AuthPageProps) {
   const initialView: View = verifiedStatus === 'success'
     ? 'verify-success'
     : verifiedStatus === 'error'
@@ -25,16 +24,12 @@ export function AuthPage({ onLogin, onRegister, isLoading, verifiedStatus, reset
 
   const [view, setView] = useState<View>(initialView)
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [pendingEmail, setPendingEmail] = useState('')
 
   // Form fields
-  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [forgotEmail, setForgotEmail] = useState('')
   const [forgotSent, setForgotSent] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -50,29 +45,6 @@ export function AuthPage({ onLogin, onRegister, isLoading, verifiedStatus, reset
       await onLogin(email, password)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleRegister(e: React.FormEvent) {
-    e.preventDefault()
-    clearError()
-    if (password !== confirmPassword) {
-      setError('Las contraseñas no coinciden')
-      return
-    }
-    if (password.length < 8) {
-      setError('La contraseña debe tener al menos 8 caracteres')
-      return
-    }
-    setSubmitting(true)
-    try {
-      await onRegister(name, email, password)
-      setPendingEmail(email)
-      setView('verify-pending')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al crear la cuenta')
     } finally {
       setSubmitting(false)
     }
@@ -151,22 +123,6 @@ export function AuthPage({ onLogin, onRegister, isLoading, verifiedStatus, reset
             </div>
           )}
 
-          {/* ── Verificación pendiente ───────────────────────────────── */}
-          {view === 'verify-pending' && (
-            <div className="flex flex-col items-center gap-4 text-center">
-              <div className="flex items-center justify-center w-16 h-16 rounded-full bg-[#e8eef7]">
-                <CheckCircle size={32} className="text-[#264c99]" />
-              </div>
-              <h2 className="text-xl font-bold text-slate-800">Revisa tu correo</h2>
-              <p className="text-[#757874] text-sm">
-                Enviamos un enlace de verificación a <strong className="text-slate-700">{pendingEmail}</strong>.
-                Haz clic en el enlace para activar tu cuenta.
-              </p>
-              <p className="text-xs text-[#757874]/70">¿No llegó? Revisa la carpeta de spam.</p>
-              <Button variant="ghost" fullWidth onClick={() => setView('login')}>Volver al inicio de sesión</Button>
-            </div>
-          )}
-
           {/* ── Restablecer contraseña ───────────────────────────────── */}
           {view === 'reset' && (
             <>
@@ -235,65 +191,6 @@ export function AuthPage({ onLogin, onRegister, isLoading, verifiedStatus, reset
             </>
           )}
 
-          {/* ── Registro ─────────────────────────────────────────────── */}
-          {view === 'register' && (
-            <>
-              <button onClick={() => setView('login')} className="flex items-center gap-1 text-sm text-[#757874] hover:text-slate-700 mb-4 transition-colors">
-                <ArrowLeft size={14} />Volver al inicio de sesión
-              </button>
-              <h2 className="text-xl font-bold text-slate-800 mb-1">Crear cuenta</h2>
-              <p className="text-[#757874] text-sm mb-6">Usa cualquier correo: Gmail, Outlook, Yahoo, etc.</p>
-              <form onSubmit={(e) => void handleRegister(e)} className="flex flex-col gap-4">
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => { setName(e.target.value); clearError() }}
-                  placeholder="Nombre completo"
-                  required
-                  className={inputClass}
-                />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); clearError() }}
-                  placeholder="Email"
-                  required
-                  className={inputClass}
-                />
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); clearError() }}
-                    placeholder="Contraseña (mín. 8 caracteres)"
-                    required
-                    className={inputClass + ' pr-10'}
-                  />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#757874]">
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-                <div className="relative">
-                  <input
-                    type={showConfirm ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={(e) => { setConfirmPassword(e.target.value); clearError() }}
-                    placeholder="Confirmar contraseña"
-                    required
-                    className={inputClass + ' pr-10'}
-                  />
-                  <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#757874]">
-                    {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-                {error && <p className="text-xs text-[#A4636E]" role="alert">{error}</p>}
-                <Button type="submit" fullWidth disabled={submitting || isLoading}>
-                  {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Crear cuenta'}
-                </Button>
-              </form>
-            </>
-          )}
-
           {/* ── Login ────────────────────────────────────────────────── */}
           {view === 'login' && (
             <>
@@ -328,10 +225,7 @@ export function AuthPage({ onLogin, onRegister, isLoading, verifiedStatus, reset
                   {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Iniciar sesión'}
                 </Button>
               </form>
-              <div className="flex justify-between text-xs text-[#4a6fad] mb-5">
-                <button type="button" onClick={() => { clearError(); setView('register') }} className="hover:underline">
-                  ¿No tienes cuenta? Regístrate
-                </button>
+              <div className="flex justify-end text-xs text-[#4a6fad] mb-5">
                 <button type="button" onClick={() => { clearError(); setView('forgot') }} className="hover:underline">
                   ¿Olvidaste tu contraseña?
                 </button>
