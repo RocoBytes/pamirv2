@@ -76,17 +76,21 @@ complétalo con el fragmento del proyecto Neon de v2 antes de usar esos comandos
 
 El sistema es de acceso cerrado: no existe registro público. La UI no ofrece
 un formulario de creación de cuenta y `POST /api/auth/register` ya no existe
-en la API (responde 404). Las cuentas se crean con el CLI interactivo
-`db:create-user`:
+en la API (responde 404). Las cuentas se crean solo por invitación (ver más
+abajo) o con el CLI interactivo:
 
 ```bash
 cd backend
 npm run db:create-user -- --email alguien@club.cl --name "Nombre Apellido" --rol ADMIN
 ```
 
-`--rol` acepta `SOCIO` o `ADMIN` (por defecto `SOCIO`). Pide la
+`--rol` acepta `SOCIO`, `LIDER` o `ADMIN` (por defecto `SOCIO`). Pide la
 contraseña por stdin (nunca por flag) y la confirma dos veces si hay una TTY.
 Usa `--force` para actualizar un usuario existente en vez de fallar.
+
+Un usuario existente sin contraseña (por ejemplo, migrado desde Clerk) ingresa
+por primera vez usando "¿Olvidaste tu contraseña?": el enlace de
+restablecimiento define su contraseña y verifica su email en el mismo paso.
 
 El acceso de administrador depende únicamente del rol (`ADMIN`) guardado en la
 base de datos, nunca de un email fijo: el comando anterior con `--rol ADMIN`
@@ -94,6 +98,46 @@ base de datos, nunca de un email fijo: el comando anterior con `--rol ADMIN`
 revocarlo, sin redeploy. La variable `ALERT_EMAIL` (ver `backend/.env.example`)
 es un asunto distinto: solo define a quién llegan las alertas automáticas de
 "salida sin cierre".
+
+### Roles e invitaciones
+
+Tres roles (`RolUsuario`): `SOCIO` (rol base), `LIDER` (un socio al que además
+se le permite invitar nuevos socios; no otorga ningún otro permiso en el
+resto de la aplicación) y `ADMIN` (control total, incluida la gestión de
+usuarios y roles). Un `ADMIN` puede invitar cualquier rol; un `LIDER` solo
+puede invitar `SOCIO`. Nadie puede cambiar su propio rol, lo que garantiza que
+el sistema siempre conserve al menos un `ADMIN`.
+
+Ciclo de vida de una invitación:
+
+- Vigencia de **7 días** desde su creación; se puede **reenviar** (invalida el
+  token anterior y emite uno nuevo) o **revocar** mientras esté pendiente.
+- Es de **un solo uso**: al aceptarse queda marcada como `ACEPTADA` y no puede
+  reutilizarse ni reenviarse.
+- Solo se persiste el **hash SHA-256** del token, nunca el valor en claro; el
+  enlace enviado por correo usa el token como **fragmento de URL**
+  (`/#invite=...`), que nunca llega al servidor ni a los logs del proxy.
+- Un `LIDER` solo ve y administra sus propias invitaciones; un `ADMIN` ve
+  todas.
+
+Endpoints (bajo `/api/invitaciones`, requieren sesión con rol `ADMIN` o
+`LIDER`, salvo los dos públicos indicados):
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/api/invitaciones` | Crea una invitación y envía el correo |
+| `GET` | `/api/invitaciones` | Lista invitaciones (propias o todas si es `ADMIN`) |
+| `POST` | `/api/invitaciones/:id/revocar` | Revoca una invitación pendiente |
+| `POST` | `/api/invitaciones/:id/reenviar` | Reenvía (token nuevo) una invitación pendiente o expirada |
+| `POST` | `/api/auth/invitaciones/consultar` *(público)* | Consulta los datos de una invitación por token (en el body) |
+| `POST` | `/api/auth/invitaciones/aceptar` *(público)* | Acepta una invitación y crea la cuenta |
+
+Gestión de usuarios (solo `ADMIN`, bajo `/api/admin`):
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/admin/users` | Lista todos los usuarios |
+| `PATCH` | `/api/admin/users/:id/rol` | Cambia el rol de otro usuario |
 
 ---
 

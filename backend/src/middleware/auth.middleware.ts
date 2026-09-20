@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/jwt.js';
-import { isAdmin } from '../lib/authz.js';
+import { isAdmin, canInvite } from '../lib/authz.js';
 
 export async function authMiddleware(
   req: Request,
@@ -51,6 +51,20 @@ export function requireAdmin(
 ): void {
   if (!isAdmin(req.user)) {
     res.status(403).json({ error: 'Acceso restringido al administrador' });
+    return;
+  }
+  next();
+}
+
+// Sistema cerrado: solo ADMIN y LIDER pueden invitar cuentas nuevas (un LIDER
+// solo puede invitar SOCIOS — ver lib/invitaciones.ts).
+export function requireCanInvite(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (!canInvite(req.user)) {
+    res.status(403).json({ error: 'No tienes permiso para invitar' });
     return;
   }
   next();

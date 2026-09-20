@@ -20,6 +20,14 @@ describe('parseCreateUserArgs', () => {
     }
   });
 
+  it('parses --rol LIDER', () => {
+    const result = parseCreateUserArgs(['--email', 'a@b.com', '--name', 'Ada', '--rol', 'LIDER']);
+    assert.equal(result.success, true);
+    if (result.success) {
+      assert.equal(result.data.rol, 'LIDER');
+    }
+  });
+
   it('trims and lowercases the email', () => {
     const result = parseCreateUserArgs(['--email', '  Foo@BAR.com  ', '--name', 'Foo']);
     assert.equal(result.success, true);

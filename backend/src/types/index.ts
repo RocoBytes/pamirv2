@@ -1,8 +1,10 @@
+import type { RolUsuario } from '../generated/prisma/client.js';
+
 export interface AuthUser {
   id: string;
   email: string;
   name: string;
-  rol: 'SOCIO' | 'ADMIN';
+  rol: RolUsuario;
 }
 
 // Augments Express's Request interface to add req.user

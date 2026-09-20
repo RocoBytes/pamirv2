@@ -52,4 +52,14 @@ describe('auth.route', () => {
     const layers = await loadRouterLayers();
     assert.equal(hasRoute(layers, '/reset-password', 'post'), true);
   });
+
+  it('expone POST /invitaciones/consultar (público)', async () => {
+    const layers = await loadRouterLayers();
+    assert.equal(hasRoute(layers, '/invitaciones/consultar', 'post'), true);
+  });
+
+  it('expone POST /invitaciones/aceptar (público)', async () => {
+    const layers = await loadRouterLayers();
+    assert.equal(hasRoute(layers, '/invitaciones/aceptar', 'post'), true);
+  });
 });

@@ -16,6 +16,11 @@ async function loadRequireAdmin() {
   return requireAdmin;
 }
 
+async function loadRequireCanInvite() {
+  const { requireCanInvite } = await import('./auth.middleware.js');
+  return requireCanInvite;
+}
+
 function fakeResponse(): Response & { statusCode?: number; body?: unknown } {
   const res = {
     statusCode: undefined,
@@ -87,6 +92,57 @@ describe('requireAdmin', () => {
     const { next, state } = fakeNext();
 
     requireAdmin(req, res, next);
+
+    assert.equal(state.called, false);
+    assert.equal(res.statusCode, 403);
+  });
+});
+
+describe('requireCanInvite', () => {
+  it('calls next() for a user with rol ADMIN', async () => {
+    const requireCanInvite = await loadRequireCanInvite();
+    const req = { user: { id: '1', email: 'admin@club.cl', name: 'Admin', rol: 'ADMIN' } } as unknown as Request;
+    const res = fakeResponse();
+    const { next, state } = fakeNext();
+
+    requireCanInvite(req, res, next);
+
+    assert.equal(state.called, true);
+    assert.equal(res.statusCode, undefined);
+  });
+
+  it('calls next() for a user with rol LIDER', async () => {
+    const requireCanInvite = await loadRequireCanInvite();
+    const req = { user: { id: '2', email: 'lider@club.cl', name: 'Lider', rol: 'LIDER' } } as unknown as Request;
+    const res = fakeResponse();
+    const { next, state } = fakeNext();
+
+    requireCanInvite(req, res, next);
+
+    assert.equal(state.called, true);
+    assert.equal(res.statusCode, undefined);
+  });
+
+  it('responds 403 and does not call next() for a user with rol SOCIO', async () => {
+    const requireCanInvite = await loadRequireCanInvite();
+    const req = { user: { id: '3', email: 'socio@club.cl', name: 'Socio', rol: 'SOCIO' } } as unknown as Request;
+    const res = fakeResponse();
+    const { next, state } = fakeNext();
+
+    requireCanInvite(req, res, next);
+
+    assert.equal(state.called, false);
+    assert.equal(res.statusCode, 403);
+    assert.deepEqual(res.body, { error: 'No tienes permiso para invitar' });
+  });
+
+  it('responds 403 when there is no user', async () => {
+    const requireCanInvite = await loadRequireCanInvite();
+    const req = { user: null } as unknown as Request;
+    const res = fakeResponse();
+    const { next, state } = fakeNext();
+
+    requireCanInvite(req, res, next);
 
     assert.equal(state.called, false);
     assert.equal(res.statusCode, 403);

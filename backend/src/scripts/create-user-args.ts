@@ -4,9 +4,9 @@ import { emailField, nameField } from '../lib/auth-fields.js';
 // Puro (sin Prisma, sin I/O): parsea y valida los argumentos de línea de
 // comandos de create-user.ts. No hay flag --password: la contraseña siempre
 // se pide de forma interactiva (ver create-user.ts).
-export type Rol = 'SOCIO' | 'ADMIN';
+export type Rol = 'SOCIO' | 'LIDER' | 'ADMIN';
 
-const ROL_VALUES: readonly Rol[] = ['SOCIO', 'ADMIN'];
+const ROL_VALUES: readonly Rol[] = ['SOCIO', 'LIDER', 'ADMIN'];
 
 export interface CreateUserArgs {
   email: string;
@@ -20,7 +20,7 @@ export type ParseCreateUserArgsResult =
   | { success: false; errors: string[] };
 
 const USAGE_ERROR =
-  'Argumentos inválidos. Flags permitidos: --email <email>, --name "<nombre>", --rol <SOCIO|ADMIN>, --force';
+  'Argumentos inválidos. Flags permitidos: --email <email>, --name "<nombre>", --rol <SOCIO|LIDER|ADMIN>, --force';
 
 export function parseCreateUserArgs(argv: string[]): ParseCreateUserArgsResult {
   let rawValues: { email?: string; name?: string; rol?: string; force?: boolean };
@@ -70,7 +70,7 @@ export function parseCreateUserArgs(argv: string[]): ParseCreateUserArgsResult {
   const rolInput = rawValues.rol ?? 'SOCIO';
   const rol = ROL_VALUES.find((r) => r === rolInput);
   if (!rol) {
-    errors.push('El rol debe ser SOCIO o ADMIN');
+    errors.push('El rol debe ser SOCIO, LIDER o ADMIN');
   }
 
   if (errors.length > 0 || !email || !name || !rol) {

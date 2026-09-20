@@ -924,6 +924,45 @@ export function buildPasswordResetEmail(name: string, resetUrl: string): string 
 </html>`;
 }
 
+// ─── Invitaciones (sistema cerrado) ───────────────────────────────────────────
+
+export interface InvitationEmailData {
+  invitadoPorNombre: string;
+  rolLabel: string;
+  inviteUrl: string;
+  expiraEnDias: number;
+}
+
+export function buildInvitationEmail(data: InvitationEmailData): string {
+  const inviteUrlSafe = escapeHtml(data.inviteUrl);
+
+  const intro = `<p style="margin:0;color:#1f2937;font-size:15px;">
+    <strong>${escapeHtml(data.invitadoPorNombre)}</strong> te invitó a crear una cuenta en el sistema Pamir de Andino Club Pamir.
+  </p>`;
+
+  const tabla = `${row('Rol asignado', data.rolLabel)}`;
+
+  const cta = `
+        <tr>
+          <td style="padding:0 32px 28px;text-align:center;">
+            <a href="${inviteUrlSafe}" style="display:inline-block;background:${GREEN};color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 28px;border-radius:8px;">Crear mi cuenta</a>
+            <p style="margin:14px 0 0;color:#6b7280;font-size:11px;word-break:break-all;">
+              Si el botón no funciona, copia este enlace: ${inviteUrlSafe}
+            </p>
+            <p style="margin:14px 0 0;color:#ef4444;font-size:13px;font-weight:600;">⚠ Este enlace expira en ${data.expiraEnDias} días.</p>
+            <p style="margin:8px 0 0;color:${GRAY};font-size:12px;">Es un enlace personal y de un solo uso: no lo compartas con nadie.</p>
+          </td>
+        </tr>`;
+
+  return emailShell(
+    'Invitación a Pamir',
+    intro,
+    tabla,
+    'Este correo es una notificación automática del sistema PAMIR. Si no esperabas esta invitación, puedes ignorar este mensaje.',
+    cta,
+  );
+}
+
 // ─── Eventos del club ─────────────────────────────────────────────────────────
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';

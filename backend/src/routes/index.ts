@@ -11,6 +11,7 @@ import documentosRouter from './documentos.route.js';
 import eventosRouter from './eventos.route.js';
 import cronRouter from './cron.route.js';
 import adminRouter from './admin.route.js';
+import invitacionesRouter from './invitaciones.route.js';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use('/documentos', documentosRouter);
 router.use('/eventos', eventosRouter);
 router.use('/cron', cronRouter);
 router.use('/admin', adminRouter);
+router.use('/invitaciones', invitacionesRouter);
 
 export default router;
