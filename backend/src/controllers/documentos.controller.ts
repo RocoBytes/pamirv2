@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import Busboy from 'busboy';
 import { prisma } from '../lib/prisma.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
+import { isAdmin } from '../lib/authz.js';
 import { uploadToGoogleDrive, deleteFromGoogleDrive } from '../lib/google-drive.js';
 
 const MEMBRESIA_SOCIO_PAMIR = 'SOCIO_ANDINO_PAMIR';
@@ -34,7 +34,7 @@ export async function getDocumentos(req: Request, res: Response): Promise<void> 
   try {
     const email = req.user!.email;
 
-    if (email !== ADMIN_EMAIL) {
+    if (!isAdmin(req.user)) {
       const integrante = await prisma.integrante.findFirst({
         where: { email },
         select: { membresiaClub: true },

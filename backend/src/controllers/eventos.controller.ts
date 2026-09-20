@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { encolarNotificacion, despacharNotificacionesPendientes } from '../lib/notificaciones.js';
+import { isAdmin } from '../lib/authz.js';
 
 const MES_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -28,7 +29,7 @@ export async function getCategorias(_req: Request, res: Response): Promise<void>
 
 export async function getEventos(req: Request, res: Response): Promise<void> {
   try {
-    const isAdmin = req.user!.rol === 'ADMIN';
+    const esAdmin = isAdmin(req.user);
 
     const mes = req.query['mes'];
     if (mes !== undefined && (typeof mes !== 'string' || !MES_REGEX.test(mes))) {
@@ -46,7 +47,7 @@ export async function getEventos(req: Request, res: Response): Promise<void> {
     // consulta indexada por request para no-admins; los socios pagan lo mismo
     // y obtienen lista vacía).
     let gestorIds: number[] = [];
-    if (!isAdmin) {
+    if (!esAdmin) {
       const filas = await prisma.gestorCategoria.findMany({
         where: { usuarioId: req.user!.id },
         select: { categoriaId: true },
@@ -56,7 +57,7 @@ export async function getEventos(req: Request, res: Response): Promise<void> {
     const esGestor = gestorIds.length > 0;
 
     const condiciones: Prisma.EventoWhereInput[] = [];
-    if (!isAdmin) {
+    if (!esAdmin) {
       condiciones.push(
         esGestor
           ? {
@@ -85,7 +86,7 @@ export async function getEventos(req: Request, res: Response): Promise<void> {
       ventana = { fechaFin: { gte: hoySantiagoUtc() } };
     }
     if (ventana) {
-      if (isAdmin) {
+      if (esAdmin) {
         condiciones.push({ OR: [ventana, { estado: 'BORRADOR', fechaInicio: null }] });
       } else if (esGestor) {
         condiciones.push({
@@ -144,7 +145,7 @@ export async function getEventoById(req: Request, res: Response): Promise<void> 
       res.status(404).json({ error: 'Evento no encontrado' });
       return;
     }
-    if (evento.estado === 'BORRADOR' && req.user!.rol !== 'ADMIN') {
+    if (evento.estado === 'BORRADOR' && !isAdmin(req.user)) {
       const esGestorDeCategoria =
         evento.categoriaId !== null &&
         (await prisma.gestorCategoria.count({
@@ -209,7 +210,7 @@ export async function inscribirse(req: Request, res: Response): Promise<void> {
 
   try {
     const evento = await prisma.evento.findUnique({ where: { id } });
-    if (!evento || (evento.estado === 'BORRADOR' && req.user!.rol !== 'ADMIN')) {
+    if (!evento || (evento.estado === 'BORRADOR' && !isAdmin(req.user))) {
       res.status(404).json({ error: 'Evento no encontrado' });
       return;
     }

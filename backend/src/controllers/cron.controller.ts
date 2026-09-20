@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { sendEmail } from '../lib/google-gmail.js';
 import { buildAlertaSalidaEmail, buildRecordatorioCierreEmail } from '../lib/email-templates.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
+import { ALERT_EMAIL } from '../lib/constants.js';
 import { instanteSantiago } from '../lib/santiago-time.js';
 
 /**
@@ -99,7 +99,7 @@ export async function checkAlertas(req: Request, res: Response): Promise<void> {
 
           try {
             await sendEmail(
-              ADMIN_EMAIL,
+              ALERT_EMAIL,
               `ALERTA: Salida sin cierre — ${salida.nombreActividad}`,
               buildAlertaSalidaEmail(salida),
             );

@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { Prisma, SalidaStatus, Salida } from '../generated/prisma/client.js';
 import { sendEmail } from '../lib/google-gmail.js';
 import { buildSalidaNotificationEmail } from '../lib/email-templates.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
+import { isAdmin } from '../lib/authz.js';
 import { instanteSantiago } from '../lib/santiago-time.js';
 import { errorFechaCalendario } from '../lib/fecha-calendario.js';
 
@@ -186,9 +186,8 @@ export async function createSalida(req: Request, res: Response): Promise<void> {
   try {
     const data = req.body as CreateSalidaBody;
     const userId = req.user?.id ?? null;
-    const isAdmin = req.user?.email === ADMIN_EMAIL;
     // Solo el admin puede crear registros históricos (fecha pasada, sin notificaciones).
-    const esRegistroHistorico = isAdmin && data.esRegistroHistorico === true;
+    const esRegistroHistorico = isAdmin(req.user) && data.esRegistroHistorico === true;
 
     if (!data.pronosticoMeteorologico?.trim()) {
       res.status(400).json({ error: 'El pronóstico meteorológico es obligatorio' });
@@ -196,7 +195,7 @@ export async function createSalida(req: Request, res: Response): Promise<void> {
     }
 
     // Un usuario no-admin nunca puede marcar una salida como registro histórico.
-    if (!isAdmin && data.esRegistroHistorico) {
+    if (!isAdmin(req.user) && data.esRegistroHistorico) {
       res.status(403).json({ error: 'No tienes permiso para crear registros históricos' });
       return;
     }
@@ -293,7 +292,7 @@ export async function getSalidas(req: Request, res: Response): Promise<void> {
     // El admin ve todas las salidas (incluidas COMPLETADAS) para poder
     // revisar evaluaciones y cierres de cualquier líder.
     // _count.cierres allows the AdminPanel to detect open salidas without a cierre.
-    if (userEmail === ADMIN_EMAIL) {
+    if (isAdmin(req.user)) {
       const salidas = await prisma.salida.findMany({
         orderBy: { createdAt: 'desc' },
         include: { _count: { select: { cierres: true } } },
@@ -394,9 +393,6 @@ export async function getSalidaById(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // El administrador puede ver el detalle de cualquier salida.
-    const isAdmin = requestUserEmail === ADMIN_EMAIL;
-
     let isParticipant = false;
     if (requestUserEmail) {
       const integrante = await prisma.integrante.findFirst({
@@ -411,7 +407,8 @@ export async function getSalidaById(req: Request, res: Response): Promise<void> 
       }
     }
 
-    if (!isAdmin && salida.userId !== null && salida.userId !== requestUserId && !isParticipant) {
+    // El administrador puede ver el detalle de cualquier salida.
+    if (!isAdmin(req.user) && salida.userId !== null && salida.userId !== requestUserId && !isParticipant) {
       res.status(403).json({ error: 'No tienes permiso para ver esta salida' });
       return;
     }
@@ -427,8 +424,6 @@ export async function updateSalida(req: Request, res: Response): Promise<void> {
   try {
     const id = req.params.id as string;
     const requestUserId = req.user?.id ?? null;
-    const requestUserEmail = req.user?.email ?? null;
-    const isAdmin = requestUserEmail === ADMIN_EMAIL;
 
     const existing = await prisma.salida.findUnique({ where: { id } });
     if (!existing) {
@@ -436,7 +431,7 @@ export async function updateSalida(req: Request, res: Response): Promise<void> {
       return;
     }
     // Solo el dueño o el administrador pueden editar una salida.
-    if (!isAdmin && existing.userId !== null && existing.userId !== requestUserId) {
+    if (!isAdmin(req.user) && existing.userId !== null && existing.userId !== requestUserId) {
       res.status(403).json({ error: 'No tienes permiso para modificar esta salida' });
       return;
     }
@@ -512,7 +507,6 @@ export async function updateSalidaIntegrantes(req: Request, res: Response): Prom
     const id = req.params.id as string;
     const requestUserId = req.user?.id ?? null;
     const requestUserEmail = req.user?.email ?? null;
-    const isAdmin = requestUserEmail === ADMIN_EMAIL;
 
     const existing = await prisma.salida.findUnique({ where: { id } });
     if (!existing) {
@@ -521,7 +515,7 @@ export async function updateSalidaIntegrantes(req: Request, res: Response): Prom
     }
 
     // Solo el dueño o el administrador pueden editar los integrantes.
-    if (!isAdmin && existing.userId !== null && existing.userId !== requestUserId) {
+    if (!isAdmin(req.user) && existing.userId !== null && existing.userId !== requestUserId) {
       res.status(403).json({ error: 'No tienes permiso para modificar esta salida' });
       return;
     }

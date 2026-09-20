@@ -85,6 +85,13 @@ npm run db:create-user -- --email alguien@club.cl --name "Nombre Apellido" --rol
 contraseña por stdin (nunca por flag) y la confirma dos veces si hay una TTY.
 Usa `--force` para actualizar un usuario existente en vez de fallar.
 
+El acceso de administrador depende únicamente del rol (`ADMIN`) guardado en la
+base de datos, nunca de un email fijo: el comando anterior con `--rol ADMIN`
+(o con `--force` sobre un usuario existente) es la forma de otorgarlo o
+revocarlo, sin redeploy. La variable `ALERT_EMAIL` (ver `backend/.env.example`)
+es un asunto distinto: solo define a quién llegan las alertas automáticas de
+"salida sin cierre".
+
 ---
 
 ## Despliegue

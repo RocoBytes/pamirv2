@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { Prisma, Cierre } from '../generated/prisma/client.js';
 import { sendEmail } from '../lib/google-gmail.js';
 import { buildCierreNotificationEmail } from '../lib/email-templates.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
+import { isAdmin } from '../lib/authz.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
@@ -72,7 +72,6 @@ export async function createCierre(req: Request, res: Response): Promise<void> {
   try {
     const data = req.body as CreateCierreBody;
     const userId = req.user!.id;
-    const isAdmin = req.user!.email === ADMIN_EMAIL;
 
     const salida = await prisma.salida.findUnique({ where: { id: data.salidaId } });
     if (!salida) {
@@ -80,7 +79,7 @@ export async function createCierre(req: Request, res: Response): Promise<void> {
       return;
     }
     // El dueño o el administrador pueden cerrar; nadie más.
-    if (!isAdmin && salida.userId !== null && salida.userId !== userId) {
+    if (!isAdmin(req.user) && salida.userId !== null && salida.userId !== userId) {
       res.status(403).json({ error: 'No tienes permiso para cerrar esta salida' });
       return;
     }
@@ -137,7 +136,7 @@ export async function createCierre(req: Request, res: Response): Promise<void> {
     // registro histórico, o su retorno estimado fue hace más de 5 días.
     const retornoStr = salida.fechaRetornoEstimada.toISOString().slice(0, 10);
     const cutoffStr = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const silenciarCierre = isAdmin && (salida.esRegistroHistorico || retornoStr < cutoffStr);
+    const silenciarCierre = isAdmin(req.user) && (salida.esRegistroHistorico || retornoStr < cutoffStr);
 
     if (!silenciarCierre) {
       sendCierreParticipantEmails(data.salidaId, cierre)

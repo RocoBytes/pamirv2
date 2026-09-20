@@ -18,8 +18,6 @@ import type { IntegranteRecord } from './types/salida'
 
 type Route = 'dashboard' | 'nueva-salida' | 'nuevo-integrante' | 'nueva-cierre' | 'nuevo-integrante-standalone' | 'documentos' | 'contactos' | 'admin-panel' | 'admin-dashboard' | 'editar-salida' | 'eventos' | 'crear-evento' | 'gestionar-evento'
 
-const ADMIN_EMAIL = 'seguridad.acp.cl@gmail.com'
-
 function getQueryParam(name: string): string | null {
   return new URLSearchParams(window.location.search).get(name)
 }
@@ -42,7 +40,9 @@ export default function App() {
   const [integrante, setIntegrante] = useState<IntegranteRecord | null>(null)
 
   const isAuthenticated = !!(user && token)
-  const isAdmin = user?.email === ADMIN_EMAIL
+  // Autorización por rol en DB (no por email): promover o degradar un admin
+  // es un UPDATE en la base, sin redeploy.
+  const isAdmin = user?.rol === 'ADMIN'
   // Autorización del módulo de eventos: por rol/gestores en DB, no por email
   const esAdminEventos = user?.rol === 'ADMIN'
   const gestorCategoriaIds = user?.gestorCategorias?.map((g) => g.categoriaId) ?? []

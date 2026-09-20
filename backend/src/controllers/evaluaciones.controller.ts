@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
+import { isAdmin } from '../lib/authz.js';
 
 const MAX_COMENTARIO_LENGTH = 2000;
 
@@ -103,7 +103,7 @@ export async function submitEvaluacion(req: Request, res: Response): Promise<voi
 // GET /api/evaluaciones/resultados/:salidaId — solo admin
 export async function getResultados(req: Request, res: Response): Promise<void> {
   try {
-    if (req.user?.email !== ADMIN_EMAIL) {
+    if (!isAdmin(req.user)) {
       res.status(403).json({ error: 'No tienes permiso para ver los resultados' });
       return;
     }

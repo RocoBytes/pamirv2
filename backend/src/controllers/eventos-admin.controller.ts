@@ -5,6 +5,7 @@ import { fechaCalendarioField as fechaField } from '../lib/fecha-calendario.js';
 import { instanteSantiago } from '../lib/santiago-time.js';
 import { prisma } from '../lib/prisma.js';
 import { Evento, Prisma } from '../generated/prisma/client.js';
+import { isAdmin } from '../lib/authz.js';
 import {
   despacharNotificacionesPendientes,
   DispatchEnCursoError,
@@ -31,7 +32,7 @@ class HttpError extends Error {
 // (req.gestorCategoriaIds, poblado por requireGestorEventos). Un evento sin
 // categoría solo lo gestiona el admin.
 function puedeGestionarCategoria(req: Request, categoriaId: number | null): boolean {
-  if (req.user?.rol === 'ADMIN') return true;
+  if (isAdmin(req.user)) return true;
   if (categoriaId === null) return false;
   return req.gestorCategoriaIds?.includes(categoriaId) ?? false;
 }
@@ -169,7 +170,7 @@ export async function createEvento(req: Request, res: Response): Promise<void> {
   try {
     // Un gestor siempre crea dentro de una de sus categorías; solo el admin
     // puede partir un borrador sin categoría.
-    if (req.user!.rol !== 'ADMIN' && parsed.data.categoriaId == null) {
+    if (!isAdmin(req.user) && parsed.data.categoriaId == null) {
       res.status(400).json({ error: 'Selecciona la categoría' });
       return;
     }
@@ -233,7 +234,7 @@ export async function updateEvento(req: Request, res: Response): Promise<void> {
     // Cambios de categoría: un gestor no puede dejarla en null ni moverla a
     // una categoría que no gestiona.
     if (parsed.data.categoriaId !== undefined) {
-      if (parsed.data.categoriaId === null && req.user!.rol !== 'ADMIN') {
+      if (parsed.data.categoriaId === null && !isAdmin(req.user)) {
         res.status(400).json({ error: 'Selecciona la categoría' });
         return;
       }

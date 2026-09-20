@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { sendEmail } from '../lib/google-gmail.js';
 import { buildConfirmationEmail } from '../lib/email-templates.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
+import { isAdmin } from '../lib/authz.js';
 
 interface CreateIntegranteBody {
   nombreCompleto: string;
@@ -43,7 +43,7 @@ export async function createIntegrante(req: Request, res: Response): Promise<voi
   try {
     const data = req.body as CreateIntegranteBody;
 
-    if (req.user!.email !== ADMIN_EMAIL && req.user!.email !== data.email) {
+    if (!isAdmin(req.user) && req.user!.email !== data.email) {
       res.status(403).json({ error: 'No autorizado para crear integrantes para otros usuarios' });
       return;
     }
