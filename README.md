@@ -65,6 +65,28 @@ cp frontend/.env.example frontend/.env  # Fase 2: VITE_API_URL, etc.
 
 ---
 
+## Protección de la base de datos y gestión de usuarios (v2)
+
+`backend/db-target.json` declara un fragmento del host de Neon (`allowedHostFragment`)
+que `DATABASE_URL` debe contener. Los comandos `db:push`, `db:deploy`, `db:migrate`,
+`db:studio` y `db:create-user` corren primero `npm run db:guard`, que aborta si
+`DATABASE_URL` no coincide — evitando que un comando local termine tocando la
+base de v1. Con el archivo vacío (como viene por defecto) el guard siempre falla;
+complétalo con el fragmento del proyecto Neon de v2 antes de usar esos comandos.
+
+Las cuentas se crean con el CLI interactivo `db:create-user`:
+
+```bash
+cd backend
+npm run db:create-user -- --email alguien@club.cl --name "Nombre Apellido" --rol ADMIN
+```
+
+`--rol` acepta `SOCIO` o `ADMIN` (por defecto `SOCIO`). Pide la
+contraseña por stdin (nunca por flag) y la confirma dos veces si hay una TTY.
+Usa `--force` para actualizar un usuario existente en vez de fallar.
+
+---
+
 ## Despliegue
 
 Arquitectura: un stack de Docker Compose en el VPS. El contenedor `nginx`
