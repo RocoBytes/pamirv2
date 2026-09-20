@@ -58,6 +58,8 @@ interface DashboardProps {
   onEditSalida: (id: string) => void
   onCloseSalida: (id: string) => void
   onLogout: () => void
+  puedeInvitar: boolean
+  onInvitar: () => void
 }
 
 function formatDate(iso: string): string {
@@ -128,7 +130,7 @@ function SalidaCard({ salida, currentUserId, onClick }: { salida: SalidaRecord, 
   )
 }
 
-export function Dashboard({ user, locked = false, isAdmin = false, isSocioPamir = false, onNewSalida, onNewCierre, onNewIntegrante, onDocumentos, onContactos, onEventos, onAdminPanel, onEditSalida, onCloseSalida, onLogout }: DashboardProps) {
+export function Dashboard({ user, locked = false, isAdmin = false, isSocioPamir = false, onNewSalida, onNewCierre, onNewIntegrante, onDocumentos, onContactos, onEventos, onAdminPanel, onEditSalida, onCloseSalida, onLogout, puedeInvitar, onInvitar }: DashboardProps) {
   const [salidas, setSalidas] = useState<SalidaRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -437,6 +439,26 @@ export function Dashboard({ user, locked = false, isAdmin = false, isSocioPamir 
               </div>
               <p className="text-xs text-[#757874]">
                 Salidas abiertas, alarmas e historial de registros
+              </p>
+            </div>
+            <ChevronRight size={16} className="text-[#757874]" />
+          </button>
+        )}
+
+        {/* Invitar — sistema cerrado, visible solo para ADMIN y LIDER */}
+        {puedeInvitar && (
+          <button
+            onClick={onInvitar}
+            className="w-full flex items-center gap-4 bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm hover:shadow-md transition-shadow duration-200 p-4 mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] focus-visible:ring-offset-2"
+            aria-label="Invitar al club"
+          >
+            <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#e8eef7] flex items-center justify-center">
+              <UserPlus size={20} className="text-[#264c99]" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-semibold text-slate-900 text-sm">Invitar</p>
+              <p className="text-xs text-[#757874]">
+                Envía una invitación por correo para unirse al club
               </p>
             </div>
             <ChevronRight size={16} className="text-[#757874]" />

@@ -7,7 +7,7 @@ export interface User {
   avatar?: string
   picture?: string
   // Opcional: sesiones guardadas antes del módulo de eventos no lo traen
-  rol?: 'SOCIO' | 'ADMIN'
+  rol?: 'SOCIO' | 'LIDER' | 'ADMIN'
   // Categorías de eventos que el usuario gestiona (gestores por categoría)
   gestorCategorias?: { categoriaId: number; slug: string }[]
 }

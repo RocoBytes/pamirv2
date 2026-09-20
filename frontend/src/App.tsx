@@ -13,10 +13,14 @@ import { EventoAdminPage } from './components/EventoAdminPage'
 import { AdminPanel } from './components/AdminPanel'
 import { AdminDashboard } from './components/AdminDashboard'
 import { SalidaEditForm } from './components/SalidaEditForm'
+import { InvitarPage } from './components/invitaciones/InvitarPage'
+import { Button } from './components/ui/Button'
 import { fetchMyIntegrante } from './lib/api'
 import type { IntegranteRecord } from './types/salida'
+import { parseInviteToken } from './lib/invite-token'
+import { puedeInvitar } from './lib/roles'
 
-type Route = 'dashboard' | 'nueva-salida' | 'nuevo-integrante' | 'nueva-cierre' | 'nuevo-integrante-standalone' | 'documentos' | 'contactos' | 'admin-panel' | 'admin-dashboard' | 'editar-salida' | 'eventos' | 'crear-evento' | 'gestionar-evento'
+type Route = 'dashboard' | 'nueva-salida' | 'nuevo-integrante' | 'nueva-cierre' | 'nuevo-integrante-standalone' | 'documentos' | 'contactos' | 'admin-panel' | 'admin-dashboard' | 'editar-salida' | 'eventos' | 'crear-evento' | 'gestionar-evento' | 'invitar'
 
 function getQueryParam(name: string): string | null {
   return new URLSearchParams(window.location.search).get(name)
@@ -39,6 +43,20 @@ export default function App() {
   const [integranteChecked, setIntegranteChecked] = useState(false)
   const [integrante, setIntegrante] = useState<IntegranteRecord | null>(null)
 
+  // Token de invitación (sistema cerrado): viaja en el fragmento de la URL
+  // (`#invite=<token>`) a propósito, para que nunca llegue al servidor ni a
+  // los logs del proxy. Se lee una sola vez al montar.
+  const [inviteToken, setInviteToken] = useState<string | null>(() =>
+    parseInviteToken(window.location.hash),
+  )
+
+  useEffect(() => {
+    if (!inviteToken) return
+    // Limpia el fragmento de la URL para que el token no quede en el
+    // historial ni sobreviva a un refresh accidental.
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
+  }, [inviteToken])
+
   const isAuthenticated = !!(user && token)
   // Autorización por rol en DB (no por email): promover o degradar un admin
   // es un UPDATE en la base, sin redeploy.
@@ -49,6 +67,8 @@ export default function App() {
   const puedeGestionarEventos = esAdminEventos || gestorCategoriaIds.length > 0
   const hasIntegrante = integrante !== null
   const isSocioPamir = integrante?.membresiaClub === 'SOCIO_ANDINO_PAMIR'
+  // Sistema cerrado por invitación: solo ADMIN y LIDER pueden invitar.
+  const puedeInvitarUsuario = puedeInvitar(user?.rol)
 
   // Reset al cambiar la sesión, ajustando estado durante el render
   // (evita el setState síncrono dentro del effect)
@@ -57,6 +77,10 @@ export default function App() {
     setPrevAuthenticated(isAuthenticated)
     setIntegranteChecked(false)
     setIntegrante(null)
+    // Una transición false → true consume el token de invitación (login
+    // normal o login automático tras aceptar una invitación). Si la app ya
+    // estaba autenticada al montar, el token se conserva para el interstitial.
+    if (isAuthenticated) setInviteToken(null)
   }
 
   useEffect(() => {
@@ -99,7 +123,29 @@ export default function App() {
         isLoading={isLoading}
         verifiedStatus={verifiedParam === '1' ? 'success' : verifiedParam === 'error' ? 'error' : undefined}
         resetToken={resetToken ?? undefined}
+        inviteToken={inviteToken ?? undefined}
       />
+    )
+  }
+
+  // Sesión ya iniciada pero se abrió un enlace de invitación: no se ignora en
+  // silencio, se ofrece cerrar sesión para aceptarla o seguir con la actual.
+  if (inviteToken) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-[#4a6fad]/15 p-6 text-center">
+          <p className="text-sm text-slate-700 mb-5">
+            Ya iniciaste sesión como <span className="font-semibold">{user?.email}</span>. Para
+            aceptar esta invitación debes cerrar sesión.
+          </p>
+          <div className="flex flex-col gap-2">
+            <Button fullWidth onClick={logout}>Cerrar sesión y continuar</Button>
+            <Button variant="ghost" fullWidth onClick={() => setInviteToken(null)}>
+              Seguir con mi sesión
+            </Button>
+          </div>
+        </div>
+      </div>
     )
   }
 
@@ -183,17 +229,24 @@ export default function App() {
     )
   }
 
-  if (route === 'admin-panel' && isAdmin) {
+  if (route === 'admin-panel' && isAdmin && user) {
     return (
       <AdminPanel
         onBack={() => setRoute('dashboard')}
         onDashboard={() => setRoute('admin-dashboard')}
+        currentUserId={user.id}
       />
     )
   }
 
   if (route === 'admin-dashboard' && isAdmin) {
     return <AdminDashboard onBack={() => setRoute('admin-panel')} />
+  }
+
+  if (route === 'invitar' && user && puedeInvitarUsuario) {
+    // Rol garantizado LIDER o ADMIN por puedeInvitarUsuario; el `?? 'SOCIO'`
+    // solo satisface el tipo (User.rol es opcional por sesiones antiguas).
+    return <InvitarPage rolActual={user.rol ?? 'SOCIO'} onBack={() => setRoute('dashboard')} />
   }
 
   if (route === 'editar-salida' && isAdmin && actionSalidaId) {
@@ -234,6 +287,8 @@ export default function App() {
       onEditSalida={(id) => { setActionSalidaId(id); setRoute('editar-salida') }}
       onCloseSalida={(id) => { setActionSalidaId(id); setRoute('nueva-cierre') }}
       onLogout={logout}
+      puedeInvitar={puedeInvitarUsuario}
+      onInvitar={() => setRoute('invitar')}
     />
   )
 }

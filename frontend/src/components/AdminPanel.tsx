@@ -18,6 +18,7 @@ import {
   Upload,
   Trash2,
   KeyRound,
+  UserCog,
 } from 'lucide-react'
 import logoPamir from '../assets/logo_PAMIR.png'
 
@@ -43,10 +44,13 @@ import type { SalidaRecord } from '../types/salida'
 import { STATUS_LABELS, STATUS_COLORS, DISCIPLINA_LABELS } from '../types/salida'
 import { CATEGORIA_LABELS, CATEGORIA_ORDEN } from '../lib/documentos'
 import { Button } from './ui/Button'
+import { InvitacionesManager } from './invitaciones/InvitacionesManager'
+import { UsuariosManager } from './invitaciones/UsuariosManager'
 
 interface AdminPanelProps {
   onBack: () => void
   onDashboard: () => void
+  currentUserId: string
 }
 
 function formatDate(iso: string): string {
@@ -656,7 +660,7 @@ function DocumentosAdminSection() {
 
 // ─── AdminPanel component ─────────────────────────────────────────────────────
 
-export function AdminPanel({ onBack, onDashboard }: AdminPanelProps) {
+export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelProps) {
   const [salidas, setSalidas] = useState<SalidaRecord[] | null>(null)
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
@@ -939,6 +943,25 @@ export function AdminPanel({ onBack, onDashboard }: AdminPanelProps) {
         {!isLoading && <GoogleCredencialSection />}
 
         {!isLoading && <DocumentosAdminSection />}
+
+        {/* ── Section: Usuarios e invitaciones (sistema cerrado) ──────────── */}
+        {!isLoading && (
+          <section className="mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <UserCog size={16} className="text-[#264c99]" />
+              <h2 className="text-base font-bold text-slate-900">Usuarios e invitaciones</h2>
+            </div>
+            <p className="text-xs text-[#757874] mb-3">
+              Andino Club Pamir es un sistema cerrado: las cuentas nuevas solo se crean por
+              invitación. Gestiona quién puede unirse y qué rol tiene cada integrante.
+            </p>
+
+            <div className="flex flex-col gap-6">
+              <InvitacionesManager rolActual="ADMIN" />
+              <UsuariosManager currentUserId={currentUserId} />
+            </div>
+          </section>
+        )}
 
         {!isLoading && salidas && (
           <>

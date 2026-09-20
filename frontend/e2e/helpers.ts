@@ -16,6 +16,15 @@ export const MOCK_ADMIN = {
   gestorCategorias: [],
 }
 
+/** Líder: socio al que además se le permite invitar a otros socios */
+export const MOCK_LIDER = {
+  id: 'user-lider-001',
+  email: 'lider@example.com',
+  name: 'Lider Cordada',
+  rol: 'LIDER',
+  gestorCategorias: [],
+}
+
 /** Gestor de eventos: socio con una categoría asignada (montanismo-n1) */
 export const MOCK_GESTOR = {
   id: 'user-gestor-001',

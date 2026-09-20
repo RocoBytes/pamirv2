@@ -10,6 +10,15 @@ import type {
   PostulantesResponse,
 } from '../types/evento'
 import { getAuthToken } from './auth-token'
+import type {
+  Rol,
+  Invitacion,
+  UsuarioAdmin,
+  ConsultarInvitacionResponse,
+  AceptarInvitacionResponse,
+  CrearInvitacionResponse,
+  ListarInvitacionesResponse,
+} from '../types/invitacion'
 
 // En desarrollo el proxy de Vite redirige /api → localhost:3000.
 // En producción (Vercel) no hay proxy: se usa VITE_API_URL apuntando a Render.com.
@@ -761,6 +770,85 @@ export async function cancelarEvento(id: string, motivo?: string): Promise<Event
     body: JSON.stringify(motivo ? { motivo } : {}),
   })
   return handleResponse<EventoRecord>(res)
+}
+
+// ─── Invitaciones (sistema cerrado) ──────────────────────────────────────────
+
+// Públicos: no llevan Authorization. El token siempre va en el body, nunca en
+// la URL, para que no quede en los logs de acceso.
+
+export async function consultarInvitacion(token: string): Promise<ConsultarInvitacionResponse> {
+  const res = await fetch(`${API_BASE}/auth/invitaciones/consultar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  })
+  return handleResponse<ConsultarInvitacionResponse>(res)
+}
+
+export async function aceptarInvitacion(
+  token: string,
+  name: string,
+  password: string,
+): Promise<AceptarInvitacionResponse> {
+  const res = await fetch(`${API_BASE}/auth/invitaciones/aceptar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, name, password }),
+  })
+  return handleResponse<AceptarInvitacionResponse>(res)
+}
+
+// Autenticados (ADMIN o LIDER): ADMIN ve todas, LIDER solo las que él envió.
+
+export async function listarInvitaciones(): Promise<ListarInvitacionesResponse> {
+  const res = await fetch(`${API_BASE}/invitaciones`, {
+    headers: authHeaders(),
+  })
+  return handleResponse<ListarInvitacionesResponse>(res)
+}
+
+export async function crearInvitacion(email: string, rol?: Rol): Promise<CrearInvitacionResponse> {
+  const res = await fetch(`${API_BASE}/invitaciones`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(rol ? { email, rol } : { email }),
+  })
+  return handleResponse<CrearInvitacionResponse>(res)
+}
+
+export async function revocarInvitacion(id: string): Promise<{ invitacion: Invitacion }> {
+  const res = await fetch(`${API_BASE}/invitaciones/${encodeURIComponent(id)}/revocar`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  return handleResponse<{ invitacion: Invitacion }>(res)
+}
+
+export async function reenviarInvitacion(id: string): Promise<CrearInvitacionResponse> {
+  const res = await fetch(`${API_BASE}/invitaciones/${encodeURIComponent(id)}/reenviar`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  return handleResponse<CrearInvitacionResponse>(res)
+}
+
+// ─── Usuarios (solo administrador) ────────────────────────────────────────────
+
+export async function listarUsuarios(): Promise<UsuarioAdmin[]> {
+  const res = await fetch(`${API_BASE}/admin/users`, {
+    headers: authHeaders(),
+  })
+  return handleResponse<UsuarioAdmin[]>(res)
+}
+
+export async function cambiarRolUsuario(id: string, rol: Rol): Promise<UsuarioAdmin> {
+  const res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(id)}/rol`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ rol }),
+  })
+  return handleResponse<UsuarioAdmin>(res)
 }
 
 // ─── Health ───────────────────────────────────────────────────────────────────
