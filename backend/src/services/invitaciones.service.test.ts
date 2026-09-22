@@ -8,6 +8,7 @@ import {
   reenviarInvitacion,
   consultarInvitacion,
   aceptarInvitacion,
+  crearInvitacionPlataforma,
   type InvitacionesDeps,
   type InvitacionesRepo,
   type InvitacionRow,
@@ -59,6 +60,7 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
         tokenHash: data.tokenHash,
         expiresAt: data.expiresAt,
         invitadoPorId: data.invitadoPorId,
+        emitidaPorPlataforma: data.emitidaPorPlataforma,
         aceptadaAt: null,
         usuarioId: null,
         revocadaAt: null,
@@ -657,5 +659,217 @@ describe('aceptarInvitacion', () => {
     const result = await aceptarInvitacion(deps, token, { name: 'Alguien', password: 'password123' });
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.status, 409);
+  });
+
+  it('ignora un emitidaPorPlataforma/organizationId inyectados en el body: la cuenta hereda los de la invitación', async () => {
+    const { deps, users, invitaciones } = createDeps();
+    const creada = await crearInvitacion(deps, ADMIN, { email: 'segura@club.cl' });
+    assert.equal(creada.ok, true);
+    if (!creada.ok) return;
+    const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
+
+    const result = await aceptarInvitacion(deps, token, {
+      name: 'Alguien',
+      password: 'password123',
+      // No forman parte del contrato de entrada de aceptarInvitacion: deben ignorarse.
+      emitidaPorPlataforma: true,
+      organizationId: 'org-intrusa',
+    } as unknown as { name: unknown; password: unknown });
+    assert.equal(result.ok, true);
+
+    const creado = users.find((u) => u.email === 'segura@club.cl');
+    assert.equal(creado?.organizationId, ADMIN.organizationId);
+    assert.equal(invitaciones.find((i) => i.email === 'segura@club.cl')?.emitidaPorPlataforma, false);
+  });
+});
+
+// ─── crearInvitacionPlataforma ──────────────────────────────────────────────────
+
+describe('crearInvitacionPlataforma', () => {
+  it('crea una invitación sin invitador para el club indicado (happy path)', async () => {
+    const { deps, invitaciones } = createDeps();
+    const result = await crearInvitacionPlataforma(deps, {
+      organizationId: 'org-nuevo',
+      email: 'primer-admin@club-nuevo.cl',
+      rol: 'ADMIN',
+    });
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.status, 201);
+      assert.equal(result.body.invitacion.invitadoPor, null);
+      assert.equal(result.body.invitacion.emitidaPorPlataforma, true);
+      assert.equal(result.body.invitacion.rol, 'ADMIN');
+      assert.equal(result.body.emailEnviado, true);
+    }
+
+    const guardada = invitaciones.find((i) => i.email === 'primer-admin@club-nuevo.cl');
+    assert.equal(guardada?.organizationId, 'org-nuevo');
+    assert.equal(guardada?.invitadoPorId, null);
+    assert.equal(guardada?.emitidaPorPlataforma, true);
+  });
+
+  it('usa "el equipo de la plataforma" como nombre del invitador en el correo', async () => {
+    const { deps, sentEmails } = createDeps();
+    await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'x@club-nuevo.cl', rol: 'ADMIN' });
+    assert.equal((sentEmails[0] as { invitadoPorNombre: string }).invitadoPorNombre, 'el equipo de la plataforma');
+  });
+
+  it('rechaza con 409 si ya existe una cuenta con ese email', async () => {
+    const { deps } = createDeps({}, [
+      { id: 'u1', organizationId: 'org-1', email: 'ya@club.cl', name: 'Ya', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const result = await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'ya@club.cl', rol: 'ADMIN' });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 409);
+  });
+
+  it('rechaza un rol desconocido', async () => {
+    const { deps } = createDeps();
+    const result = await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'x@club-nuevo.cl', rol: 'SUPERADMIN' });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 400);
+  });
+
+  it('rechaza un email inválido', async () => {
+    const { deps } = createDeps();
+    const result = await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'no-es-un-email', rol: 'ADMIN' });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 400);
+  });
+
+  it('revoca cualquier invitación pendiente previa para el mismo email', async () => {
+    const { deps, invitaciones } = createDeps();
+    await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'dup@club-nuevo.cl', rol: 'ADMIN' });
+    await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'dup@club-nuevo.cl', rol: 'ADMIN' });
+
+    assert.equal(invitaciones.length, 2);
+    assert.notEqual(invitaciones[0]?.revocadaAt, null);
+    assert.equal(invitaciones[1]?.revocadaAt, null);
+  });
+
+  describe('exención de la regla de autoridad vigente', () => {
+    it('consultarInvitacion es válida y devuelve la etiqueta de la plataforma, sin invitador', async () => {
+      const { deps } = createDeps();
+      const creada = await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'x@club-nuevo.cl', rol: 'ADMIN' });
+      assert.equal(creada.ok, true);
+      if (!creada.ok) return;
+      const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
+
+      const result = await consultarInvitacion(deps, token);
+      assert.equal(result.ok, true);
+      if (result.ok) {
+        assert.equal(result.body.invitadoPor, 'el equipo de la plataforma');
+        assert.equal(result.body.rol, 'ADMIN');
+      }
+    });
+
+    it('aceptarInvitacion crea un ADMIN del club indicado, sin depender de ningún invitador', async () => {
+      const { deps, users } = createDeps();
+      const creada = await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'nuevo-admin@club-nuevo.cl', rol: 'ADMIN' });
+      assert.equal(creada.ok, true);
+      if (!creada.ok) return;
+      const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
+
+      const result = await aceptarInvitacion(deps, token, { name: 'Nuevo Admin', password: 'password123' });
+      assert.equal(result.ok, true);
+
+      const creado = users.find((u) => u.email === 'nuevo-admin@club-nuevo.cl');
+      assert.equal(creado?.rol, 'ADMIN');
+      assert.equal(creado?.organizationId, 'org-nuevo');
+    });
+
+    it('en cambio, una invitación NORMAL sigue rechazándose si su invitador ya no existe', async () => {
+      const { deps, users } = createDeps();
+      const creada = await crearInvitacion(deps, ADMIN, { email: 'x@club.cl' });
+      assert.equal(creada.ok, true);
+      if (!creada.ok) return;
+      const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
+
+      users.splice(users.findIndex((u) => u.id === ADMIN.id), 1);
+
+      const result = await consultarInvitacion(deps, token);
+      assert.equal(result.ok, false);
+      if (!result.ok) assert.equal(result.status, 410);
+    });
+  });
+
+  describe('gestión por el ADMIN/LIDER del club', () => {
+    it('un ADMIN puede reenviarla; el reenvío produce una invitación normal emitida por ese ADMIN', async () => {
+      const { deps, invitaciones } = createDeps();
+      const creada = await crearInvitacionPlataforma(deps, {
+        organizationId: ADMIN.organizationId,
+        email: 'reenviar@club.cl',
+        rol: 'SOCIO',
+      });
+      assert.equal(creada.ok, true);
+      if (!creada.ok) return;
+
+      const result = await reenviarInvitacion(deps, ADMIN, creada.body.invitacion.id);
+      assert.equal(result.ok, true);
+      if (!result.ok) return;
+
+      assert.equal(result.body.invitacion.emitidaPorPlataforma, false);
+      assert.equal(result.body.invitacion.invitadoPor?.id, ADMIN.id);
+      const nueva = invitaciones.find((i) => i.id === result.body.invitacion.id);
+      assert.equal(nueva?.invitadoPorId, ADMIN.id);
+    });
+
+    it('un ADMIN puede revocarla', async () => {
+      const { deps } = createDeps();
+      const creada = await crearInvitacionPlataforma(deps, {
+        organizationId: ADMIN.organizationId,
+        email: 'revocar@club.cl',
+        rol: 'SOCIO',
+      });
+      assert.equal(creada.ok, true);
+      if (!creada.ok) return;
+
+      const result = await revocarInvitacion(deps, ADMIN, creada.body.invitacion.id);
+      assert.equal(result.ok, true);
+    });
+
+    it('un LIDER no la ve al listar (solo ve las suyas) ni puede gestionarla (404)', async () => {
+      const { deps } = createDeps();
+      const creada = await crearInvitacionPlataforma(deps, {
+        organizationId: ADMIN.organizationId,
+        email: 'oculta-para-lider@club.cl',
+        rol: 'SOCIO',
+      });
+      assert.equal(creada.ok, true);
+      if (!creada.ok) return;
+
+      const listado = await listarInvitaciones(deps, LIDER);
+      assert.equal(listado.ok, true);
+      if (listado.ok) {
+        assert.equal(listado.body.invitaciones.some((i) => i.id === creada.body.invitacion.id), false);
+      }
+
+      const revocar = await revocarInvitacion(deps, LIDER, creada.body.invitacion.id);
+      assert.equal(revocar.ok, false);
+      if (!revocar.ok) assert.equal(revocar.status, 404);
+
+      const reenviar = await reenviarInvitacion(deps, LIDER, creada.body.invitacion.id);
+      assert.equal(reenviar.ok, false);
+      if (!reenviar.ok) assert.equal(reenviar.status, 404);
+    });
+
+    it('un ADMIN sí la ve al listar', async () => {
+      const { deps } = createDeps();
+      const creada = await crearInvitacionPlataforma(deps, {
+        organizationId: ADMIN.organizationId,
+        email: 'visible-para-admin@club.cl',
+        rol: 'SOCIO',
+      });
+      assert.equal(creada.ok, true);
+      if (!creada.ok) return;
+
+      const listado = await listarInvitaciones(deps, ADMIN);
+      assert.equal(listado.ok, true);
+      if (listado.ok) {
+        const encontrada = listado.body.invitaciones.find((i) => i.id === creada.body.invitacion.id);
+        assert.ok(encontrada);
+        assert.equal(encontrada?.emitidaPorPlataforma, true);
+      }
+    });
   });
 });

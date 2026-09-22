@@ -17,7 +17,21 @@ export async function authMiddleware(req, res, next) {
         // club pertenece), así que este findUnique corre en contexto de plataforma.
         const user = await runAsPlatform(() => prisma.user.findUnique({
             where: { id: userId },
-            include: { organization: { select: { status: true } } },
+            include: {
+                organization: {
+                    select: {
+                        id: true,
+                        slug: true,
+                        name: true,
+                        shortName: true,
+                        status: true,
+                        membresiaPropia: true,
+                        alertEmail: true,
+                        contactName: true,
+                        contactEmail: true,
+                    },
+                },
+            },
         }));
         if (!user) {
             req.user = null;
@@ -28,7 +42,25 @@ export async function authMiddleware(req, res, next) {
             res.status(403).json({ error: CLUB_SUSPENDIDO_MENSAJE });
             return;
         }
-        req.user = { id: user.id, organizationId: user.organizationId, email: user.email, name: user.name, rol: user.rol };
+        req.user = {
+            id: user.id,
+            organizationId: user.organizationId,
+            email: user.email,
+            name: user.name,
+            rol: user.rol,
+            // Resumen cargado una sola vez acá: los controladores lo leen de
+            // req.user.organization en vez de volver a consultar Organization.
+            organization: {
+                id: user.organization.id,
+                slug: user.organization.slug,
+                name: user.organization.name,
+                shortName: user.organization.shortName,
+                membresiaPropia: user.organization.membresiaPropia,
+                alertEmail: user.organization.alertEmail,
+                contactName: user.organization.contactName,
+                contactEmail: user.organization.contactEmail,
+            },
+        };
         // Todo lo que siga en la cadena de middlewares/handler corre dentro del
         // contexto del club del usuario: es lo que hace que prisma.ts filtre
         // automáticamente cada consulta de este request por su organizationId.

@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { sendEmail } from '../lib/google-gmail.js';
 import { buildAlertaSalidaEmail, buildRecordatorioCierreEmail } from '../lib/email-templates.js';
-import { ALERT_EMAIL } from '../lib/constants.js';
+import { resolveAlertRecipient } from '../lib/alert-recipient.js';
 import { instanteSantiago } from '../lib/santiago-time.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 /**
@@ -30,6 +30,8 @@ export async function checkAlertas(req, res) {
         const candidates = await runAsPlatform(() => 
         // Candidate salidas: open (EN_CURSO), no cierre, not a historical record,
         // and still pending at least one of the two actions (reminder or alarm).
+        // Se incluye el club dueño (alertEmail, name) para poder resolver el
+        // destinatario de la alarma sin volver a consultar Organization.
         prisma.salida.findMany({
             where: {
                 status: 'EN_CURSO',
@@ -41,10 +43,15 @@ export async function checkAlertas(req, res) {
                     { recordatorioCierreEnviadoAt: null },
                 ],
             },
+            include: { organization: { select: { alertEmail: true, name: true } } },
         }));
         const now = new Date();
         let alerted = 0;
         let reminded = 0;
+        // Una sola advertencia por corrida, aunque el override esté "ignorado" en
+        // varias salidas: un DEV_ALERT_EMAIL_OVERRIDE olvidado en producción es un
+        // error de configuración del entorno, no de una salida en particular.
+        let overrideIgnoredWarned = false;
         for (const salida of candidates) {
             try {
                 // Cada salida se procesa dentro del contexto de SU club: los updates
@@ -90,8 +97,18 @@ export async function checkAlertas(req, res) {
                             where: { id: salida.id },
                             data: { alertaEnviadaAt: new Date() },
                         });
+                        const { recipient, overrideIgnored } = resolveAlertRecipient({
+                            orgAlertEmail: salida.organization.alertEmail,
+                            override: process.env.DEV_ALERT_EMAIL_OVERRIDE,
+                            nodeEnv: process.env.NODE_ENV,
+                        });
+                        if (overrideIgnored && !overrideIgnoredWarned) {
+                            overrideIgnoredWarned = true;
+                            console.warn('[cron/check-alertas] DEV_ALERT_EMAIL_OVERRIDE está definida pero NODE_ENV=production: se ignora ' +
+                                'y cada salida usa el correo de alerta de su propio club.');
+                        }
                         try {
-                            await sendEmail(ALERT_EMAIL, `ALERTA: Salida sin cierre — ${salida.nombreActividad}`, buildAlertaSalidaEmail(salida));
+                            await sendEmail(recipient, `ALERTA: Salida sin cierre — ${salida.nombreActividad}`, buildAlertaSalidaEmail(salida));
                             alerted++;
                         }
                         catch (emailErr) {

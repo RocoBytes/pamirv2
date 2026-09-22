@@ -95,9 +95,9 @@ restablecimiento define su contraseña y verifica su email en el mismo paso.
 El acceso de administrador depende únicamente del rol (`ADMIN`) guardado en la
 base de datos, nunca de un email fijo: el comando anterior con `--rol ADMIN`
 (o con `--force` sobre un usuario existente) es la forma de otorgarlo o
-revocarlo, sin redeploy. La variable `ALERT_EMAIL` (ver `backend/.env.example`)
-es un asunto distinto: solo define a quién llegan las alertas automáticas de
-"salida sin cierre".
+revocarlo, sin redeploy. A quién llegan las alertas automáticas de "salida sin
+cierre" es un asunto distinto (ver la sección "Clubes (multi-tenant)" más
+abajo): depende del club, no de una variable de entorno fija.
 
 Ningún endpoint que lea o escriba datos admite llamadas anónimas: todos exigen
 `requireAuth` (sesión válida). Los únicos endpoints públicos son
@@ -233,6 +233,45 @@ etc.) provenga siempre de una fila ya resuelta dentro del mismo contexto —
 nunca de un id que llegue crudo del cliente sin pasar antes por una consulta
 scopeada.
 
+### Comportamiento por club
+
+`authMiddleware` carga una vez por request un resumen del club del usuario
+(`req.user.organization`: `slug`, `name`, `shortName`, `membresiaPropia`,
+`alertEmail`, `contactName`, `contactEmail`) — los controladores lo leen de
+ahí en vez de volver a consultar `Organization`.
+
+- **Alarma de "salida sin cierre"**: va al `alertEmail` DEL CLUB DUEÑO de la
+  salida, no a una casilla global. Para desarrollo, `DEV_ALERT_EMAIL_OVERRIDE`
+  (ver `backend/.env.example`) redirige todas las alarmas del cron a una
+  casilla de pruebas; en producción (`NODE_ENV=production`) se **ignora
+  siempre**, a propósito — un valor olvidado en el entorno no debe desviar en
+  silencio la alarma de seguridad de un club hacia una sola casilla. El
+  helper puro que decide esto es `backend/src/lib/alert-recipient.ts`.
+- **Invitaciones emitidas por la plataforma**: dar de alta el primer `ADMIN`
+  de un club nuevo es un problema de arranque (todavía no hay nadie en ese
+  club que pueda invitarlo). `crearInvitacionPlataforma`
+  (`backend/src/services/invitaciones.service.ts`) crea una invitación sin
+  invitador (`invitadoPorId: null`, `emitidaPorPlataforma: true`), exenta de
+  la regla que exige que el invitador siga existiendo y pueda otorgar ese rol.
+  `consultarInvitacion` muestra "el equipo de la plataforma" como invitador.
+  No tiene endpoint HTTP propio — la llamará un CLI de administración en una
+  fase posterior. El `ADMIN` de un club gestiona (lista/revoca/reenvía) estas
+  invitaciones igual que cualquier otra; un reenvío produce una invitación
+  normal, emitida por quien reenvía.
+- **Biblioteca de documentos** (`GET /api/documentos`): visible para el admin
+  y para los socios cuya `Integrante.membresiaClub` coincida con la
+  `Organization.membresiaPropia` DE ESE CLUB — nunca un valor fijo
+  (`backend/src/lib/documentos-access.ts`). Dos personas con la misma
+  afiliación de socio pueden obtener resultados distintos si consultan desde
+  clubes distintos.
+- **Fichas de salud entre clubes**: comportamiento deliberado, no un bug. Tras
+  el aislamiento, un participante cuya ficha de `Integrante` vive en OTRO club
+  simplemente no existe acá: el resumen de salud de una salida y el correo
+  que lo acompaña marcan `fichaEncontrada: false` con el texto "sin ficha en
+  este club", y el buscador de participantes por RUT del wizard ofrece
+  agregarlo como participante express o pedirle que complete su propia ficha
+  en ese club. Los datos médicos nunca se comparten entre clubes.
+
 ### Verificarlo
 
 ```bash
@@ -243,8 +282,11 @@ npm run test:isolation
 Corre contra la base de datos real de desarrollo (protegida por `db:guard`,
 igual que `db:push`/`db:migrate`), crea dos clubes efímeros con datos que
 colisionan a propósito (mismo RUT, mismo slug de categoría, mismo número de
-salida), verifica el aislamiento a nivel de base de datos y de HTTP, y borra
-todo lo que creó al terminar (incluso si algo falla a mitad de camino).
+salida, misma afiliación de socio en clubes con `membresiaPropia` distinta),
+verifica el aislamiento a nivel de base de datos y de HTTP —incluida la regla
+de la biblioteca de documentos y el ciclo de vida de una invitación de
+plataforma— y borra todo lo que creó al terminar (incluso si algo falla a
+mitad de camino).
 
 ---
 

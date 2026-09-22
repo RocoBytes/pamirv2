@@ -161,7 +161,10 @@ function BarRow({ label, value, max }: { label: string; value: number; max: numb
 
 function SinFichaBadge() {
   return (
-    <span className="inline-block bg-[#fef2f2] border border-[#fca5a5] text-[#991b1b] text-[10px] font-semibold px-2 py-0.5 rounded-md">
+    <span
+      className="inline-block bg-[#fef2f2] border border-[#fca5a5] text-[#991b1b] text-[10px] font-semibold px-2 py-0.5 rounded-md"
+      title="No tiene ficha de salud registrada en este club"
+    >
       Sin ficha
     </span>
   )

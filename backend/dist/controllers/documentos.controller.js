@@ -1,9 +1,9 @@
 import Busboy from 'busboy';
 import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../lib/authz.js';
+import { puedeVerDocumentos } from '../lib/documentos-access.js';
 import { uploadToGoogleDrive, deleteFromGoogleDrive } from '../lib/google-drive.js';
 import { bindTenantContext } from '../lib/tenant-context.js';
-const MEMBRESIA_SOCIO_PAMIR = 'SOCIO_ANDINO_PAMIR';
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
 const ALLOWED_DOC_EXT = /\.pdf$/i;
 // Set conocido de categorías de la biblioteca. Debe mantenerse en sync con
@@ -29,15 +29,21 @@ function sanitizeDocFilename(raw) {
 export async function getDocumentos(req, res) {
     try {
         const email = req.user.email;
-        if (!isAdmin(req.user)) {
-            const integrante = await prisma.integrante.findFirst({
+        const organization = req.user.organization;
+        const admin = isAdmin(req.user);
+        const integrante = admin
+            ? null
+            : await prisma.integrante.findFirst({
                 where: { email },
                 select: { membresiaClub: true },
             });
-            if (integrante?.membresiaClub !== MEMBRESIA_SOCIO_PAMIR) {
-                res.status(403).json({ error: 'Sección exclusiva para socios de Andino Club Pamir' });
-                return;
-            }
+        if (!puedeVerDocumentos({
+            isAdmin: admin,
+            integranteMembresiaClub: integrante?.membresiaClub,
+            membresiaPropia: organization.membresiaPropia,
+        })) {
+            res.status(403).json({ error: `Sección exclusiva para socios de ${organization.name}` });
+            return;
         }
         const documentos = await prisma.documento.findMany({
             where: { visible: true },

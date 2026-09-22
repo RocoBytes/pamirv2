@@ -170,6 +170,12 @@ model Invitacion {
   tokenHash     String     @unique @map("token_hash")
   expiresAt     DateTime   @map("expires_at")
   invitadoPorId String?    @map("invitado_por_id")
+  // Invitación emitida directamente por la plataforma, sin invitador: nace
+  // para dar de alta al primer ADMIN de un club nuevo (que todavía no tiene a
+  // nadie que lo invite). Está exenta de la regla de vigencia basada en la
+  // autoridad del invitador (ver verificarVigencia en invitaciones.service.ts)
+  // — no tiene uno por diseño, no porque haya sido borrado.
+  emitidaPorPlataforma Boolean @default(false) @map("emitida_por_plataforma")
   aceptadaAt    DateTime?  @map("aceptada_at")
   usuarioId     String?    @unique @map("usuario_id")
   revocadaAt    DateTime?  @map("revocada_at")
@@ -370,7 +376,9 @@ model Cierre {
 }
 
 // Biblioteca de documentos del club (formularios, check-lists, glosario, libros).
-// Visible solo para socios de Andino Club Pamir (membresiaClub SOCIO_ANDINO_PAMIR) y admin.
+// Visible solo para el admin y para los socios cuyo Integrante.membresiaClub
+// coincide con la Organization.membresiaPropia del club (ver getDocumentos en
+// documentos.controller.ts).
 model Documento {
   id             String  @id @default(uuid())
   organizationId String  @map("organization_id")

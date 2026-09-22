@@ -822,12 +822,12 @@ export function buildSaludSalidaEmail(
 
   const sinFichaRows = sinFicha.length
     ? `
-    ${sectionHeader('Participantes sin ficha de salud registrada')}
+    ${sectionHeader('Participantes sin ficha de salud registrada en este club')}
     ${sinFicha.map((p) => `
     <tr>
       <td colspan="2" style="padding:8px 12px;color:#1f2937;font-size:13px;border-bottom:1px solid ${BORDER};">
         ${escapeHtml(p.nombre)} <span style="color:${GRAY};font-size:12px;">(RUT: ${escapeHtml(p.rut)})</span>
-        <span style="margin-left:8px;display:inline-block;background:#fef2f2;border:1px solid #fca5a5;border-radius:4px;padding:2px 8px;font-size:11px;color:#991b1b;font-weight:600;">Sin ficha de salud</span>
+        <span style="margin-left:8px;display:inline-block;background:#fef2f2;border:1px solid #fca5a5;border-radius:4px;padding:2px 8px;font-size:11px;color:#991b1b;font-weight:600;">Sin ficha en este club</span>
       </td>
     </tr>`).join('')}
     `

@@ -13,6 +13,7 @@ function toPublicView(inv, invitadoPor, now) {
         aceptadaAt: inv.aceptadaAt,
         revocadaAt: inv.revocadaAt,
         invitadoPor,
+        emitidaPorPlataforma: inv.emitidaPorPlataforma,
     };
 }
 async function invitadoPorPublico(deps, invitadoPorId) {
@@ -30,6 +31,10 @@ const MENSAJE_TOKEN_INVALIDO = 'La invitación no es válida';
 const MENSAJE_YA_UTILIZADA = 'Esta invitación ya fue utilizada. Inicia sesión.';
 const MENSAJE_EXPIRADA = 'La invitación expiró. Pide a quien te invitó que la reenvíe.';
 const MENSAJE_NO_VIGENTE = 'La invitación ya no está vigente';
+const MENSAJE_ROL_INVALIDO = 'Rol inválido';
+// Nombre que se muestra como "invitado por" cuando la invitación la emitió la
+// plataforma (sin invitador) — ver crearInvitacionPlataforma.
+const PLATAFORMA_NOMBRE = 'el equipo de la plataforma';
 async function enviarCorreoInvitacion(deps, params) {
     try {
         await deps.sendEmail(params);
@@ -70,6 +75,7 @@ export async function crearInvitacion(deps, requester, body) {
         tokenHash,
         expiresAt,
         invitadoPorId: requester.id,
+        emitidaPorPlataforma: false,
     });
     // Fragmento (#) a propósito: nunca llega al servidor ni a los logs del proxy.
     const inviteUrl = `${deps.frontendUrl}/#invite=${token}`;
@@ -153,6 +159,8 @@ export async function reenviarInvitacion(deps, requester, id) {
     await deps.repo.markRevoked(id, now);
     const { token, tokenHash } = generateInviteToken();
     const expiresAt = new Date(now.getTime() + INVITE_TTL_MS);
+    // Un reenvío siempre produce una invitación normal emitida por quien
+    // reenvía, aunque la original haya sido emitida por la plataforma.
     const nueva = await deps.repo.createInvitacion({
         organizationId: requester.organizationId,
         email: inv.email,
@@ -160,6 +168,7 @@ export async function reenviarInvitacion(deps, requester, id) {
         tokenHash,
         expiresAt,
         invitadoPorId: requester.id,
+        emitidaPorPlataforma: false,
     });
     const inviteUrl = `${deps.frontendUrl}/#invite=${token}`;
     const emailEnviado = await enviarCorreoInvitacion(deps, {
@@ -190,9 +199,14 @@ async function verificarVigencia(deps, inv, now) {
     if (estado === 'REVOCADA') {
         return { ok: false, status: 410, error: MENSAJE_NO_VIGENTE };
     }
-    // Una invitación solo vale lo que valga la autoridad vigente de quien la
-    // envió: si ya no existe o fue degradado por debajo del rol otorgado, se
-    // trata igual que una revocación.
+    // Una invitación emitida por la plataforma no tiene invitador por diseño:
+    // queda exenta de la regla de autoridad vigente de abajo.
+    if (inv.emitidaPorPlataforma) {
+        return { vigente: true, inviter: null };
+    }
+    // Una invitación normal solo vale lo que valga la autoridad vigente de
+    // quien la envió: si ya no existe o fue degradado por debajo del rol
+    // otorgado, se trata igual que una revocación.
     const inviter = inv.invitadoPorId ? await deps.repo.findUserById(inv.invitadoPorId) : null;
     if (!inviter || !puedeInvitarRol(inviter.rol, inv.rol)) {
         return { ok: false, status: 410, error: MENSAJE_NO_VIGENTE };
@@ -211,7 +225,12 @@ export async function consultarInvitacion(deps, token) {
     return {
         ok: true,
         status: 200,
-        body: { email: inv.email, rol: inv.rol, rolLabel: ROL_LABELS[inv.rol], invitadoPor: vigencia.inviter.name },
+        body: {
+            email: inv.email,
+            rol: inv.rol,
+            rolLabel: ROL_LABELS[inv.rol],
+            invitadoPor: vigencia.inviter ? vigencia.inviter.name : PLATAFORMA_NOMBRE,
+        },
     };
 }
 export async function aceptarInvitacion(deps, token, body) {
@@ -254,5 +273,58 @@ export async function aceptarInvitacion(deps, token, body) {
         ok: true,
         status: 201,
         body: { message: 'Cuenta creada. Ya puedes iniciar sesión.', email: user.email },
+    };
+}
+// ─── crearInvitacionPlataforma ──────────────────────────────────────────────────
+// Invitación emitida directamente por la plataforma, sin invitador: nace para
+// dar de alta al primer ADMIN de un club nuevo (que todavía no tiene a nadie
+// que lo invite). No hay endpoint HTTP para esto — lo llamará un CLI de
+// administración en una fase posterior, ya envuelto en el contexto de club
+// correspondiente (runWithOrganization).
+const ROLES_VALIDOS = Object.keys(ROL_LABELS);
+export async function crearInvitacionPlataforma(deps, input) {
+    const emailParsed = emailField.safeParse(input.email);
+    if (!emailParsed.success) {
+        return { ok: false, status: 400, error: emailParsed.error.issues[0]?.message ?? 'Email inválido' };
+    }
+    const email = emailParsed.data.toLowerCase();
+    if (typeof input.rol !== 'string' || !ROLES_VALIDOS.includes(input.rol)) {
+        return { ok: false, status: 400, error: MENSAJE_ROL_INVALIDO };
+    }
+    const rol = input.rol;
+    const existing = await deps.repo.findUserByEmail(email);
+    if (existing) {
+        return { ok: false, status: 409, error: MENSAJE_CUENTA_EXISTENTE };
+    }
+    const now = deps.now();
+    await deps.repo.revokePendingForEmail(email, now);
+    const { token, tokenHash } = generateInviteToken();
+    const expiresAt = new Date(now.getTime() + INVITE_TTL_MS);
+    const invitacion = await deps.repo.createInvitacion({
+        organizationId: input.organizationId,
+        email,
+        rol,
+        tokenHash,
+        expiresAt,
+        invitadoPorId: null,
+        emitidaPorPlataforma: true,
+    });
+    // Fragmento (#) a propósito: nunca llega al servidor ni a los logs del proxy.
+    const inviteUrl = `${deps.frontendUrl}/#invite=${token}`;
+    const emailEnviado = await enviarCorreoInvitacion(deps, {
+        to: email,
+        invitadoPorNombre: PLATAFORMA_NOMBRE,
+        rolLabel: ROL_LABELS[rol],
+        inviteUrl,
+        expiraEnDias: INVITE_TTL_DIAS,
+    });
+    return {
+        ok: true,
+        status: 201,
+        body: {
+            invitacion: toPublicView(invitacion, null, now),
+            inviteUrl,
+            emailEnviado,
+        },
     };
 }

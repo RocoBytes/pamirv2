@@ -9,6 +9,8 @@ import assert from 'node:assert/strict';
 import { prisma } from '../lib/prisma.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 import { signToken } from '../lib/jwt.js';
+import { crearInvitacionPlataforma } from '../services/invitaciones.service.js';
+import { invitacionesRepoPrisma } from '../services/invitaciones.repo.prisma.js';
 import app from '../app.js';
 const asJson = (v) => v;
 // ─── Claves naturales COLISIONANTES entre ambos clubes (a propósito) ──────────
@@ -16,6 +18,15 @@ const SHARED_RUT = '11.111.111-1';
 const SHARED_CATEGORIA_SLUG = 'iso-test-categoria';
 const SHARED_DECLARACION_VERSION = 'iso-test-v1';
 const SHARED_NUMERO_SALIDA = 1;
+// RUT del socio "de biblioteca" (distinto del SHARED_RUT de arriba, que ya
+// usan las pruebas genéricas por modelo) — ver seedOrganization.
+const SOCIO_RUT = '22.222.222-2';
+// Membresías propias reales de ambos clubes (no un valor sintético
+// "SOCIO_ISO_X"): el check de la biblioteca de documentos depende de que
+// difieran entre sí para poder probar la regla "misma afiliación, club
+// distinto".
+const MEMBRESIA_A = 'SOCIO_ANDINO_PAMIR';
+const MEMBRESIA_B = 'SOCIO_EL_MONTANISTA';
 const RANDOM_SUFFIX = randomUUID().slice(0, 8);
 const SLUG_A = `iso-test-a-${RANDOM_SUFFIX}`;
 const SLUG_B = `iso-test-b-${RANDOM_SUFFIX}`;
@@ -79,11 +90,13 @@ async function countIsoTestOrganizations() {
 // numeroSalida) — si el aislamiento tuviera un agujero, esto lo expondría.
 async function seedOrganization(label, slug) {
     return runAsPlatform(async () => {
+        const membresiaPropia = label === 'A' ? MEMBRESIA_A : MEMBRESIA_B;
+        const organizationName = `Iso Test Club ${label}`;
         const organization = await prisma.organization.create({
             data: {
                 slug,
-                name: `Iso Test Club ${label}`,
-                membresiaPropia: `SOCIO_ISO_${label}`,
+                name: organizationName,
+                membresiaPropia,
                 alertEmail: `alert-${label.toLowerCase()}-${RANDOM_SUFFIX}@iso-test.local`,
                 contactName: `Contacto ${label}`,
                 contactEmail: `contacto-${label.toLowerCase()}-${RANDOM_SUFFIX}@iso-test.local`,
@@ -123,7 +136,53 @@ async function seedOrganization(label, slug) {
                 cirugiasLesionesTiene: false,
                 fuma: false,
                 usaLentes: false,
-                membresiaClub: `SOCIO_ISO_${label}`,
+                membresiaClub: membresiaPropia,
+                declaracionSalud: true,
+                aceptacionRiesgo: true,
+                consentimientoDatos: true,
+                derechoImagen: true,
+            },
+        });
+        // Socio (no admin) con una ficha de Integrante EN SU PROPIO club cuya
+        // membresía es siempre la de A, incluso en el seed de B — así el check de
+        // la biblioteca de documentos comprueba que la regla depende de la
+        // membresía propia del club QUE CONSULTA, no de a qué club "dice
+        // pertenecer" el socio (misma afiliación, resultado distinto).
+        const socioEmail = `socio-${label.toLowerCase()}-${RANDOM_SUFFIX}@iso-test.local`;
+        const socioUser = await prisma.user.create({
+            data: {
+                organizationId: organization.id,
+                email: socioEmail,
+                name: `Socio ${label}`,
+                rol: 'SOCIO',
+                emailVerified: true,
+            },
+        });
+        await prisma.integrante.create({
+            data: {
+                organizationId: organization.id,
+                nombreCompleto: `Socio Integrante ${label}`,
+                rut: SOCIO_RUT,
+                nacionalidad: 'Chilena',
+                genero: 'OTRO',
+                fechaNacimiento: new Date('1990-01-01T00:00:00.000Z'),
+                direccion: 'Calle Falsa 456',
+                comuna: 'Santiago',
+                region: 'Metropolitana',
+                telefonoCelular: '+56900000002',
+                email: socioEmail,
+                previsionSalud: 'FONASA',
+                nombreContacto: 'Contacto Emergencia',
+                parentesco: 'Madre',
+                telefonoContacto: '+56900000003',
+                grupoSanguineo: 'O+',
+                alergiasTiene: false,
+                enfermedadesCronicasTiene: false,
+                medicamentosTiene: false,
+                cirugiasLesionesTiene: false,
+                fuma: false,
+                usaLentes: false,
+                membresiaClub: MEMBRESIA_A,
                 declaracionSalud: true,
                 aceptacionRiesgo: true,
                 consentimientoDatos: true,
@@ -254,8 +313,11 @@ async function seedOrganization(label, slug) {
         });
         return {
             organizationId: organization.id,
+            organizationName,
             adminUserId: adminUser.id,
             adminEmail,
+            socioUserId: socioUser.id,
+            socioEmail,
             integranteId: integrante.id,
             categoriaEventoId: categoriaEvento.id,
             gestorCategoriaId: gestorCategoria.id,
@@ -278,7 +340,14 @@ function asCheckable(delegate) {
 }
 function buildProbes(seedA, seedB) {
     return [
-        { name: 'User', delegate: asCheckable(prisma.user), idA: seedA.adminUserId, idB: seedB.adminUserId, updateProbe: { name: 'probe' } },
+        {
+            name: 'User',
+            delegate: asCheckable(prisma.user),
+            idA: seedA.adminUserId,
+            idB: seedB.adminUserId,
+            updateProbe: { name: 'probe' },
+            rowCount: 2,
+        },
         {
             name: 'DashboardLayout',
             delegate: asCheckable(prisma.dashboardLayout),
@@ -322,6 +391,7 @@ function buildProbes(seedA, seedB) {
             idA: seedA.integranteId,
             idB: seedB.integranteId,
             updateProbe: { fuma: false },
+            rowCount: 2,
         },
         {
             name: 'CategoriaEvento',
@@ -362,11 +432,11 @@ function buildProbes(seedA, seedB) {
     ];
 }
 async function runProbeChecks(probe, orgAId, orgBId) {
-    const { name, delegate, idA, idB, updateProbe } = probe;
-    await check(`${name}.findMany bajo A solo devuelve la fila de A`, async () => {
+    const { name, delegate, idA, idB, updateProbe, rowCount = 1 } = probe;
+    await check(`${name}.findMany bajo A solo devuelve fila(s) de A`, async () => {
         const rows = await runWithOrganization(orgAId, () => delegate.findMany({ where: {} }));
-        assert.equal(rows.length, 1);
-        assert.equal(rows[0]?.id, idA);
+        assert.equal(rows.length, rowCount);
+        assert.ok(rows.some((r) => r.id === idA));
     });
     await check(`${name}.findUnique por el id de B bajo A es null`, async () => {
         const row = await runWithOrganization(orgAId, () => delegate.findUnique({ where: { id: idB } }));
@@ -376,9 +446,9 @@ async function runProbeChecks(probe, orgAId, orgBId) {
         const row = await runWithOrganization(orgAId, () => delegate.findFirst({ where: { id: idB } }));
         assert.equal(row, null);
     });
-    await check(`${name}.count bajo A solo cuenta la fila de A`, async () => {
+    await check(`${name}.count bajo A solo cuenta fila(s) de A`, async () => {
         const total = await runWithOrganization(orgAId, () => delegate.count({ where: {} }));
-        assert.equal(total, 1);
+        assert.equal(total, rowCount);
     });
     await check(`${name}.update por el id de B bajo A lanza y no toca la fila de B`, async () => {
         await assert.rejects(() => runWithOrganization(orgAId, () => delegate.update({ where: { id: idB }, data: updateProbe })));
@@ -420,7 +490,9 @@ async function runCrossCuttingChecks(seedA, seedB) {
         await runWithOrganization(seedA.organizationId, async () => {
             const [salidaCount, integranteCount] = await prisma.$transaction([prisma.salida.count(), prisma.integrante.count()]);
             assert.equal(salidaCount, 1);
-            assert.equal(integranteCount, 1);
+            // 2: el Integrante "genérico" (SHARED_RUT) más el socio "de biblioteca"
+            // (SOCIO_RUT) — ver seedOrganization.
+            assert.equal(integranteCount, 2);
         });
     });
     await check('Organization.findMany bajo A solo ve a A; pedir el id de B lanza error', async () => {
@@ -473,6 +545,18 @@ async function getJson(baseUrl, token, urlPath) {
     const body = await res.json().catch(() => undefined);
     return { status: res.status, body };
 }
+// Sin token: usado por los dos endpoints públicos de invitaciones
+// (/api/auth/invitaciones/consultar y /aceptar). Ninguno de los dos envía
+// correo ni sube archivos.
+async function postJson(baseUrl, urlPath, payload) {
+    const res = await fetch(`${baseUrl}${urlPath}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => undefined);
+    return { status: res.status, body };
+}
 async function runHttpChecks(baseUrl, seedA, seedB) {
     const tokenA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
     const tokenB = signToken({ userId: seedB.adminUserId, email: seedB.adminEmail });
@@ -495,8 +579,11 @@ async function runHttpChecks(baseUrl, seedA, seedB) {
         const res = await getJson(baseUrl, tokenA, '/api/admin/users');
         assert.equal(res.status, 200);
         const users = res.body;
-        assert.equal(users.length, 1);
-        assert.equal(users[0]?.email, seedA.adminEmail);
+        // 2: el admin y el socio "de biblioteca" seedeados en el club A.
+        assert.equal(users.length, 2);
+        const emails = users.map((u) => u.email);
+        assert.ok(emails.includes(seedA.adminEmail));
+        assert.ok(emails.includes(seedA.socioEmail));
     });
     await check('GET /api/admin/stats — los totales reflejan solo el club del que consulta (predicado SQL crudo)', async () => {
         const res = await getJson(baseUrl, tokenA, '/api/admin/stats');
@@ -535,6 +622,66 @@ async function runHttpChecks(baseUrl, seedA, seedB) {
         const integranteA = resA.body;
         const integranteB = resB.body;
         assert.notEqual(integranteA.email, integranteB.email);
+    });
+    const tokenSocioA = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
+    const tokenSocioB = signToken({ userId: seedB.socioUserId, email: seedB.socioEmail });
+    await check('GET /api/documentos — el socio de A (membresía propia de A) ve la biblioteca', async () => {
+        const res = await getJson(baseUrl, tokenSocioA, '/api/documentos');
+        assert.equal(res.status, 200);
+    });
+    await check('GET /api/documentos — el socio de B con la MISMA afiliación (membresía de A) recibe 403 nombrando a SU club', async () => {
+        const res = await getJson(baseUrl, tokenSocioB, '/api/documentos');
+        assert.equal(res.status, 403);
+        const body = res.body;
+        assert.match(body.error, new RegExp(seedB.organizationName));
+    });
+    // ─── Invitaciones emitidas por la plataforma (bootstrap del primer ADMIN) ───
+    // Repositorio real (Prisma) + email falso (nunca contacta Gmail): no hay
+    // endpoint HTTP para crearlas todavía (llegará con el CLI de una fase
+    // posterior), así que se llama al servicio directo, ya envuelto en el
+    // contexto de club correspondiente — igual que hará ese CLI.
+    const fakeInvitacionDeps = {
+        repo: invitacionesRepoPrisma,
+        sendEmail: async () => { },
+        hashPassword: async (password) => `hashed:${password}`,
+        now: () => new Date(),
+        frontendUrl: 'https://iso-test.local',
+    };
+    await check('invitación de plataforma para el club A: crear → consultar (etiqueta de plataforma) → aceptar crea un ADMIN verificado', async () => {
+        const email = `platform-admin-${RANDOM_SUFFIX}@iso-test.local`;
+        const creada = await runWithOrganization(seedA.organizationId, () => crearInvitacionPlataforma(fakeInvitacionDeps, { organizationId: seedA.organizationId, email, rol: 'ADMIN' }));
+        assert.equal(creada.ok, true);
+        if (!creada.ok)
+            return;
+        assert.equal(creada.body.invitacion.invitadoPor, null);
+        assert.equal(creada.body.invitacion.emitidaPorPlataforma, true);
+        const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
+        assert.ok(token.length > 0);
+        const consultada = await postJson(baseUrl, '/api/auth/invitaciones/consultar', { token });
+        assert.equal(consultada.status, 200);
+        const consultadaBody = consultada.body;
+        assert.equal(consultadaBody.invitadoPor, 'el equipo de la plataforma');
+        assert.equal(consultadaBody.rol, 'ADMIN');
+        const aceptada = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', {
+            token,
+            name: 'Admin Plataforma',
+            password: 'password123',
+        });
+        assert.equal(aceptada.status, 201);
+        const creado = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+        assert.ok(creado);
+        assert.equal(creado?.organizationId, seedA.organizationId);
+        assert.equal(creado?.rol, 'ADMIN');
+        assert.equal(creado?.emailVerified, true);
+    });
+    await check('el admin de B no ve por HTTP una invitación de plataforma emitida para A', async () => {
+        const email = `platform-oculta-${RANDOM_SUFFIX}@iso-test.local`;
+        const creada = await runWithOrganization(seedA.organizationId, () => crearInvitacionPlataforma(fakeInvitacionDeps, { organizationId: seedA.organizationId, email, rol: 'SOCIO' }));
+        assert.equal(creada.ok, true);
+        const res = await getJson(baseUrl, tokenB, '/api/invitaciones');
+        assert.equal(res.status, 200);
+        const body = res.body;
+        assert.equal(body.invitaciones.some((i) => i.email === email), false);
     });
     await check('suspender el club B: su token pasa a 403 y el club A sigue en 200', async () => {
         await runAsPlatform(() => prisma.organization.update({ where: { id: seedB.organizationId }, data: { status: 'SUSPENDED' } }));

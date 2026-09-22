@@ -141,6 +141,7 @@ export const InvitacionScalarFieldEnum = {
     tokenHash: 'tokenHash',
     expiresAt: 'expiresAt',
     invitadoPorId: 'invitadoPorId',
+    emitidaPorPlataforma: 'emitidaPorPlataforma',
     aceptadaAt: 'aceptadaAt',
     usuarioId: 'usuarioId',
     revocadaAt: 'revocadaAt',

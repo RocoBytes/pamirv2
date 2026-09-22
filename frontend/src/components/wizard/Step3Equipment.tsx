@@ -184,8 +184,10 @@ function RutLookupResult({ rut, integrante, loading, actionLabel, isAdmin, onSel
     return (
       <div className="flex flex-col gap-2 px-4 py-3 rounded-xl border border-[#4a6fad]/20 bg-[#f0f4fb]">
         <p className="text-sm text-[#757874]">
-          Integrante no encontrado:{' '}
-          <span className="font-mono font-medium text-slate-700">{rut}</span>
+          Sin ficha en este club para el RUT{' '}
+          <span className="font-mono font-medium text-slate-700">{rut}</span>.
+          Puedes agregarlo como participante express o pedirle que complete su
+          ficha.
         </p>
         <button
           type="button"
