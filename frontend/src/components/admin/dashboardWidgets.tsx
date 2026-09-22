@@ -22,12 +22,47 @@ import {
 import type { AdminDashboard, DashboardWidgetLayout } from '../../lib/api'
 import { STATUS_LABELS } from '../../types/salida'
 
-// Theme tokens (mirror index.css). Recharts needs concrete color strings.
-const COLOR_PRIMARY = '#264c99'
-const COLOR_SECONDARY = '#4a6fad'
-const COLOR_TERTIARY = '#A4636E'
-const COLOR_GRID = '#e8eef7'
-const PIE_COLORS = ['#264c99', '#4a6fad', '#A4636E', '#7b9bd1', '#c08a93', '#9fb4d8']
+/*
+ * Paleta categórica de datos. Recharts necesita strings concretos, no clases,
+ * así que estos valores no pueden salir de los tokens de index.css en tiempo de
+ * ejecución — conviene tratarlos como una paleta propia y no como un espejo de
+ * los tokens de UI, que era lo que decía la versión anterior y ya no era cierto.
+ *
+ * Por qué no son los colores de marca: los tokens de UI están pensados para
+ * texto y superficies, no para áreas de datos contiguas. `primary` (#003481) cae
+ * fuera de la banda de luminosidad usable en un gráfico y `pine` (#2c6e49) lee
+ * como gris al reducir su tamaño. Estos seis se derivan de esa familia pero
+ * corridos a valores que sí funcionan como datos.
+ *
+ * Verificada con el validador de la skill dataviz (banda de luminosidad, piso de
+ * croma, separación bajo daltonismo protan/deutan/tritan, piso de visión normal
+ * y contraste ≥3:1 contra la superficie clara): los seis checks en PASS.
+ * El orden es FIJO — nunca se cicla ni se reasigna según cuántas series haya.
+ */
+const CHART_COLORS = [
+  '#3366d6', // azul
+  '#e85400', // naranja
+  '#14a862', // verde
+  '#9455e0', // violeta
+  '#0f9bb5', // cian
+  '#c2185b', // magenta
+] as const
+
+/*
+ * Asignación por significado, no por posición: el color sigue a la entidad, así
+ * que "cantidad de salidas" es siempre el mismo azul en todos los gráficos donde
+ * aparece, y no cambia de tono según en qué bloque esté.
+ */
+/** Conteos de salidas (todos los gráficos de una sola serie). */
+const COLOR_SALIDAS = CHART_COLORS[0]
+/** Severidad, contra COLOR_SALIDAS en el gráfico de incidentes y accidentes:
+ *  es el par adyacente (0,1) de la paleta, el que el validador comprobó. */
+const COLOR_SEVERIDAD = CHART_COLORS[1]
+/** Calidad de la experiencia: otra magnitud, no un conteo — hue propio. */
+const COLOR_CALIDAD = CHART_COLORS[2]
+// Rejilla recesiva: tiene que quedar por detrás de los datos, no competir.
+const COLOR_GRID = '#e1e3de'
+const PIE_COLORS = [...CHART_COLORS]
 
 const STATUS_LABEL = STATUS_LABELS as Record<string, string>
 
@@ -52,10 +87,10 @@ function MetricCard({
   subtitle?: string
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 h-full flex flex-col justify-center overflow-hidden">
-      <p className="text-2xl font-bold text-[#264c99] leading-tight">{value}</p>
-      <p className="text-xs text-[#757874] mt-1">{label}</p>
-      {subtitle && <p className="text-[10px] text-[#757874]/70 mt-0.5">{subtitle}</p>}
+    <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 h-full flex flex-col justify-center overflow-hidden">
+      <p className="text-2xl font-bold text-primary leading-tight">{value}</p>
+      <p className="text-xs text-on-surface-variant mt-1">{label}</p>
+      {subtitle && <p className="text-[10px] text-on-surface-variant/70 mt-0.5">{subtitle}</p>}
     </div>
   )
 }
@@ -70,12 +105,12 @@ function ChartCard({
   children: ReactNode
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 h-full flex flex-col overflow-hidden">
-      <h3 className="text-xs font-bold text-[#264c99] uppercase tracking-wide mb-3 shrink-0">
+    <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 h-full flex flex-col overflow-hidden">
+      <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-3 shrink-0">
         {title}
       </h3>
       {empty ? (
-        <p className="text-xs text-[#757874] py-8 text-center">
+        <p className="text-xs text-on-surface-variant py-8 text-center">
           Sin datos para los filtros seleccionados
         </p>
       ) : (
@@ -245,7 +280,7 @@ export const WIDGETS: WidgetDef[] = [
                 type="monotone"
                 dataKey="total"
                 name="Salidas"
-                stroke={COLOR_PRIMARY}
+                stroke={COLOR_SALIDAS}
                 strokeWidth={2}
               />
             </LineChart>
@@ -273,8 +308,8 @@ export const WIDGETS: WidgetDef[] = [
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip />
               <Legend />
-              <Bar dataKey="incidentes" name="Incidentes" fill={COLOR_SECONDARY} />
-              <Bar dataKey="accidentes" name="Accidentes" fill={COLOR_TERTIARY} />
+              <Bar dataKey="incidentes" name="Incidentes" fill={COLOR_SALIDAS} />
+              <Bar dataKey="accidentes" name="Accidentes" fill={COLOR_SEVERIDAD} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -334,7 +369,7 @@ export const WIDGETS: WidgetDef[] = [
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip />
-              <Bar dataKey="total" name="Respuestas" fill={COLOR_PRIMARY} />
+              <Bar dataKey="total" name="Respuestas" fill={COLOR_CALIDAD} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -362,7 +397,7 @@ export const WIDGETS: WidgetDef[] = [
                 type="monotone"
                 dataKey="promedio"
                 name="Promedio"
-                stroke={COLOR_TERTIARY}
+                stroke={COLOR_CALIDAD}
                 strokeWidth={2}
               />
             </LineChart>
@@ -385,7 +420,7 @@ export const WIDGETS: WidgetDef[] = [
               <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="lider" width={110} tick={{ fontSize: 11 }} />
               <Tooltip />
-              <Bar dataKey="total" name="Salidas" fill={COLOR_PRIMARY} />
+              <Bar dataKey="total" name="Salidas" fill={COLOR_SALIDAS} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -415,7 +450,7 @@ export const WIDGETS: WidgetDef[] = [
               <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip />
-              <Bar dataKey="total" name="Salidas" fill={COLOR_SECONDARY} />
+              <Bar dataKey="total" name="Salidas" fill={COLOR_SALIDAS} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>

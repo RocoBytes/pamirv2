@@ -10,7 +10,7 @@ interface EventoCalendarProps {
 
 const DIAS_LARGO = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO']
 const DIAS_CORTO = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
-const COLOR_SIN_CATEGORIA = '#264c99'
+const COLOR_SIN_CATEGORIA = '#3366d6'
 
 interface DiaCelda {
   key: string // 'YYYY-MM-DD'
@@ -116,13 +116,13 @@ export function EventoCalendar({ eventos, mes, onSelect }: EventoCalendarProps) 
 
   return (
     <div>
-      <div className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm overflow-hidden">
         {/* Encabezado de días */}
-        <div className="grid grid-cols-7 bg-[#f0f4fb] border-b border-[#4a6fad]/15">
+        <div className="grid grid-cols-7 bg-surface-container-low border-b border-secondary/15">
           {DIAS_LARGO.map((dia, i) => (
             <div
               key={dia}
-              className="py-2 text-center text-[10px] font-bold tracking-wider text-[#4a6fad]"
+              className="py-2 text-center text-[10px] font-bold tracking-wider text-secondary"
             >
               <span className="hidden sm:inline">{dia}</span>
               <span className="sm:hidden">{DIAS_CORTO[i]}</span>
@@ -133,16 +133,16 @@ export function EventoCalendar({ eventos, mes, onSelect }: EventoCalendarProps) 
         {semanas.map((semana, w) => {
           const segmentos = segmentosDeSemana(semana, visibles)
           return (
-            <div key={w} className="relative border-b border-[#4a6fad]/10 last:border-b-0">
+            <div key={w} className="relative border-b border-secondary/10 last:border-b-0">
               {/* Fondo: separadores de columna, días vecinos y hoy */}
               <div className="absolute inset-0 grid grid-cols-7 pointer-events-none" aria-hidden="true">
                 {semana.map((d) => (
                   <div
                     key={d.key}
                     className={[
-                      'border-r border-[#4a6fad]/10 last:border-r-0',
+                      'border-r border-secondary/10 last:border-r-0',
                       !d.delMes ? 'bg-slate-50/80' : '',
-                      d.key === hoy ? 'bg-[#e8eef7]/60' : '',
+                      d.key === hoy ? 'bg-primary-fixed/60' : '',
                     ]
                       .filter(Boolean)
                       .join(' ')}
@@ -159,7 +159,7 @@ export function EventoCalendar({ eventos, mes, onSelect }: EventoCalendarProps) 
                         className={[
                           'text-xs font-medium',
                           d.key === hoy
-                            ? 'inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#264c99] text-white font-bold'
+                            ? 'inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white font-bold'
                             : d.delMes
                               ? 'text-slate-700'
                               : 'text-slate-400',
@@ -180,7 +180,7 @@ export function EventoCalendar({ eventos, mes, onSelect }: EventoCalendarProps) 
                       title={seg.evento.titulo}
                       className={[
                         'text-[11px] font-semibold text-left leading-tight truncate px-1.5 py-0.5 mx-px',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                         'hover:opacity-85 transition-opacity',
                         seg.esInicio ? 'rounded-l-md' : '',
                         seg.esFin ? 'rounded-r-md' : '',
@@ -232,7 +232,7 @@ export function EventoCalendar({ eventos, mes, onSelect }: EventoCalendarProps) 
             <button
               key={e.id}
               onClick={() => onSelect(e.id)}
-              className="flex items-center gap-2.5 bg-white rounded-xl border border-[#4a6fad]/15 shadow-sm px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]"
+              className="flex items-center gap-2.5 bg-white rounded-xl border border-secondary/15 shadow-sm px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <span
                 className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -241,7 +241,7 @@ export function EventoCalendar({ eventos, mes, onSelect }: EventoCalendarProps) 
               />
               <span className="flex-1 min-w-0">
                 <span className="block text-sm font-medium text-slate-900 truncate">{e.titulo}</span>
-                <span className="block text-xs text-[#757874]">
+                <span className="block text-xs text-on-surface-variant">
                   {formatRangoFechas(e.fechaInicio, e.fechaFin)}
                 </span>
               </span>
@@ -254,7 +254,7 @@ export function EventoCalendar({ eventos, mes, onSelect }: EventoCalendarProps) 
       {categoriasPresentes.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
           {categoriasPresentes.map((cat) => (
-            <span key={cat.id} className="inline-flex items-center gap-1.5 text-xs text-[#757874]">
+            <span key={cat.id} className="inline-flex items-center gap-1.5 text-xs text-on-surface-variant">
               <span
                 className="w-2.5 h-2.5 rounded-full"
                 style={{ backgroundColor: cat.color }}
