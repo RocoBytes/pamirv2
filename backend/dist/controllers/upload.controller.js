@@ -1,6 +1,7 @@
 import Busboy from 'busboy';
 import { uploadToGoogleDrive } from '../lib/google-drive.js';
 import { prisma } from '../lib/prisma.js';
+import { puedeGestionarSalida } from '../lib/authz.js';
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
 const ALLOWED_EXT = /\.gpx$/i;
 export const ALLOWED_PRONOSTICO_EXT_STRICT = /\.(pdf|jpg|jpeg|png)$/i;
@@ -43,20 +44,13 @@ export async function uploadGpx(req, res) {
         return;
     }
     // ── 2. Verificar ownership — política deny-by-default ───────────────────────
-    // Si la salida tiene dueño registrado, sólo ese dueño puede subir el GPX.
-    const salidaOwner = salida.userId;
-    const requesterId = req.user?.id ?? null;
-    if (salidaOwner !== null) {
-        if (requesterId === null) {
-            res.status(401).json({ error: 'Debes iniciar sesión para subir archivos a esta salida' });
-            return;
-        }
-        if (requesterId !== salidaOwner) {
-            res.status(403).json({ error: 'No tienes permiso para modificar esta salida' });
-            return;
-        }
+    // Solo el dueño de la salida o un administrador pueden subir el GPX. Las
+    // salidas legadas sin dueño (userId null) quedan reservadas al admin: un
+    // usuario no-admin nunca puede subirles archivos.
+    if (!puedeGestionarSalida(req.user, salida)) {
+        res.status(403).json({ error: 'No tienes permiso para modificar esta salida' });
+        return;
     }
-    // Salidas sin dueño (creadas como invitado) admiten upload sin autenticación
     // ── 3. Parsear multipart con busboy ─────────────────────────────────────────
     let responded = false;
     const safeRespond = (status, body) => {
@@ -143,17 +137,11 @@ export async function uploadPronostico(req, res) {
         res.status(404).json({ error: 'Salida no encontrada' });
         return;
     }
-    const salidaOwner = salida.userId;
-    const requesterId = req.user?.id ?? null;
-    if (salidaOwner !== null) {
-        if (requesterId === null) {
-            res.status(401).json({ error: 'Debes iniciar sesión para subir archivos a esta salida' });
-            return;
-        }
-        if (requesterId !== salidaOwner) {
-            res.status(403).json({ error: 'No tienes permiso para modificar esta salida' });
-            return;
-        }
+    // Misma política que uploadGpx: dueño o admin; las salidas legadas sin
+    // dueño (userId null) quedan reservadas al admin.
+    if (!puedeGestionarSalida(req.user, salida)) {
+        res.status(403).json({ error: 'No tienes permiso para modificar esta salida' });
+        return;
     }
     let responded = false;
     const safeRespond = (status, body) => {

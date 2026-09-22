@@ -99,6 +99,17 @@ revocarlo, sin redeploy. La variable `ALERT_EMAIL` (ver `backend/.env.example`)
 es un asunto distinto: solo define a quién llegan las alertas automáticas de
 "salida sin cierre".
 
+Ningún endpoint que lea o escriba datos admite llamadas anónimas: todos exigen
+`requireAuth` (sesión válida). Los únicos endpoints públicos son
+`GET /api/health` (liveness, no toca la base de datos), los de
+`/api/auth` (login, verificación de email, recuperación de contraseña y los
+dos de invitación descritos abajo — son el mecanismo para obtener una sesión
+o crear la cuenta), `GET`/`POST /api/evaluaciones/:token` (formulario anónimo
+protegido por un token de un solo uso) y `GET /api/cron/check-alertas`
+(protegido por `CRON_SECRET`, no por sesión). Una prueba automatizada
+(`backend/src/routes/public-routes.test.ts`) fija esta lista: agregar una ruta
+anónima nueva sin actualizarla hace fallar la suite.
+
 ### Roles e invitaciones
 
 Tres roles (`RolUsuario`): `SOCIO` (rol base), `LIDER` (un socio al que además

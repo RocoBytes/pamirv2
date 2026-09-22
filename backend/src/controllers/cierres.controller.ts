@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { Prisma, Cierre } from '../generated/prisma/client.js';
 import { sendEmail } from '../lib/google-gmail.js';
 import { buildCierreNotificationEmail } from '../lib/email-templates.js';
-import { isAdmin } from '../lib/authz.js';
+import { isAdmin, puedeGestionarSalida } from '../lib/authz.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
@@ -78,8 +78,9 @@ export async function createCierre(req: Request, res: Response): Promise<void> {
       res.status(404).json({ error: 'Salida no encontrada' });
       return;
     }
-    // El dueño o el administrador pueden cerrar; nadie más.
-    if (!isAdmin(req.user) && salida.userId !== null && salida.userId !== userId) {
+    // El dueño o el administrador pueden cerrar; nadie más. Una salida sin
+    // dueño (userId null) queda reservada al admin.
+    if (!puedeGestionarSalida(req.user, salida)) {
       res.status(403).json({ error: 'No tienes permiso para cerrar esta salida' });
       return;
     }
@@ -150,13 +151,7 @@ export async function createCierre(req: Request, res: Response): Promise<void> {
 
 export async function getCierres(req: Request, res: Response): Promise<void> {
   try {
-    const userId = req.user?.id;
-
-    // Sin autenticación no hay cierres que mostrar — evita exponer datos de toda la plataforma
-    if (!userId) {
-      res.json({ data: [], total: 0, page: 1, limit: 50 });
-      return;
-    }
+    const userId = req.user!.id;
 
     const page = Math.max(1, parseInt(req.query['page'] as string) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query['limit'] as string) || 50));

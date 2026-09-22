@@ -112,12 +112,10 @@ export async function getSalida(id: string): Promise<SalidaRecord> {
   return handleResponse<SalidaRecord>(res)
 }
 
+// gpxFileId/gpxFileName/gpxFileUrl nunca viajan en este payload: el GPX se
+// sube después, a través de uploadGpx(), una vez creada la salida.
 export async function createSalida(
-  data: Omit<SalidaFormData, 'gpxFile'> & {
-    gpxFileId?: string
-    gpxFileName?: string
-    gpxFileUrl?: string
-  },
+  data: Omit<SalidaFormData, 'gpxFile'>,
 ): Promise<SalidaRecord> {
   const res = await fetch(`${API_BASE}/salidas`, {
     method: 'POST',
@@ -149,14 +147,6 @@ export async function updateSalidaIntegrantes(
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(data),
-  })
-  return handleResponse<SalidaRecord>(res)
-}
-
-export async function claimSalida(id: string): Promise<SalidaRecord> {
-  const res = await fetch(`${API_BASE}/salidas/${id}/claim`, {
-    method: 'PATCH',
-    headers: authHeaders(),
   })
   return handleResponse<SalidaRecord>(res)
 }

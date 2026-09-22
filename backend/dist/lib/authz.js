@@ -11,3 +11,15 @@ export function isAdmin(user) {
 export function canInvite(user) {
     return user?.rol === 'ADMIN' || user?.rol === 'LIDER';
 }
+// Regla única de gestión de una salida (editar, editar integrantes, cerrar,
+// subir GPX/pronóstico): el admin siempre puede; si no es admin, solo el
+// dueño registrado puede. Una salida sin dueño (userId null — legada o cuyo
+// dueño fue eliminado) no tiene ningún no-admin que la gestione, así que
+// queda reservada al admin. Un LIDER no tiene ningún permiso extra aquí: se
+// comporta como cualquier SOCIO. El borrado tiene su propia regla explícita
+// (ver deleteSalida) y no usa este helper.
+export function puedeGestionarSalida(user, salida) {
+    if (isAdmin(user))
+        return true;
+    return salida.userId !== null && salida.userId === user?.id;
+}

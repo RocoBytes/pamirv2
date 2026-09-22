@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { sendEmail } from '../lib/google-gmail.js';
 import { buildSalidaNotificationEmail } from '../lib/email-templates.js';
-import { isAdmin } from '../lib/authz.js';
+import { isAdmin, puedeGestionarSalida } from '../lib/authz.js';
 import { instanteSantiago } from '../lib/santiago-time.js';
 import { errorFechaCalendario } from '../lib/fecha-calendario.js';
 const asJson = (v) => v;
@@ -99,7 +99,7 @@ function diffIntegrantesAudit(prev, next, por) {
 export async function createSalida(req, res) {
     try {
         const data = req.body;
-        const userId = req.user?.id ?? null;
+        const userId = req.user.id;
         // Solo el admin puede crear registros históricos (fecha pasada, sin notificaciones).
         const esRegistroHistorico = isAdmin(req.user) && data.esRegistroHistorico === true;
         if (!data.pronosticoMeteorologico?.trim()) {
@@ -126,11 +126,11 @@ export async function createSalida(req, res) {
                 return;
             }
         }
-        const participantesNormalizados = normalizeParticipantes(data.participantes ?? [], req.user?.email ?? data.liderCordada ?? null);
+        const participantesNormalizados = normalizeParticipantes(data.participantes ?? [], req.user.email ?? data.liderCordada ?? null);
         const salida = await prisma.salida.create({
             data: {
                 userId,
-                creatorEmail: req.user?.email ?? null,
+                creatorEmail: req.user.email,
                 tipoSalida: data.tipoSalida,
                 disciplina: data.disciplina,
                 temporada: data.temporada,
@@ -157,7 +157,9 @@ export async function createSalida(req, res) {
                 riesgosIdentificados: asJson(data.riesgosIdentificados ?? []),
                 riesgosOtro: data.riesgosOtro,
                 planEvacuacion: data.planEvacuacion,
-                gpxFileUrl: data.gpxFileUrl,
+                // gpxFileUrl/gpxFileId/gpxFileName nunca se aceptan aquí: solo los
+                // escribe el endpoint dedicado de subida (POST /:id/gpx), después de
+                // crear la salida.
                 status: data.status ?? 'EN_CURSO',
                 incidentReport: data.incidentReport,
                 esRegistroHistorico,
@@ -176,16 +178,8 @@ export async function createSalida(req, res) {
 }
 export async function getSalidas(req, res) {
     try {
-        const userId = req.user?.id;
-        const userEmail = req.user?.email;
-        if (!userId) {
-            const salidas = await prisma.salida.findMany({
-                where: { userId: null, status: 'EN_CURSO' },
-                orderBy: { createdAt: 'desc' },
-            });
-            res.json(salidas);
-            return;
-        }
+        const userId = req.user.id;
+        const userEmail = req.user.email;
         // El admin ve todas las salidas (incluidas COMPLETADAS) para poder
         // revisar evaluaciones y cierres de cualquier líder.
         // _count.cierres allows the AdminPanel to detect open salidas without a cierre.
@@ -235,39 +229,10 @@ export async function getSalidas(req, res) {
         res.status(500).json({ error: 'No se pudieron obtener las salidas' });
     }
 }
-export async function claimSalida(req, res) {
-    try {
-        const id = req.params['id'];
-        const userId = req.user?.id;
-        if (!userId) {
-            res.status(401).json({ error: 'Debes iniciar sesión para reclamar una salida' });
-            return;
-        }
-        const salida = await prisma.salida.findUnique({ where: { id } });
-        if (!salida) {
-            res.status(404).json({ error: 'Salida no encontrada' });
-            return;
-        }
-        if (salida.userId !== null) {
-            res.status(409).json({ error: 'Esta salida ya tiene un propietario' });
-            return;
-        }
-        const updated = await prisma.salida.update({
-            where: { id },
-            data: { userId, creatorEmail: req.user.email },
-        });
-        res.json(updated);
-    }
-    catch (error) {
-        console.error('[claimSalida]', error);
-        res.status(500).json({ error: 'No se pudo reclamar la salida' });
-    }
-}
 export async function getSalidaById(req, res) {
     try {
         const id = req.params.id;
-        const requestUserId = req.user?.id ?? null;
-        const requestUserEmail = req.user?.email ?? null;
+        const requestUserEmail = req.user.email;
         const salida = await prisma.salida.findUnique({
             where: { id },
             include: { user: { select: { name: true, email: true } } },
@@ -289,8 +254,10 @@ export async function getSalidaById(req, res) {
                 }
             }
         }
-        // El administrador puede ver el detalle de cualquier salida.
-        if (!isAdmin(req.user) && salida.userId !== null && salida.userId !== requestUserId && !isParticipant) {
+        // Puede ver el detalle: el admin, el dueño, o un participante registrado.
+        // Una salida sin dueño (userId null) ya no es visible para cualquiera:
+        // solo el admin o un participante.
+        if (!puedeGestionarSalida(req.user, salida) && !isParticipant) {
             res.status(403).json({ error: 'No tienes permiso para ver esta salida' });
             return;
         }
@@ -304,14 +271,14 @@ export async function getSalidaById(req, res) {
 export async function updateSalida(req, res) {
     try {
         const id = req.params.id;
-        const requestUserId = req.user?.id ?? null;
         const existing = await prisma.salida.findUnique({ where: { id } });
         if (!existing) {
             res.status(404).json({ error: 'Salida no encontrada' });
             return;
         }
-        // Solo el dueño o el administrador pueden editar una salida.
-        if (!isAdmin(req.user) && existing.userId !== null && existing.userId !== requestUserId) {
+        // Solo el dueño o el administrador pueden editar una salida. Una salida
+        // sin dueño (userId null) queda reservada al admin.
+        if (!puedeGestionarSalida(req.user, existing)) {
             res.status(403).json({ error: 'No tienes permiso para modificar esta salida' });
             return;
         }
@@ -380,15 +347,15 @@ export async function updateSalida(req, res) {
 export async function updateSalidaIntegrantes(req, res) {
     try {
         const id = req.params.id;
-        const requestUserId = req.user?.id ?? null;
-        const requestUserEmail = req.user?.email ?? null;
+        const requestUserEmail = req.user.email;
         const existing = await prisma.salida.findUnique({ where: { id } });
         if (!existing) {
             res.status(404).json({ error: 'Salida no encontrada' });
             return;
         }
-        // Solo el dueño o el administrador pueden editar los integrantes.
-        if (!isAdmin(req.user) && existing.userId !== null && existing.userId !== requestUserId) {
+        // Solo el dueño o el administrador pueden editar los integrantes. Una
+        // salida sin dueño (userId null) queda reservada al admin.
+        if (!puedeGestionarSalida(req.user, existing)) {
             res.status(403).json({ error: 'No tienes permiso para modificar esta salida' });
             return;
         }
@@ -442,13 +409,17 @@ export async function updateSalidaIntegrantes(req, res) {
 export async function deleteSalida(req, res) {
     try {
         const id = req.params.id;
-        const requestUserId = req.user?.id ?? null;
+        const requestUserId = req.user.id;
         const existing = await prisma.salida.findUnique({ where: { id } });
         if (!existing) {
             res.status(404).json({ error: 'Salida no encontrada' });
             return;
         }
-        if (existing.userId !== null && existing.userId !== requestUserId) {
+        // Regla propia (no usa puedeGestionarSalida): una salida con dueño solo la
+        // borra su dueño, nunca el admin; una sin dueño (legada) queda reservada
+        // al admin.
+        const puedeBorrar = existing.userId === null ? isAdmin(req.user) : existing.userId === requestUserId;
+        if (!puedeBorrar) {
             res.status(403).json({ error: 'No tienes permiso para eliminar esta salida' });
             return;
         }
