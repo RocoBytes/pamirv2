@@ -17,7 +17,6 @@ import {
   FileText,
   Upload,
   Trash2,
-  KeyRound,
   UserCog,
 } from 'lucide-react'
 import logoPamir from '../assets/logo_PAMIR.png'
@@ -30,15 +29,12 @@ import {
   fetchDocumentosAdmin,
   uploadDocumento,
   deleteDocumento,
-  fetchGoogleCredencial,
-  saveGoogleCredencial,
 } from '../lib/api'
 import type {
   AdminStats,
   SaludSalidaResponse,
   ParticipanteSalud,
   DocumentoRecord,
-  GoogleCredencial,
 } from '../lib/api'
 import type { SalidaRecord } from '../types/salida'
 import { STATUS_LABELS, STATUS_COLORS, DISCIPLINA_LABELS } from '../types/salida'
@@ -197,189 +193,6 @@ function SaludFlags({ salud }: { salud: NonNullable<ParticipanteSalud['salud']> 
 }
 
 // ─── Documentación del Club: gestión admin ──────────────────────────────────
-
-// En modo "Testing" Google caduca el refresh token a los 7 días. Se avisa desde
-// el sexto para que dé tiempo a renovarlo antes de que se corte el correo.
-const DIAS_CADUCIDAD_TOKEN = 7
-const DIAS_AVISO_TOKEN = 6
-
-/**
- * Renovación del refresh token de Google sin SSH ni redeploy.
- *
- * Antes de esto, renovarlo exigía entrar al VPS, editar /opt/pamir/.env y
- * recrear el contenedor; en agosto de 2026 el token caducó y la app estuvo
- * 8 días sin enviar correos ni subir a Drive.
- */
-function GoogleCredencialSection() {
-  const [credencial, setCredencial] = useState<GoogleCredencial | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [token, setToken] = useState('')
-  const [guardando, setGuardando] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
-  const [formSuccess, setFormSuccess] = useState<string | null>(null)
-
-  const load = useCallback(async () => {
-    setLoadError(null)
-    try {
-      setCredencial(await fetchGoogleCredencial())
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'No se pudo consultar la credencial')
-    }
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
-
-  const handleGuardar = useCallback(
-    async (e: FormEvent) => {
-      e.preventDefault()
-      setFormError(null)
-      setFormSuccess(null)
-
-      const valor = token.trim()
-      if (!valor) {
-        setFormError('Pega el refresh token antes de guardar')
-        return
-      }
-
-      setGuardando(true)
-      try {
-        // El backend lo prueba contra Google antes de guardarlo, así que un
-        // token con una errata no llega a romper nada.
-        setCredencial(await saveGoogleCredencial(valor))
-        setToken('')
-        setFormSuccess('Credencial actualizada. Ya está activa, no hace falta reiniciar nada.')
-      } catch (err) {
-        setFormError(err instanceof Error ? err.message : 'No se pudo guardar la credencial')
-      } finally {
-        setGuardando(false)
-      }
-    },
-    [token],
-  )
-
-  const dias = credencial?.diasDesdeActualizacion ?? null
-  const porCaducar = dias !== null && dias >= DIAS_AVISO_TOKEN
-
-  return (
-    <section className="mb-8">
-      <div className="flex items-center gap-2 mb-3">
-        <KeyRound size={16} className="text-[#264c99]" />
-        <h2 className="text-base font-bold text-slate-900">Credencial de Google</h2>
-      </div>
-      <p className="text-xs text-[#757874] mb-3">
-        Con ella la app envía los correos automáticos y sube los archivos a Google Drive. Caduca
-        cada {DIAS_CADUCIDAD_TOKEN} días y se renueva pegando el token nuevo aquí.
-      </p>
-
-      <div className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 mb-4 flex flex-col gap-3">
-        {loadError && (
-          <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-xs text-[#8b3a44]">
-            <AlertCircle size={14} className="shrink-0 mt-0.5" />
-            <p>{loadError}</p>
-          </div>
-        )}
-
-        {credencial && (
-          <div
-            className={
-              credencial.estado.ok
-                ? 'flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800'
-                : 'flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-xs text-[#8b3a44]'
-            }
-          >
-            {credencial.estado.ok ? (
-              <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle size={14} className="shrink-0 mt-0.5" />
-            )}
-            <div className="flex-1">
-              <p className="font-semibold">
-                {credencial.estado.ok
-                  ? 'Funcionando'
-                  : 'Caída: los correos y las subidas a Drive no están saliendo'}
-              </p>
-              {credencial.estado.motivo && <p className="mt-0.5">{credencial.estado.motivo}</p>}
-              {credencial.origen === 'db' && credencial.actualizadoAt && (
-                <p className="mt-1">
-                  Actualizada {dias === 0 ? 'hoy' : `hace ${dias} día${dias === 1 ? '' : 's'}`}
-                  {credencial.actualizadoPor ? ` por ${credencial.actualizadoPor}` : ''}.
-                </p>
-              )}
-              {credencial.origen === 'env' && (
-                <p className="mt-1">
-                  En uso la credencial del servidor. Al guardar una aquí, esta pasa a mandar.
-                </p>
-              )}
-              {porCaducar && credencial.estado.ok && (
-                <p className="mt-1 font-semibold">
-                  Está por caducar: conviene renovarla hoy.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        <form onSubmit={(e) => void handleGuardar(e)} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="google-refresh-token" className="text-xs font-semibold text-slate-700">
-              Refresh token nuevo
-            </label>
-            <input
-              id="google-refresh-token"
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              disabled={guardando}
-              placeholder="1//0..."
-              className="rounded-lg border border-[#4a6fad]/25 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#264c99] disabled:opacity-50"
-            />
-            <p className="text-xs text-[#757874] mt-0.5">
-              Se obtiene con{' '}
-              <code className="font-mono">node backend/scripts/get-refresh-token.mjs</code>,
-              autorizando con la cuenta de seguridad del club.
-            </p>
-          </div>
-
-          {formError && (
-            <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-xs text-[#8b3a44]">
-              <AlertCircle size={14} className="shrink-0 mt-0.5" />
-              <p>{formError}</p>
-            </div>
-          )}
-
-          {formSuccess && (
-            <div className="flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">
-              <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
-              <p>{formSuccess}</p>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={guardando}
-            className="inline-flex items-center justify-center gap-1.5 bg-[#264c99] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[#1e3d7d] disabled:opacity-50 transition-colors self-start"
-          >
-            {guardando ? (
-              <>
-                <Loader2 size={14} className="animate-spin" />
-                Comprobando con Google...
-              </>
-            ) : (
-              <>
-                <KeyRound size={14} />
-                Guardar credencial
-              </>
-            )}
-          </button>
-        </form>
-      </div>
-    </section>
-  )
-}
 
 function DocumentosAdminSection() {
   const [docs, setDocs] = useState<DocumentoRecord[] | null>(null)
@@ -943,8 +756,6 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
         )}
 
         {/* ── Section: Documentación del Club ─────────────────────────────── */}
-        {!isLoading && <GoogleCredencialSection />}
-
         {!isLoading && <DocumentosAdminSection />}
 
         {/* ── Section: Usuarios e invitaciones (sistema cerrado) ──────────── */}

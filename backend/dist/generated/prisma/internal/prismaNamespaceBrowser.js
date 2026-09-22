@@ -43,7 +43,6 @@ export const ModelName = {
     User: 'User',
     DashboardLayout: 'DashboardLayout',
     Invitacion: 'Invitacion',
-    AppSecret: 'AppSecret',
     Salida: 'Salida',
     EvaluacionToken: 'EvaluacionToken',
     EvaluacionRespuesta: 'EvaluacionRespuesta',
@@ -117,14 +116,6 @@ export const InvitacionScalarFieldEnum = {
     aceptadaAt: 'aceptadaAt',
     usuarioId: 'usuarioId',
     revocadaAt: 'revocadaAt',
-    createdAt: 'createdAt'
-};
-export const AppSecretScalarFieldEnum = {
-    id: 'id',
-    key: 'key',
-    value: 'value',
-    updatedBy: 'updatedBy',
-    updatedAt: 'updatedAt',
     createdAt: 'createdAt'
 };
 export const SalidaScalarFieldEnum = {

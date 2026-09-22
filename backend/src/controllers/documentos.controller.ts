@@ -3,11 +3,15 @@ import Busboy from 'busboy';
 import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../lib/authz.js';
 import { puedeVerDocumentos } from '../lib/documentos-access.js';
-import { uploadToGoogleDrive, deleteFromGoogleDrive } from '../lib/google-drive.js';
+import { getFileStorage } from '../lib/storage/get-file-storage.js';
+import { buildObjectKey } from '../lib/storage/object-key.js';
+import { deleteStoredFileBestEffort } from '../lib/storage/delete-best-effort.js';
+import { resolveFileDownload } from '../lib/storage/resolve-file-download.js';
 import { bindTenantContext } from '../lib/tenant-context.js';
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
 const ALLOWED_DOC_EXT = /\.pdf$/i;
+const DOCUMENTO_DOWNLOAD_SECONDS = 600;
 
 // Set conocido de categorías de la biblioteca. Debe mantenerse en sync con
 // CATEGORIA_LABELS del frontend (frontend/src/lib/documentos.ts).
@@ -19,14 +23,6 @@ const DOCUMENTO_CATEGORIAS = [
   'LIBROS',
   'OTRO',
 ];
-
-function sanitizeDocFilename(raw: string): string {
-  return raw
-    .replace(/[/\\]/g, '')
-    .replace(/[^\w\s.-]/g, '_')
-    .trim()
-    .slice(0, 200);
-}
 
 // GET /api/documentos — biblioteca del club, solo socios ACP y admin.
 // El gate de membresía vive acá: ocultar el recuadro en el frontend es
@@ -63,7 +59,7 @@ export async function getDocumentos(req: Request, res: Response): Promise<void> 
         categoria: true,
         nombre: true,
         descripcion: true,
-        driveFileUrl: true,
+        driveFileId: true,
       },
     });
 
@@ -85,7 +81,7 @@ export async function getDocumentosAdmin(_req: Request, res: Response): Promise<
         categoria: true,
         nombre: true,
         descripcion: true,
-        driveFileUrl: true,
+        driveFileId: true,
         visible: true,
         orden: true,
       },
@@ -101,11 +97,13 @@ export async function getDocumentosAdmin(_req: Request, res: Response): Promise<
  * POST /api/documentos — admin sube un PDF.
  *
  * multipart/form-data con campos de texto (categoria, nombre, descripcion?,
- * orden?) y un campo "file" con el PDF. Se canaliza el stream directo a Google
- * Drive (Resumable Upload), sin cargar el buffer completo en RAM, y se crea el
- * registro Documento con el link público resultante. Detrás de requireAdmin.
+ * orden?) y un campo "file" con el PDF. Se canaliza el stream directo al
+ * storage configurado (ver lib/storage), sin cargar el buffer completo en
+ * RAM, y se crea el registro Documento con la clave del objeto resultante
+ * (nunca una URL: el bucket es privado). Detrás de requireAdmin.
  */
 export async function createDocumento(req: Request, res: Response): Promise<void> {
+  const organizationId = req.user!.organizationId;
   let responded = false;
   let fileSeen = false;
 
@@ -173,35 +171,43 @@ export async function createDocumento(req: Request, res: Response): Promise<void
         });
       });
 
-      try {
-        const result = await uploadToGoogleDrive(
-          fileStream,
-          sanitizeDocFilename(rawFilename),
-          mimeType || 'application/pdf',
-          MAX_FILE_SIZE,
-        );
+      const key = buildObjectKey({ organizationId, kind: 'documento', extension: 'pdf' });
 
-        const documento = await prisma.documento.create({
-          data: {
-            organizationId: req.user!.organizationId,
-            categoria,
-            nombre,
-            descripcion: descripcion || null,
-            driveFileId: result.fileId,
-            driveFileUrl: result.webViewLink,
-            orden,
-            visible: true,
-          },
-          select: {
-            id: true,
-            categoria: true,
-            nombre: true,
-            descripcion: true,
-            driveFileUrl: true,
-            visible: true,
-            orden: true,
-          },
+      try {
+        await getFileStorage().upload(fileStream, {
+          key,
+          contentType: mimeType || 'application/pdf',
+          maxBytes: MAX_FILE_SIZE,
         });
+
+        let documento;
+        try {
+          documento = await prisma.documento.create({
+            data: {
+              organizationId,
+              categoria,
+              nombre,
+              descripcion: descripcion || null,
+              driveFileId: key,
+              driveFileUrl: null,
+              orden,
+              visible: true,
+            },
+            select: {
+              id: true,
+              categoria: true,
+              nombre: true,
+              descripcion: true,
+              driveFileId: true,
+              visible: true,
+              orden: true,
+            },
+          });
+        } catch (err) {
+          // No dejar huérfano el objeto recién subido si la escritura falla.
+          await deleteStoredFileBestEffort(key, 'createDocumento');
+          throw err;
+        }
 
         safeRespond(201, documento);
       } catch (err: unknown) {
@@ -212,8 +218,8 @@ export async function createDocumento(req: Request, res: Response): Promise<void
           });
           return;
         }
-        console.error('[createDocumento] Error subiendo a Google Drive:', err);
-        safeRespond(500, { error: 'Error al subir el documento a Google Drive' });
+        console.error('[createDocumento] Error subiendo el documento:', err);
+        safeRespond(500, { error: 'Error al subir el documento' });
       }
     }),
   );
@@ -236,8 +242,8 @@ export async function createDocumento(req: Request, res: Response): Promise<void
 }
 
 /**
- * DELETE /api/documentos/:id — admin borra un documento (registro + archivo en
- * Drive). Detrás de requireAdmin.
+ * DELETE /api/documentos/:id — admin borra un documento (registro + archivo
+ * del storage). Detrás de requireAdmin.
  */
 export async function deleteDocumento(req: Request, res: Response): Promise<void> {
   const id = req.params.id as string;
@@ -248,20 +254,82 @@ export async function deleteDocumento(req: Request, res: Response): Promise<void
       return;
     }
 
-    if (documento.driveFileId) {
-      try {
-        await deleteFromGoogleDrive(documento.driveFileId);
-      } catch (err) {
-        // No bloquear el borrado del registro si Drive falla (p.ej. el archivo
-        // ya no existe): la fuente de verdad para la app es la DB.
-        console.error('[deleteDocumento] No se pudo borrar de Drive:', err);
-      }
-    }
+    // Best-effort: un id legado de Google Drive (Drive ya no existe) se
+    // ignora en silencio — ver el helper.
+    await deleteStoredFileBestEffort(documento.driveFileId, 'deleteDocumento');
 
     await prisma.documento.delete({ where: { id } });
     res.json({ ok: true });
   } catch (error) {
     console.error('[deleteDocumento]', error);
     res.status(500).json({ error: 'No se pudo eliminar el documento' });
+  }
+}
+
+/**
+ * GET /api/documentos/:id/url — URL de descarga del PDF de un documento de la
+ * biblioteca. Misma regla de acceso que GET /api/documentos (puedeVerDocumentos).
+ */
+export async function getDocumentoUrl(req: Request, res: Response): Promise<void> {
+  res.set('Cache-Control', 'no-store');
+
+  try {
+    const id = req.params.id as string;
+    const documento = await prisma.documento.findUnique({ where: { id } });
+    if (!documento) {
+      res.status(404).json({ error: 'Documento no encontrado' });
+      return;
+    }
+
+    const email = req.user!.email;
+    const organization = req.user!.organization;
+    const admin = isAdmin(req.user);
+
+    const integrante = admin
+      ? null
+      : await prisma.integrante.findFirst({
+          where: { email },
+          select: { membresiaClub: true },
+        });
+
+    if (
+      !puedeVerDocumentos({
+        isAdmin: admin,
+        integranteMembresiaClub: integrante?.membresiaClub,
+        membresiaPropia: organization.membresiaPropia,
+      })
+    ) {
+      res.status(403).json({ error: `Sección exclusiva para socios de ${organization.name}` });
+      return;
+    }
+
+    const resolution = resolveFileDownload(
+      { fileId: documento.driveFileId, legacyUrl: documento.driveFileUrl, downloadName: `${documento.nombre}.pdf` },
+      req.user!.organizationId,
+    );
+
+    switch (resolution.kind) {
+      case 'absent':
+        res.status(404).json({ error: 'El documento no tiene un archivo asociado' });
+        return;
+      case 'mismatch':
+        console.error(`[getDocumentoUrl] clave ${resolution.key} no pertenece al club solicitante`);
+        res.status(404).json({ error: 'El documento no tiene un archivo asociado' });
+        return;
+      case 'legacy':
+        res.json({ url: resolution.url, expiresInSeconds: null });
+        return;
+      case 'signed': {
+        const url = await getFileStorage().createSignedDownloadUrl(resolution.key, {
+          expiresInSeconds: DOCUMENTO_DOWNLOAD_SECONDS,
+          downloadName: resolution.downloadName,
+        });
+        res.json({ url, expiresInSeconds: DOCUMENTO_DOWNLOAD_SECONDS });
+        return;
+      }
+    }
+  } catch (error) {
+    console.error('[getDocumentoUrl]', error);
+    res.status(500).json({ error: 'No se pudo generar el enlace de descarga' });
   }
 }

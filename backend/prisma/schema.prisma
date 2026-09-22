@@ -191,23 +191,6 @@ model Invitacion {
   @@map("invitaciones")
 }
 
-// Secretos que un administrador puede rotar desde el panel, sin SSH ni redeploy.
-// Nació para el refresh token de Google: la pantalla de consentimiento OAuth está
-// en estado "Testing", así que Google lo caduca cada 7 días y hay que renovarlo a
-// mano. El contenedor es read_only y env_file se lee sólo al arrancar, de modo que
-// la app no puede reescribir su propio .env: el valor vive aquí.
-// `value` va SIEMPRE cifrado (lib/secret-crypto.ts), nunca en claro.
-model AppSecret {
-  id        String   @id @default(uuid())
-  key       String   @unique
-  value     String
-  updatedBy String?  @map("updated_by")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@map("app_secrets")
-}
-
 model Salida {
   id             String  @id @default(uuid())
   organizationId String  @map("organization_id")
@@ -543,7 +526,9 @@ model Evento {
   // Contenido — la completitud se exige al publicar, no en el borrador
   objetivo        String?
   itinerario      String?
-  // Optional itinerary attachment (PDF/JPG/PNG stored in Google Drive)
+  // Optional itinerary attachment (PDF/JPG/PNG in object storage). itinerarioFileUrl
+  // stays only for a legacy row created before the storage migration; a new
+  // upload never fills it (the bucket is private — the URL is signed on demand).
   itinerarioFileId   String? @map("itinerario_file_id")
   itinerarioFileName String? @map("itinerario_file_name")
   itinerarioFileUrl  String? @map("itinerario_file_url")

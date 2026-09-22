@@ -302,7 +302,7 @@ export function Step5Status({
             <span className="text-[#757874] font-normal">(opcional)</span>
           </>
         }
-        hint="Selecciona un archivo .gpx desde tu dispositivo. Se subirá automáticamente a Google Drive al guardar la salida."
+        hint="Selecciona un archivo .gpx desde tu dispositivo. Se subirá automáticamente al guardar la salida."
         accept=".gpx"
         placeholder="Seleccionar archivo .gpx…"
         value={gpxFile}

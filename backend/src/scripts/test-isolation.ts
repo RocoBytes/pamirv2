@@ -7,6 +7,7 @@ import 'dotenv/config';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
 import assert from 'node:assert/strict';
 import { prisma } from '../lib/prisma.js';
 import { verifyDbTargetOrExit } from '../lib/db-target-guard.js';
@@ -15,6 +16,9 @@ import { signToken } from '../lib/jwt.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { crearInvitacionPlataforma, type InvitacionesDeps } from '../services/invitaciones.service.js';
 import { invitacionesRepoPrisma } from '../services/invitaciones.repo.prisma.js';
+import { getFileStorage } from '../lib/storage/get-file-storage.js';
+import { buildObjectKey } from '../lib/storage/object-key.js';
+import type { FileStorage } from '../lib/storage/file-storage.js';
 import app from '../app.js';
 
 const asJson = (v: unknown): Prisma.InputJsonValue => v as Prisma.InputJsonValue;
@@ -692,6 +696,26 @@ async function getJson(baseUrl: string, token: string, urlPath: string): Promise
   return { status: res.status, body };
 }
 
+// Como getJson, pero también expone los headers de respuesta — lo necesitan
+// los checks de Cache-Control de las URLs firmadas (ver runFileDownloadChecks).
+async function getRaw(
+  baseUrl: string,
+  token: string,
+  urlPath: string,
+): Promise<{ status: number; body: unknown; headers: Headers }> {
+  const res = await fetch(`${baseUrl}${urlPath}`, { headers: { Authorization: `Bearer ${token}` } });
+  const body = await res.json().catch(() => undefined);
+  return { status: res.status, body, headers: res.headers };
+}
+
+async function deleteJson(baseUrl: string, token: string, urlPath: string): Promise<{ status: number }> {
+  const res = await fetch(`${baseUrl}${urlPath}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return { status: res.status };
+}
+
 // Sin token: usado por los dos endpoints públicos de invitaciones
 // (/api/auth/invitaciones/consultar y /aceptar). Ninguno de los dos envía
 // correo ni sube archivos.
@@ -870,6 +894,321 @@ async function runHttpChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): P
   });
 }
 
+// ─── Descargas firmadas entre clubes (Fase 6: storage en Google Cloud Storage) ──
+// Esta sección corre DESPUÉS de runHttpChecks a propósito: muta el evento
+// sembrado (BORRADOR → PUBLICADO, con fechas) para poder probar la URL
+// firmada de su itinerario con una fila "visible para socios", y ese cambio
+// no debe interferir con ningún check anterior que asuma el estado original.
+
+// Superficie mínima que necesitamos inspeccionar del storage — el mismo
+// patrón "duck typing" que CheckableDelegate más arriba en este archivo.
+interface InspectableStorage extends FileStorage {
+  has(key: string): boolean;
+  keys(): string[];
+}
+
+// La suite jamás debe escribir en un bucket real: getFileStorage() debe
+// resolver al adaptador de memoria (la suite corre sin STORAGE_PROVIDER=gcs
+// ni variables GCS_*). Lanza en vez de continuar en silencio.
+function assertMemoryStorage(): InspectableStorage {
+  const storage = getFileStorage();
+  const candidate = storage as Partial<InspectableStorage>;
+  if (typeof candidate.has !== 'function' || typeof candidate.keys !== 'function') {
+    throw new Error(
+      'getFileStorage() no resolvió al adaptador de memoria: esta sección jamás debe correr contra un bucket ' +
+        'real. main() fuerza STORAGE_PROVIDER=memory al arrancar; si ves este error, algo resolvió ' +
+        'getFileStorage() antes de ese punto.',
+    );
+  }
+  return storage as InspectableStorage;
+}
+
+interface OrgFileSeed {
+  gpxKey: string;
+  pronosticoKey: string;
+  documentoKey: string;
+  itinerarioKey: string;
+}
+
+// Extiende (nunca duplica) las filas ya sembradas por seedOrganization: la
+// salida, el documento y el evento existentes ganan claves de objeto REALES
+// (construidas con buildObjectKey para el organizationId del propio club) y
+// un objeto chico correspondiente en el storage — así los checks de más abajo
+// (URL firmada, huérfanos borrados) verifican comportamiento real, no solo
+// strings sueltos.
+async function seedFilesForOrg(storage: InspectableStorage, seed: OrgSeed): Promise<OrgFileSeed> {
+  const gpxKey = buildObjectKey({ organizationId: seed.organizationId, kind: 'gpx', extension: 'gpx' });
+  const pronosticoKey = buildObjectKey({ organizationId: seed.organizationId, kind: 'pronostico', extension: 'pdf' });
+  const documentoKey = buildObjectKey({ organizationId: seed.organizationId, kind: 'documento', extension: 'pdf' });
+  const itinerarioKey = buildObjectKey({ organizationId: seed.organizationId, kind: 'itinerario', extension: 'pdf' });
+
+  await runAsPlatform(async () => {
+    await prisma.salida.update({
+      where: { id: seed.salidaId },
+      data: {
+        gpxFileId: gpxKey,
+        gpxFileName: 'ruta.gpx',
+        pronosticoFileId: pronosticoKey,
+        pronosticoFileName: 'pronostico.pdf',
+      },
+    });
+    await prisma.documento.update({
+      where: { id: seed.documentoId },
+      data: { driveFileId: documentoKey },
+    });
+    // PUBLICADO con fechas futuras: visible para cualquier socio del club (no
+    // solo el admin — puedeVerEvento solo exige admin/gestor para BORRADOR),
+    // y sigue dentro de la ventana temporal por defecto de GET /api/eventos.
+    await prisma.evento.update({
+      where: { id: seed.eventoId },
+      data: {
+        estado: 'PUBLICADO',
+        fechaInicio: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        fechaFin: new Date(Date.now() + 31 * 24 * 60 * 60 * 1000),
+        itinerarioFileId: itinerarioKey,
+        itinerarioFileName: 'itinerario.pdf',
+      },
+    });
+  });
+
+  for (const key of [gpxKey, pronosticoKey, documentoKey, itinerarioKey]) {
+    await storage.upload(Readable.from([Buffer.from(`contenido iso-test ${key}`)]), {
+      key,
+      contentType: 'application/octet-stream',
+      maxBytes: 4096,
+    });
+  }
+
+  return { gpxKey, pronosticoKey, documentoKey, itinerarioKey };
+}
+
+// Fila que NINGÚN flujo de la API puede producir: pertenece a orgBId pero su
+// driveFileId es una clave de objeto de orgAId — solo se puede escribir a
+// mano, en contexto de plataforma. Ejercita la defensa en profundidad de
+// resolveFileDownload (objectKeyBelongsTo) además del aislamiento por fila.
+async function seedMismatchDocumento(orgBId: string, orgAId: string): Promise<string> {
+  const foreignKey = buildObjectKey({ organizationId: orgAId, kind: 'documento', extension: 'pdf' });
+  const documento = await runAsPlatform(() =>
+    prisma.documento.create({
+      data: {
+        organizationId: orgBId,
+        categoria: 'OTRO',
+        nombre: 'Documento mismatch iso-test',
+        driveFileId: foreignKey,
+      },
+    }),
+  );
+  return documento.id;
+}
+
+// Fila legada: id sin forma de clave de objeto (como un fileId de Drive) más
+// una URL legada — ejercita la rama "legacy" de resolveFileDownload.
+async function seedLegacyDocumento(orgAId: string, legacyUrl: string): Promise<string> {
+  const documento = await runAsPlatform(() =>
+    prisma.documento.create({
+      data: {
+        organizationId: orgAId,
+        categoria: 'OTRO',
+        nombre: 'Documento legado iso-test',
+        driveFileId: '1AbCdEfGhIjKlMnOpQrStUvWxYz012345',
+        driveFileUrl: legacyUrl,
+      },
+    }),
+  );
+  return documento.id;
+}
+
+async function runFileDownloadChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
+  const storage = assertMemoryStorage();
+
+  // El último check de runHttpChecks deja al club B en SUSPENDED (a
+  // propósito, para probar esa regla) y nada más lo reactiva. Esta sección
+  // necesita a AMBOS clubes respondiendo con normalidad — si no, cualquier
+  // 403 de suspensión se confundiría con un 404 de aislamiento. No se toca
+  // ni se reordena el check de suspensión de runHttpChecks: se revierte acá.
+  await runAsPlatform(() =>
+    prisma.organization.update({ where: { id: seedB.organizationId }, data: { status: 'ACTIVE' } }),
+  );
+
+  const tokenA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+  const tokenB = signToken({ userId: seedB.adminUserId, email: seedB.adminEmail });
+
+  // Precondición explícita: si la reactivación fallara (o algo la revirtiera
+  // más adelante), este check nombra la causa real en vez de que aparezcan
+  // seis 403 inexplicables disfrazados de fallos de aislamiento.
+  await check('club B reactivado: su token vuelve a responder 200 en un endpoint autenticado', async () => {
+    const res = await getRaw(baseUrl, tokenB, '/api/salidas');
+    assert.equal(res.status, 200);
+  });
+
+  let filesA: OrgFileSeed | undefined;
+  let filesB: OrgFileSeed | undefined;
+  let mismatchDocId: string | undefined;
+  let legacyDocId: string | undefined;
+  const LEGACY_URL = 'https://legacy-storage.example/documento/legado.pdf';
+
+  try {
+    filesA = await seedFilesForOrg(storage, seedA);
+    filesB = await seedFilesForOrg(storage, seedB);
+    mismatchDocId = await seedMismatchDocumento(seedB.organizationId, seedA.organizationId);
+    legacyDocId = await seedLegacyDocumento(seedA.organizationId, LEGACY_URL);
+
+    // ── Camino feliz: cada club obtiene su propia URL firmada (simétrico: ──────
+    // B ahora está activo y también debe poder firmar las suyas — al menos
+    // salida/gpx y documento, para no duplicar la cobertura completa de A).
+    const ownPathChecks: { label: string; token: string; org: OrgSeed; path: string }[] = [
+      { label: 'A salida/gpx', token: tokenA, org: seedA, path: `/api/salidas/${seedA.salidaId}/archivos/gpx/url` },
+      {
+        label: 'A salida/pronostico',
+        token: tokenA,
+        org: seedA,
+        path: `/api/salidas/${seedA.salidaId}/archivos/pronostico/url`,
+      },
+      { label: 'A documento', token: tokenA, org: seedA, path: `/api/documentos/${seedA.documentoId}/url` },
+      {
+        label: 'A evento/itinerario',
+        token: tokenA,
+        org: seedA,
+        path: `/api/eventos/${seedA.eventoId}/itinerario/url`,
+      },
+      { label: 'B salida/gpx', token: tokenB, org: seedB, path: `/api/salidas/${seedB.salidaId}/archivos/gpx/url` },
+      { label: 'B documento', token: tokenB, org: seedB, path: `/api/documentos/${seedB.documentoId}/url` },
+    ];
+    for (const { label, token, org, path } of ownPathChecks) {
+      await check(`GET ${path} — el propio club obtiene su URL firmada (${label})`, async () => {
+        const res = await getRaw(baseUrl, token, path);
+        assert.equal(res.status, 200);
+        const body = res.body as { url: string; expiresInSeconds: number | null };
+        assert.equal(body.expiresInSeconds, 600);
+        assert.ok(
+          body.url.includes(`orgs/${org.organizationId}/`),
+          `la URL firmada debía incluir el prefijo del propio club: ${body.url}`,
+        );
+        assert.equal(res.headers.get('cache-control'), 'no-store');
+      });
+    }
+
+    await check('GET /api/salidas/:id/archivos/:tipo/url — tipo fuera de gpx|pronostico responde 400', async () => {
+      const res = await getRaw(baseUrl, tokenA, `/api/salidas/${seedA.salidaId}/archivos/otro/url`);
+      assert.equal(res.status, 400);
+    });
+
+    // ── Entre clubes: B nunca ve los archivos de A, sin filtrar datos de A ─────
+    const crossPathChecks: { label: string; path: string }[] = [
+      { label: 'salida/gpx', path: `/api/salidas/${seedA.salidaId}/archivos/gpx/url` },
+      { label: 'salida/pronostico', path: `/api/salidas/${seedA.salidaId}/archivos/pronostico/url` },
+      { label: 'documento', path: `/api/documentos/${seedA.documentoId}/url` },
+      { label: 'evento/itinerario', path: `/api/eventos/${seedA.eventoId}/itinerario/url` },
+    ];
+    for (const { label, path } of crossPathChecks) {
+      await check(`GET ${path} con el token de B responde 404 sin filtrar datos de A (${label})`, async () => {
+        const res = await getRaw(baseUrl, tokenB, path);
+        assert.equal(res.status, 404);
+        const raw = JSON.stringify(res.body);
+        for (const leaked of [
+          seedA.organizationId,
+          filesA!.gpxKey,
+          filesA!.pronosticoKey,
+          filesA!.documentoKey,
+          filesA!.itinerarioKey,
+        ]) {
+          assert.equal(raw.includes(leaked), false, `la respuesta filtró "${leaked}"`);
+        }
+      });
+    }
+
+    await check(
+      'GET /api/salidas/:id/archivos/gpx/url — en la otra dirección (token de A sobre la salida de B) también 404',
+      async () => {
+        const res = await getRaw(baseUrl, tokenA, `/api/salidas/${seedB.salidaId}/archivos/gpx/url`);
+        assert.equal(res.status, 404);
+        const raw = JSON.stringify(res.body);
+        assert.equal(raw.includes(seedB.organizationId), false);
+        assert.equal(raw.includes(filesB!.gpxKey), false);
+      },
+    );
+
+    // ── Defensa en profundidad: clave de A guardada (a mano) en una fila de B ──
+    await check('GET /api/documentos/:id/url — una clave de A en una fila de B nunca firma: 404', async () => {
+      const res = await getRaw(baseUrl, tokenB, `/api/documentos/${mismatchDocId}/url`);
+      assert.equal(res.status, 404);
+      const raw = JSON.stringify(res.body);
+      assert.equal(raw.includes(seedA.organizationId), false);
+    });
+
+    // ── Fila legada: la URL de Drive sigue funcionando, pero solo para su club ─
+    await check(
+      'GET /api/documentos/:id/url — fila legada de A responde la URL legada (expiresInSeconds: null)',
+      async () => {
+        const res = await getRaw(baseUrl, tokenA, `/api/documentos/${legacyDocId}/url`);
+        assert.equal(res.status, 200);
+        assert.deepEqual(res.body, { url: LEGACY_URL, expiresInSeconds: null });
+      },
+    );
+
+    await check('GET /api/documentos/:id/url — la fila legada de A es 404 para B', async () => {
+      const res = await getRaw(baseUrl, tokenB, `/api/documentos/${legacyDocId}/url`);
+      assert.equal(res.status, 404);
+    });
+
+    // ── Los listados/detalles nunca filtran una columna *FileUrl ───────────────
+    const noUrlLeakChecks: { label: string; path: string }[] = [
+      { label: 'GET /api/salidas', path: '/api/salidas' },
+      { label: 'GET /api/salidas/:id', path: `/api/salidas/${seedA.salidaId}` },
+      { label: 'GET /api/documentos', path: '/api/documentos' },
+      { label: 'GET /api/documentos/admin', path: '/api/documentos/admin' },
+      { label: 'GET /api/eventos', path: '/api/eventos' },
+      { label: 'GET /api/eventos/:id', path: `/api/eventos/${seedA.eventoId}` },
+    ];
+    const forbiddenFields = ['gpxFileUrl', 'pronosticoFileUrl', 'driveFileUrl', 'itinerarioFileUrl'];
+    for (const { label, path } of noUrlLeakChecks) {
+      await check(`${label} nunca incluye una columna *FileUrl`, async () => {
+        const res = await getRaw(baseUrl, tokenA, path);
+        assert.equal(res.status, 200);
+        const raw = JSON.stringify(res.body);
+        for (const field of forbiddenFields) {
+          assert.equal(raw.includes(field), false, `se encontró "${field}" en la respuesta de ${path}`);
+        }
+      });
+    }
+
+    // ── Corrección de huérfanos de punta a punta ───────────────────────────────
+    await check('DELETE /api/salidas/:id — borra sus dos objetos del storage y no toca los de B', async () => {
+      assert.equal(storage.has(filesA!.gpxKey), true);
+      assert.equal(storage.has(filesA!.pronosticoKey), true);
+
+      const res = await deleteJson(baseUrl, tokenA, `/api/salidas/${seedA.salidaId}`);
+      assert.equal(res.status, 204);
+
+      assert.equal(storage.has(filesA!.gpxKey), false);
+      assert.equal(storage.has(filesA!.pronosticoKey), false);
+      assert.equal(storage.has(filesB!.gpxKey), true);
+      assert.equal(storage.has(filesB!.pronosticoKey), true);
+    });
+  } finally {
+    // Limpieza propia de esta sección — no depende del purgeOrganization final
+    // de main() para dejar la base y el storage exactamente como los encontró.
+    const extraDocIds = [mismatchDocId, legacyDocId].filter((id): id is string => Boolean(id));
+    if (extraDocIds.length > 0) {
+      await runAsPlatform(() => prisma.documento.deleteMany({ where: { id: { in: extraDocIds } } })).catch(
+        (err) => console.error('[test-isolation] No se pudieron limpiar las filas extra de documentos:', err),
+      );
+    }
+
+    const leftoverKeys = [
+      filesA?.documentoKey,
+      filesA?.itinerarioKey,
+      filesB?.gpxKey,
+      filesB?.pronosticoKey,
+      filesB?.documentoKey,
+      filesB?.itinerarioKey,
+    ].filter((key): key is string => Boolean(key));
+    for (const key of leftoverKeys) {
+      await storage.delete(key).catch((err) => console.error('[test-isolation] No se pudo limpiar el objeto', key, err));
+    }
+  }
+}
+
 // ─── Orquestación ──────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -883,6 +1222,13 @@ async function main(): Promise<void> {
       '[test-isolation] Comando abortado: DATABASE_URL no coincide con la base de datos de v2 declarada en ' +
       'backend/db-target.json. Ejecuta este script solo a través de "npm run test:isolation" o corrige DATABASE_URL.',
   });
+
+  // La suite jamás debe escribir en un bucket real: fuerza el adaptador de
+  // memoria aunque el .env de desarrollo seleccione GCS. getFileStorage() es
+  // perezoso y memoizado, así que basta con fijarlo antes de la primera
+  // llamada; assertMemoryStorage() lo vuelve a comprobar sobre la instancia
+  // realmente resuelta.
+  process.env.STORAGE_PROVIDER = 'memory';
 
   console.log('[test-isolation] Limpiando restos de una corrida anterior (si los hay)...');
   await purgeAllIsoTestOrganizations();
@@ -902,6 +1248,7 @@ async function main(): Promise<void> {
     const started = await startServer();
     server = started.server;
     await runHttpChecks(started.baseUrl, seedA, seedB);
+    await runFileDownloadChecks(started.baseUrl, seedA, seedB);
   } catch (err) {
     results.push({
       label: 'ejecución general del script (fuera de un check individual)',

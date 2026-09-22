@@ -4,6 +4,11 @@ import { prisma } from '../lib/prisma.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { encolarNotificacion, despacharNotificacionesPendientes } from '../lib/notificaciones.js';
 import { isAdmin } from '../lib/authz.js';
+import { serializeEvento } from '../lib/serializers/evento.js';
+import { getFileStorage } from '../lib/storage/get-file-storage.js';
+import { resolveFileDownload } from '../lib/storage/resolve-file-download.js';
+
+const ITINERARIO_DOWNLOAD_SECONDS = 600;
 
 const MES_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -114,7 +119,7 @@ export async function getEventos(req: Request, res: Response): Promise<void> {
 
     res.json(
       eventos.map(({ _count, ...evento }) => ({
-        ...evento,
+        ...serializeEvento(evento),
         totalPostulantes: _count.inscripciones,
         miInscripcion: miEstadoPorEvento.has(evento.id)
           ? { estado: miEstadoPorEvento.get(evento.id) }
@@ -125,6 +130,26 @@ export async function getEventos(req: Request, res: Response): Promise<void> {
     console.error('[getEventos]', error);
     res.status(500).json({ error: 'Error al obtener los eventos' });
   }
+}
+
+/**
+ * Regla de visibilidad de un evento: PUBLICADO/FINALIZADO/CANCELADO son
+ * visibles para cualquiera con sesión; un BORRADOR solo lo ve el admin o un
+ * gestor de su categoría. Compartida por getEventoById y GET
+ * /:id/itinerario/url — misma regla, un solo lugar.
+ */
+async function puedeVerEvento(
+  user: { id: string; rol?: string | null } | null | undefined,
+  evento: { estado: string; categoriaId: number | null },
+): Promise<boolean> {
+  if (evento.estado !== 'BORRADOR') return true;
+  if (isAdmin(user)) return true;
+  if (evento.categoriaId === null) return false;
+
+  const esGestorDeCategoria = await prisma.gestorCategoria.count({
+    where: { usuarioId: user!.id, categoriaId: evento.categoriaId },
+  });
+  return esGestorDeCategoria > 0;
 }
 
 export async function getEventoById(req: Request, res: Response): Promise<void> {
@@ -145,16 +170,9 @@ export async function getEventoById(req: Request, res: Response): Promise<void> 
       res.status(404).json({ error: 'Evento no encontrado' });
       return;
     }
-    if (evento.estado === 'BORRADOR' && !isAdmin(req.user)) {
-      const esGestorDeCategoria =
-        evento.categoriaId !== null &&
-        (await prisma.gestorCategoria.count({
-          where: { usuarioId: req.user!.id, categoriaId: evento.categoriaId },
-        })) > 0;
-      if (!esGestorDeCategoria) {
-        res.status(404).json({ error: 'Evento no encontrado' });
-        return;
-      }
+    if (!(await puedeVerEvento(req.user, evento))) {
+      res.status(404).json({ error: 'Evento no encontrado' });
+      return;
     }
 
     const [mia, declaracionVigente] = await Promise.all([
@@ -171,7 +189,7 @@ export async function getEventoById(req: Request, res: Response): Promise<void> 
 
     const { _count, ...rest } = evento;
     res.json({
-      ...rest,
+      ...serializeEvento(rest),
       totalPostulantes: _count.inscripciones,
       miInscripcion: mia ? { estado: mia.estado } : null,
       declaracionVigente,
@@ -179,6 +197,61 @@ export async function getEventoById(req: Request, res: Response): Promise<void> 
   } catch (error) {
     console.error('[getEventoById]', error);
     res.status(500).json({ error: 'Error al obtener el evento' });
+  }
+}
+
+/**
+ * GET /api/eventos/:id/itinerario/url — URL de descarga firmada (10 minutos)
+ * del adjunto de itinerario de un evento. Misma regla de acceso que
+ * GET /:id (puedeVerEvento).
+ */
+export async function getItinerarioUrl(req: Request, res: Response): Promise<void> {
+  res.set('Cache-Control', 'no-store');
+  const id = req.params['id'] as string;
+
+  try {
+    const evento = await prisma.evento.findUnique({ where: { id } });
+    if (!evento) {
+      res.status(404).json({ error: 'Evento no encontrado' });
+      return;
+    }
+    if (!(await puedeVerEvento(req.user, evento))) {
+      res.status(404).json({ error: 'Evento no encontrado' });
+      return;
+    }
+
+    const resolution = resolveFileDownload(
+      {
+        fileId: evento.itinerarioFileId,
+        legacyUrl: evento.itinerarioFileUrl,
+        downloadName: evento.itinerarioFileName ?? 'itinerario',
+      },
+      req.user!.organizationId,
+    );
+
+    switch (resolution.kind) {
+      case 'absent':
+        res.status(404).json({ error: 'El evento no tiene un itinerario adjunto' });
+        return;
+      case 'mismatch':
+        console.error(`[getItinerarioUrl] clave ${resolution.key} no pertenece al club solicitante`);
+        res.status(404).json({ error: 'El evento no tiene un itinerario adjunto' });
+        return;
+      case 'legacy':
+        res.json({ url: resolution.url, expiresInSeconds: null });
+        return;
+      case 'signed': {
+        const url = await getFileStorage().createSignedDownloadUrl(resolution.key, {
+          expiresInSeconds: ITINERARIO_DOWNLOAD_SECONDS,
+          downloadName: resolution.downloadName,
+        });
+        res.json({ url, expiresInSeconds: ITINERARIO_DOWNLOAD_SECONDS });
+        return;
+      }
+    }
+  } catch (error) {
+    console.error('[getItinerarioUrl]', error);
+    res.status(500).json({ error: 'No se pudo generar el enlace de descarga' });
   }
 }
 

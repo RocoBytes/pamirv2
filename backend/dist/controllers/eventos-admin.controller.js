@@ -5,7 +5,10 @@ import { instanteSantiago } from '../lib/santiago-time.js';
 import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../lib/authz.js';
 import { despacharNotificacionesPendientes, DispatchEnCursoError, } from '../lib/notificaciones.js';
-import { uploadToGoogleDrive, deleteFromGoogleDrive } from '../lib/google-drive.js';
+import { getFileStorage } from '../lib/storage/get-file-storage.js';
+import { buildObjectKey } from '../lib/storage/object-key.js';
+import { deleteStoredFileBestEffort } from '../lib/storage/delete-best-effort.js';
+import { serializeEvento } from '../lib/serializers/evento.js';
 import { ALLOWED_PRONOSTICO_EXT_STRICT, sanitizePronosticoFilename } from './upload.controller.js';
 import { bindTenantContext, requireOrganizationId } from '../lib/tenant-context.js';
 // Itinerary attachment (PDF/JPG/PNG) size cap, streamed straight to Drive
@@ -190,7 +193,7 @@ export async function createEvento(req, res) {
             },
             include: { categoria: true },
         });
-        res.status(201).json(evento);
+        res.status(201).json(serializeEvento(evento));
     }
     catch (error) {
         console.error('[createEvento]', error);
@@ -262,7 +265,7 @@ export async function updateEvento(req, res) {
             data: toEventoData(parsed.data),
             include: { categoria: true },
         });
-        res.json(actualizado);
+        res.json(serializeEvento(actualizado));
     }
     catch (error) {
         console.error('[updateEvento]', error);
@@ -293,16 +296,9 @@ export async function deleteEventoBorrador(req, res) {
             res.status(409).json({ error: 'Un evento con postulantes no se borra, se cancela' });
             return;
         }
-        // Best-effort cleanup of the itinerary attachment; a Drive failure must
+        // Best-effort cleanup of the itinerary attachment; a storage failure must
         // not block deleting the draft.
-        if (evento.itinerarioFileId) {
-            try {
-                await deleteFromGoogleDrive(evento.itinerarioFileId);
-            }
-            catch (err) {
-                console.error('[deleteEventoBorrador] Could not delete attachment from Drive:', err);
-            }
-        }
+        await deleteStoredFileBestEffort(evento.itinerarioFileId, 'deleteEventoBorrador');
         await prisma.evento.delete({ where: { id } });
         res.status(204).send();
     }
@@ -349,13 +345,15 @@ async function cargarEventoParaAdjunto(req, res) {
  * POST /api/eventos/:id/itinerario-adjunto
  *
  * multipart/form-data with a single "file" field (PDF/JPG/PNG, up to 15 MB).
- * The stream is piped straight to Google Drive (resumable upload); replacing
- * an existing attachment deletes the previous Drive file after responding.
+ * The stream is piped straight to the configured storage (see lib/storage);
+ * replacing an existing attachment deletes the previous object after
+ * responding.
  */
 export async function uploadItinerarioAdjunto(req, res) {
     const evento = await cargarEventoParaAdjunto(req, res);
     if (!evento)
         return;
+    const organizationId = req.user.organizationId;
     let responded = false;
     const safeRespond = (status, body) => {
         if (!responded) {
@@ -377,7 +375,8 @@ export async function uploadItinerarioAdjunto(req, res) {
     busboy.on('file', bindTenantContext(async (_fieldname, fileStream, info) => {
         fileSeen = true;
         const { filename: rawFilename, mimeType } = info;
-        if (!ALLOWED_PRONOSTICO_EXT_STRICT.test(rawFilename)) {
+        const extensionMatch = ALLOWED_PRONOSTICO_EXT_STRICT.exec(rawFilename);
+        if (!extensionMatch) {
             fileStream.resume();
             safeRespond(400, { error: 'Solo se permiten archivos PDF, JPG o PNG' });
             return;
@@ -388,30 +387,38 @@ export async function uploadItinerarioAdjunto(req, res) {
                 error: `El archivo supera el límite de ${MAX_ADJUNTO_BYTES / 1024 / 1024} MB`,
             });
         });
+        const anteriorId = evento.itinerarioFileId;
+        const key = buildObjectKey({
+            organizationId,
+            kind: 'itinerario',
+            extension: extensionMatch[1],
+        });
         try {
-            const anteriorId = evento.itinerarioFileId;
-            const result = await uploadToGoogleDrive(fileStream, sanitizePronosticoFilename(rawFilename), mimeType || 'application/octet-stream', MAX_ADJUNTO_BYTES);
+            await getFileStorage().upload(fileStream, {
+                key,
+                contentType: mimeType || 'application/octet-stream',
+                maxBytes: MAX_ADJUNTO_BYTES,
+            });
+            const filename = sanitizePronosticoFilename(rawFilename);
             let actualizado;
             try {
                 actualizado = await prisma.evento.update({
                     where: { id: evento.id },
                     data: {
-                        itinerarioFileId: result.fileId,
-                        itinerarioFileName: result.fileName,
-                        itinerarioFileUrl: result.webViewLink,
+                        itinerarioFileId: key,
+                        itinerarioFileName: filename,
+                        itinerarioFileUrl: null,
                     },
                     include: { categoria: true },
                 });
             }
             catch (err) {
-                // Do not leave the freshly uploaded file orphaned
-                await deleteFromGoogleDrive(result.fileId).catch(() => undefined);
+                // Do not leave the freshly uploaded object orphaned
+                await deleteStoredFileBestEffort(key, 'uploadItinerarioAdjunto');
                 throw err;
             }
-            safeRespond(200, actualizado);
-            if (anteriorId && anteriorId !== result.fileId) {
-                deleteFromGoogleDrive(anteriorId).catch((err) => console.error('[uploadItinerarioAdjunto] Could not delete previous attachment from Drive:', err));
-            }
+            safeRespond(200, serializeEvento(actualizado));
+            deleteStoredFileBestEffort(anteriorId, 'uploadItinerarioAdjunto');
         }
         catch (err) {
             const code = err.code;
@@ -421,8 +428,8 @@ export async function uploadItinerarioAdjunto(req, res) {
                 });
                 return;
             }
-            console.error('[uploadItinerarioAdjunto] Error subiendo a Google Drive:', err);
-            safeRespond(500, { error: 'Error al subir el adjunto a Google Drive' });
+            console.error('[uploadItinerarioAdjunto] Error subiendo el adjunto:', err);
+            safeRespond(500, { error: 'Error al subir el adjunto' });
         }
     }));
     busboy.on('error', (err) => {
@@ -442,28 +449,21 @@ export async function uploadItinerarioAdjunto(req, res) {
 /**
  * DELETE /api/eventos/:id/itinerario-adjunto
  *
- * Removes the attachment reference and best-effort deletes the Drive file.
- * Idempotent: succeeds even when nothing is attached.
+ * Removes the attachment reference and best-effort deletes the stored
+ * object. Idempotent: succeeds even when nothing is attached.
  */
 export async function deleteItinerarioAdjunto(req, res) {
     const evento = await cargarEventoParaAdjunto(req, res);
     if (!evento)
         return;
     try {
-        if (evento.itinerarioFileId) {
-            try {
-                await deleteFromGoogleDrive(evento.itinerarioFileId);
-            }
-            catch (err) {
-                console.error('[deleteItinerarioAdjunto] Could not delete attachment from Drive:', err);
-            }
-        }
+        await deleteStoredFileBestEffort(evento.itinerarioFileId, 'deleteItinerarioAdjunto');
         const actualizado = await prisma.evento.update({
             where: { id: evento.id },
             data: { itinerarioFileId: null, itinerarioFileName: null, itinerarioFileUrl: null },
             include: { categoria: true },
         });
-        res.json(actualizado);
+        res.json(serializeEvento(actualizado));
     }
     catch (error) {
         console.error('[deleteItinerarioAdjunto]', error);
@@ -533,7 +533,7 @@ export async function publicarEvento(req, res) {
             where: { id },
             data: { estado: 'PUBLICADO', publicadoAt: new Date() },
         });
-        res.json(publicado);
+        res.json(serializeEvento(publicado));
     }
     catch (error) {
         console.error('[publicarEvento]', error);
@@ -567,7 +567,7 @@ export async function despublicarEvento(req, res) {
             where: { id },
             data: { estado: 'BORRADOR', publicadoAt: null },
         });
-        res.json(despublicado);
+        res.json(serializeEvento(despublicado));
     }
     catch (error) {
         console.error('[despublicarEvento]', error);
@@ -626,7 +626,7 @@ export async function cancelarEvento(req, res) {
                 hayAvisos = true;
             }
         }
-        res.json(cancelado);
+        res.json(serializeEvento(cancelado));
         if (hayAvisos) {
             despacharNotificacionesPendientes(id).catch((err) => console.error('[cancelarEvento] dispatch:', err));
         }

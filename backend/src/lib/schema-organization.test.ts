@@ -8,7 +8,7 @@ import path from 'node:path';
 // internals de Prisma) que evita que un modelo nuevo quede sin
 // organizationId por accidente: cada tabla de negocio debe ser propiedad de
 // un club. Ampliar esta lista es una decisión explícita, no un descuido.
-const MODELOS_SIN_ORGANIZATION_ID = new Set(['Organization', 'AppSecret']);
+const MODELOS_SIN_ORGANIZATION_ID = new Set(['Organization']);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCHEMA_PATH = path.join(__dirname, '..', '..', 'prisma', 'schema.prisma');

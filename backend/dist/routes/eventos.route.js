@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware, requireAuth, requireGestorEventos } from '../middleware/auth.middleware.js';
-import { getCategorias, getEventos, getEventoById, inscribirse, retirarse, } from '../controllers/eventos.controller.js';
+import { getCategorias, getEventos, getEventoById, inscribirse, retirarse, getItinerarioUrl, } from '../controllers/eventos.controller.js';
 import { createEvento, updateEvento, deleteEventoBorrador, uploadItinerarioAdjunto, deleteItinerarioAdjunto, publicarEvento, despublicarEvento, cancelarEvento, getPostulantes, finalizarEvento, reenviarNotificaciones, } from '../controllers/eventos-admin.controller.js';
 const router = Router();
 // Todo el módulo exige sesión; no hay vistas públicas de eventos.
@@ -9,6 +9,7 @@ router.use(authMiddleware, requireAuth);
 router.get('/categorias', getCategorias);
 router.get('/', getEventos);
 router.get('/:id', getEventoById);
+router.get('/:id/itinerario/url', getItinerarioUrl);
 router.post('/:id/inscripcion', inscribirse);
 router.delete('/:id/inscripcion', retirarse);
 router.post('/', requireGestorEventos, createEvento);

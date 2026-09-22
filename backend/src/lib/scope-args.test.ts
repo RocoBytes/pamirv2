@@ -38,12 +38,6 @@ describe('scopeArgs — contexto de plataforma', () => {
     assert.deepEqual(result, args);
   });
 
-  it('deja pasar los args sin modificar para un modelo global', () => {
-    const args = { where: { key: 'k' } };
-    const result = scopeArgs({ model: 'AppSecret', operation: 'findUnique', args, store: platform });
-    assert.deepEqual(result, args);
-  });
-
   it('deja pasar los args sin modificar para Organization', () => {
     const args = { where: { slug: 'club' } };
     const result = scopeArgs({ model: 'Organization', operation: 'findUnique', args, store: platform });
@@ -57,13 +51,14 @@ describe('scopeArgs — contexto de plataforma', () => {
   });
 });
 
-// ─── Modelos globales bajo contexto de club: pasan sin filtrar ────────────────
+// ─── Modelos globales: la lista está vacía desde que se eliminó el único ──────
+// modelo global que existió (guardaba el refresh token de Google). El
+// mecanismo se conserva tipado para el próximo modelo global; sin ninguna
+// entrada hoy, ningún modelo escapa del aislamiento por esta vía.
 
-describe('scopeArgs — modelos globales bajo un contexto de club', () => {
-  it('AppSecret no se filtra por organizationId', () => {
-    const args = { where: { key: 'google_refresh_token' } };
-    const result = scopeArgs({ model: 'AppSecret', operation: 'findUnique', args, store: asA });
-    assert.deepEqual(result, args);
+describe('scopeArgs — GLOBAL_MODELS', () => {
+  it('está vacía', () => {
+    assert.deepEqual(GLOBAL_MODELS, []);
   });
 });
 

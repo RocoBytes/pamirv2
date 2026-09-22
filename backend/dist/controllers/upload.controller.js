@@ -1,5 +1,7 @@
 import Busboy from 'busboy';
-import { uploadToGoogleDrive } from '../lib/google-drive.js';
+import { getFileStorage } from '../lib/storage/get-file-storage.js';
+import { buildObjectKey } from '../lib/storage/object-key.js';
+import { deleteStoredFileBestEffort } from '../lib/storage/delete-best-effort.js';
 import { prisma } from '../lib/prisma.js';
 import { puedeGestionarSalida } from '../lib/authz.js';
 import { bindTenantContext } from '../lib/tenant-context.js';
@@ -21,15 +23,22 @@ export function sanitizePronosticoFilename(raw) {
         .trim()
         .slice(0, 200);
 }
+// Extensión real del archivo aceptado, tomada del grupo de captura de la
+// extensión permitida (nunca se confía en el nombre subido para construir la
+// clave del objeto — ver buildObjectKey).
+function extractExtension(filename, allowed) {
+    return (allowed.exec(filename)?.[1] ?? '').toLowerCase();
+}
 /**
  * POST /api/salidas/:id/gpx
  *
  * Recibe multipart/form-data con un único campo "file" conteniendo el .gpx.
- * Usa busboy para interceptar el stream y lo canaliza directamente a Google
- * Drive via Resumable Upload — sin cargar el buffer completo en RAM.
+ * Usa busboy para interceptar el stream y lo canaliza directamente al storage
+ * configurado (ver lib/storage) — sin cargar el buffer completo en RAM.
  */
 export async function uploadGpx(req, res) {
     const salidaId = req.params.id;
+    const organizationId = req.user.organizationId;
     // ── 1. Verificar que la salida existe ────────────────────────────────────────
     let salida;
     try {
@@ -89,23 +98,38 @@ export async function uploadGpx(req, res) {
                 error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
             });
         });
+        const anteriorFileId = salida.gpxFileId;
+        // Solo se acepta .gpx (ver ALLOWED_EXT, sin grupo de captura) — la
+        // extensión del objeto siempre es literal, nunca depende del filename.
+        const key = buildObjectKey({ organizationId, kind: 'gpx', extension: 'gpx' });
         try {
-            const result = await uploadToGoogleDrive(fileStream, filename, mimeType || 'application/gpx+xml', MAX_FILE_SIZE);
-            // Actualizar la salida con los datos del archivo en Drive
-            await prisma.salida.update({
-                where: { id: salidaId },
-                data: {
-                    gpxFileId: result.fileId,
-                    gpxFileName: result.fileName,
-                    gpxFileUrl: result.webViewLink,
-                },
+            await getFileStorage().upload(fileStream, {
+                key,
+                contentType: mimeType || 'application/gpx+xml',
+                maxBytes: MAX_FILE_SIZE,
             });
+            try {
+                // gpxFileUrl nunca se llena para un objeto nuevo: la URL de descarga
+                // se firma bajo demanda (ver GET /:id/archivos/:tipo/url) en vez de
+                // guardarse — el bucket es privado.
+                await prisma.salida.update({
+                    where: { id: salidaId },
+                    data: { gpxFileId: key, gpxFileName: filename, gpxFileUrl: null },
+                });
+            }
+            catch (err) {
+                // No dejar huérfano el objeto recién subido si la escritura falla.
+                await deleteStoredFileBestEffort(key, 'uploadGpx');
+                throw err;
+            }
             safeRespond(200, {
                 message: 'Archivo GPX subido exitosamente',
-                gpxFileId: result.fileId,
-                gpxFileName: result.fileName,
-                gpxFileUrl: result.webViewLink,
+                gpxFileId: key,
+                gpxFileName: filename,
             });
+            // Reemplazo: el objeto anterior se borra recién después de responder,
+            // best-effort (un id legado de Drive se ignora — ver el helper).
+            deleteStoredFileBestEffort(anteriorFileId, 'uploadGpx');
         }
         catch (err) {
             const code = err.code;
@@ -115,8 +139,8 @@ export async function uploadGpx(req, res) {
                 });
                 return;
             }
-            console.error('[uploadGpx] Error subiendo a Google Drive:', err);
-            safeRespond(500, { error: 'Error al subir el archivo a Google Drive' });
+            console.error('[uploadGpx] Error subiendo el archivo:', err);
+            safeRespond(500, { error: 'Error al subir el archivo' });
         }
     }));
     busboy.on('error', (err) => {
@@ -131,6 +155,7 @@ export async function uploadGpx(req, res) {
  */
 export async function uploadPronostico(req, res) {
     const salidaId = req.params.id;
+    const organizationId = req.user.organizationId;
     let salida;
     try {
         salida = await prisma.salida.findUnique({ where: { id: salidaId } });
@@ -181,22 +206,34 @@ export async function uploadPronostico(req, res) {
                 error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
             });
         });
+        const anteriorFileId = salida.pronosticoFileId;
+        const key = buildObjectKey({
+            organizationId,
+            kind: 'pronostico',
+            extension: extractExtension(rawFilename, ALLOWED_PRONOSTICO_EXT_STRICT),
+        });
         try {
-            const result = await uploadToGoogleDrive(fileStream, filename, mimeType || 'application/octet-stream', MAX_FILE_SIZE);
-            await prisma.salida.update({
-                where: { id: salidaId },
-                data: {
-                    pronosticoFileId: result.fileId,
-                    pronosticoFileName: result.fileName,
-                    pronosticoFileUrl: result.webViewLink,
-                },
+            await getFileStorage().upload(fileStream, {
+                key,
+                contentType: mimeType || 'application/octet-stream',
+                maxBytes: MAX_FILE_SIZE,
             });
+            try {
+                await prisma.salida.update({
+                    where: { id: salidaId },
+                    data: { pronosticoFileId: key, pronosticoFileName: filename, pronosticoFileUrl: null },
+                });
+            }
+            catch (err) {
+                await deleteStoredFileBestEffort(key, 'uploadPronostico');
+                throw err;
+            }
             safeRespond(200, {
                 message: 'Archivo de pronóstico subido exitosamente',
-                pronosticoFileId: result.fileId,
-                pronosticoFileName: result.fileName,
-                pronosticoFileUrl: result.webViewLink,
+                pronosticoFileId: key,
+                pronosticoFileName: filename,
             });
+            deleteStoredFileBestEffort(anteriorFileId, 'uploadPronostico');
         }
         catch (err) {
             const code = err.code;
@@ -206,8 +243,8 @@ export async function uploadPronostico(req, res) {
                 });
                 return;
             }
-            console.error('[uploadPronostico] Error subiendo a Google Drive:', err);
-            safeRespond(500, { error: 'Error al subir el archivo a Google Drive' });
+            console.error('[uploadPronostico] Error subiendo el archivo:', err);
+            safeRespond(500, { error: 'Error al subir el archivo' });
         }
     }));
     busboy.on('error', (err) => {

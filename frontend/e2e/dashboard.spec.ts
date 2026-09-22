@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import type { Route } from '@playwright/test'
 import {
   setAuth,
   mockNoIntegrante,
@@ -119,5 +120,87 @@ test.describe('Dashboard – sesión no autenticada', () => {
     await mockSalidas(page)
     await page.goto('/')
     await expect(page.getByText(MOCK_USER.name)).toBeVisible()
+  })
+})
+
+test.describe('Detalle de salida – descarga de GPX y pronóstico', () => {
+  const MOCK_SALIDA_DETALLE = {
+    ...MOCK_SALIDA,
+    tipoSalida: 'OFICIAL_CLUB',
+    temporada: 'estival',
+    fechaInicio: MOCK_SALIDA.fechaInicio,
+    fechaRetornoEstimada: MOCK_SALIDA.fechaInicio,
+    horaAlerta: '20:00',
+    avisosExternos: [],
+    liderCordada: 'Test Alpinista',
+    coordinacionGrupal: true,
+    matrizRiesgos: true,
+    mediosComunicacion: ['CELULAR'],
+    equipoColectivo: [],
+    riesgosIdentificados: [],
+    planEvacuacion: 'Descenso por la misma ruta',
+    gpxFileId: 'gcs-gpx-001',
+    gpxFileName: 'ruta.gpx',
+    pronosticoFileId: 'gcs-pronostico-001',
+    pronosticoFileName: 'pronostico.pdf',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    userId: MOCK_USER.id,
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await setAuth(page, MOCK_USER)
+    await mockHasIntegrante(page)
+    await mockSalidas(page, [MOCK_SALIDA])
+    await page.route('**/api/salidas/salida-001', (route: Route) => {
+      void route.fulfill({ status: 200, json: MOCK_SALIDA_DETALLE })
+    })
+    await page.route('https://storage.googleapis.com/**', (route: Route) => {
+      const url = route.request().url()
+      const filename = url.includes('gpx') ? 'ruta.gpx' : 'pronostico.pdf'
+      void route.fulfill({
+        status: 200,
+        headers: { 'Content-Disposition': `attachment; filename="${filename}"` },
+        body: 'contenido-fake',
+      })
+    })
+  })
+
+  test('descarga el GPX vía URL firmada de GCS', async ({ page }) => {
+    await page.route('**/api/salidas/salida-001/archivos/gpx/url', (route: Route) => {
+      void route.fulfill({
+        status: 200,
+        json: {
+          url: 'https://storage.googleapis.com/pamirv2-files-dev/orgs/x/gpx/gcs-gpx-001.gpx?sig=abc',
+          expiresInSeconds: 600,
+        },
+      })
+    })
+    await page.goto('/')
+    await page.getByText('Ascenso al Plomo').click()
+
+    const boton = page.getByRole('button', { name: /Descargar GPX/ })
+    await expect(boton).toBeVisible()
+    const [descarga] = await Promise.all([page.waitForEvent('download'), boton.click()])
+    expect(descarga.suggestedFilename()).toBe('ruta.gpx')
+  })
+
+  test('descarga el pronóstico vía URL firmada de GCS', async ({ page }) => {
+    await page.route('**/api/salidas/salida-001/archivos/pronostico/url', (route: Route) => {
+      void route.fulfill({
+        status: 200,
+        json: {
+          url: 'https://storage.googleapis.com/pamirv2-files-dev/orgs/x/pronostico/gcs-pronostico-001.pdf?sig=abc',
+          expiresInSeconds: 600,
+        },
+      })
+    })
+    await page.goto('/')
+    await page.getByText('Ascenso al Plomo').click()
+
+    const boton = page.getByRole('button', { name: /Ver archivo subido/ })
+    await expect(boton).toBeVisible()
+    const [descarga] = await Promise.all([page.waitForEvent('download'), boton.click()])
+    expect(descarga.suggestedFilename()).toBe('pronostico.pdf')
   })
 })

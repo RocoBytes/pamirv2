@@ -10,10 +10,11 @@ import {
 } from 'lucide-react'
 import logoPamir from '../assets/logo_PAMIR.png'
 
-import { fetchDocumentos } from '../lib/api'
+import { fetchDocumentos, fetchDocumentoUrl } from '../lib/api'
 import type { DocumentoRecord } from '../lib/api'
 import { CATEGORIA_LABELS, CATEGORIA_ORDEN } from '../lib/documentos'
 import { Button } from './ui/Button'
+import { FileDownloadButton } from './FileDownloadButton'
 
 function agruparPorCategoria(docs: DocumentoRecord[]): [string, DocumentoRecord[]][] {
   const grupos = new Map<string, DocumentoRecord[]>()
@@ -111,19 +112,9 @@ export function DocumentosPage({ onBack }: DocumentosPageProps) {
                   {CATEGORIA_LABELS[categoria] ?? categoria}
                 </h2>
                 <ul className="flex flex-col gap-2">
-                  {docs.map((doc) => (
-                    <li key={doc.id}>
-                      <a
-                        href={doc.driveFileUrl ?? '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-disabled={!doc.driveFileUrl}
-                        className={[
-                          'flex items-center gap-3 bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4',
-                          'transition-shadow duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]',
-                          doc.driveFileUrl ? 'hover:shadow-md' : 'opacity-60 pointer-events-none',
-                        ].join(' ')}
-                      >
+                  {docs.map((doc) => {
+                    const contenido = (
+                      <>
                         <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#e8eef7] flex items-center justify-center">
                           <FileText size={18} className="text-[#264c99]" />
                         </div>
@@ -134,9 +125,35 @@ export function DocumentosPage({ onBack }: DocumentosPageProps) {
                           )}
                         </div>
                         <Download size={16} className="shrink-0 text-[#4a6fad]" />
-                      </a>
-                    </li>
-                  ))}
+                      </>
+                    )
+                    return (
+                      <li key={doc.id}>
+                        {doc.driveFileId ? (
+                          <FileDownloadButton
+                            fetchUrl={() => fetchDocumentoUrl(doc.id)}
+                            className={[
+                              'flex items-center gap-3 bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 w-full text-left',
+                              'transition-shadow duration-200 hover:shadow-md',
+                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]',
+                              'disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-sm',
+                            ].join(' ')}
+                          >
+                            {contenido}
+                          </FileDownloadButton>
+                        ) : (
+                          // Documento sin archivo aún: visible pero deshabilitado
+                          <button
+                            type="button"
+                            disabled
+                            className="flex items-center gap-3 bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 w-full text-left opacity-60 cursor-not-allowed"
+                          >
+                            {contenido}
+                          </button>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               </section>
             ))}

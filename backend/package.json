@@ -26,9 +26,12 @@
     "predb:create-user": "npm run db:guard",
     "db:create-user": "tsx src/scripts/create-user.ts",
     "pretest:isolation": "npm run db:guard",
-    "test:isolation": "tsx src/scripts/test-isolation.ts"
+    "test:isolation": "tsx src/scripts/test-isolation.ts",
+    "pretest:storage": "npm run db:guard",
+    "test:storage": "tsx src/scripts/test-storage.ts"
   },
   "dependencies": {
+    "@google-cloud/storage": "^8.2.0",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
     "bcrypt": "^6.0.0",
@@ -37,8 +40,6 @@
     "dotenv": "^17.4.2",
     "express": "^4.22.1",
     "express-rate-limit": "^8.4.0",
-    "google-auth-library": "^10.6.2",
-    "googleapis": "^171.4.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^10.0.10",

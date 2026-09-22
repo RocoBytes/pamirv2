@@ -12,10 +12,12 @@ import {
   fetchCategoriasEvento,
   uploadItinerarioAdjunto,
   deleteItinerarioAdjunto,
+  fetchEventoItinerarioUrl,
 } from '../lib/api'
 import type { EventoConCategoria } from '../lib/api'
 import { restarDias, esFechaCompleta } from '../lib/fechas'
 import { Button } from './ui/Button'
+import { FileDownloadButton } from './FileDownloadButton'
 import { FilePicker } from './ui/FilePicker'
 import { Input } from './ui/Input'
 import { Select } from './ui/Select'
@@ -195,8 +197,8 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
   const [adjuntoFile, setAdjuntoFile] = useState<File | null>(null)
   const [quitarAdjunto, setQuitarAdjunto] = useState(false)
   const adjuntoActual =
-    !quitarAdjunto && evento?.itinerarioFileUrl
-      ? { url: evento.itinerarioFileUrl, nombre: evento.itinerarioFileName ?? 'archivo' }
+    !quitarAdjunto && evento?.itinerarioFileId
+      ? { eventoId: evento.id, nombre: evento.itinerarioFileName ?? 'archivo' }
       : null
   // Un gestor crea siempre dentro de una de sus categorías (espejo del backend)
   const categoriaObligatoria = !esAdminEventos
@@ -461,15 +463,13 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
           <div className="flex flex-col gap-2">
             <span className="text-sm font-semibold text-[#264c99]">Adjunto del itinerario</span>
             <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-[#264c99]/40 bg-[#e8eef7]">
-              <a
-                href={adjuntoActual.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 flex-1 min-w-0 text-sm text-[#1e3c7a] hover:underline"
+              <FileDownloadButton
+                fetchUrl={() => fetchEventoItinerarioUrl(adjuntoActual.eventoId)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-sm text-[#1e3c7a] hover:underline text-left disabled:opacity-60"
               >
                 <Paperclip size={15} className="text-[#264c99] shrink-0" />
                 <span className="truncate">{adjuntoActual.nombre}</span>
-              </a>
+              </FileDownloadButton>
               <button
                 type="button"
                 onClick={() => setQuitarAdjunto(true)}
@@ -500,7 +500,7 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
             disabled={saving}
           />
         )}
-        {quitarAdjunto && !adjuntoFile && evento?.itinerarioFileUrl && (
+        {quitarAdjunto && !adjuntoFile && evento?.itinerarioFileId && (
           <p className="text-xs text-[#757874] -mt-2">
             Se quitará el adjunto al guardar.{' '}
             <button

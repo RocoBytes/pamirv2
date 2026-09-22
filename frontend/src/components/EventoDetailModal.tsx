@@ -20,9 +20,10 @@ import {
   formatRangoFechas,
   puedeGestionarCategoria,
 } from '../types/evento'
-import { fetchEvento, retirarseEvento } from '../lib/api'
+import { fetchEvento, retirarseEvento, fetchEventoItinerarioUrl } from '../lib/api'
 import { Button } from './ui/Button'
 import { InscripcionModal } from './InscripcionModal'
+import { FileDownloadButton } from './FileDownloadButton'
 
 interface EventoDetailModalProps {
   eventoId: string
@@ -254,18 +255,16 @@ export function EventoDetailModal({
 
           <div className="grid gap-4">
             {evento.objetivo && <SeccionTexto titulo="Objetivo" texto={evento.objetivo} />}
-            {(evento.itinerario || evento.itinerarioFileUrl) && (
+            {(evento.itinerario || evento.itinerarioFileId) && (
               <SeccionTexto titulo="Itinerario" texto={evento.itinerario ?? undefined}>
-                {evento.itinerarioFileUrl && (
-                  <a
-                    href={evento.itinerarioFileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 mt-2 px-3 py-2 bg-[#e8eef7] text-[#1e3c7a] rounded-xl hover:bg-[#dde6f7] transition-colors text-sm font-medium"
+                {evento.itinerarioFileId && (
+                  <FileDownloadButton
+                    fetchUrl={() => fetchEventoItinerarioUrl(evento.id)}
+                    className="inline-flex items-center gap-2 mt-2 px-3 py-2 bg-[#e8eef7] text-[#1e3c7a] rounded-xl hover:bg-[#dde6f7] transition-colors text-sm font-medium disabled:opacity-60"
                   >
                     <Paperclip size={16} /> Ver itinerario adjunto
                     {evento.itinerarioFileName ? ` (${evento.itinerarioFileName})` : ''}
-                  </a>
+                  </FileDownloadButton>
                 )}
               </SeccionTexto>
             )}

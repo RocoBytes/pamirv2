@@ -59,7 +59,7 @@ npm run format     # Prettier
 ## Variables de entorno
 
 ```bash
-cp backend/.env.example backend/.env    # Fase 2: DATABASE_URL, GOOGLE_CLIENT_ID, etc.
+cp backend/.env.example backend/.env    # Fase 2: DATABASE_URL, JWT_SECRET, etc.
 cp frontend/.env.example frontend/.env  # Fase 2: VITE_API_URL, etc.
 ```
 
@@ -333,6 +333,66 @@ reintento del cron puede DUPLICAR una alarma, pero nunca la PIERDE.
 `MAIL_SENDER_DEFS` (`backend/src/lib/config.ts`), con su propia variable de
 entorno y su valor por defecto. Ningún llamador ni `club-email.ts` cambian.
 
+### Archivos en Google Cloud Storage
+
+GPX, pronósticos, documentos de la biblioteca e itinerarios adjuntos se suben
+directo a un bucket privado por entorno — `pamirv2-files-dev` y
+`pamirv2-files-prod`, ambos en `southamerica-west1`, con acceso uniforme a
+nivel de bucket y prevención de acceso público forzada. Nunca son públicos.
+
+Cada entorno tiene su propia cuenta de servicio
+(`pamirv2-storage-dev@pamirv2.iam.gserviceaccount.com` y
+`pamirv2-storage-prod@pamirv2.iam.gserviceaccount.com`) con el rol
+`roles/storage.objectUser` otorgado **solo sobre su propio bucket**, nunca a
+nivel de proyecto — así una llave de desarrollo en un laptop jamás puede leer
+los archivos de producción.
+
+Los objetos se guardan como `orgs/{organizationId}/{gpx|pronostico|documento|
+itinerario}/{uuid}.{ext}`. La URL de un archivo nunca se guarda ni se
+devuelve en ningún payload: la descarga pasa siempre por uno de estos tres
+endpoints, que primero repiten el chequeo de permiso del recurso y recién
+después firman una URL de descarga válida por 10 minutos:
+
+- `GET /api/salidas/:id/archivos/:tipo/url` (`tipo` = `gpx` o `pronostico`)
+- `GET /api/documentos/:id/url`
+- `GET /api/eventos/:id/itinerario/url`
+
+Los registros legado (subidos antes de esta migración) siguen respondiendo su
+link antiguo de Drive con `expiresInSeconds: null`; los nuevos devuelven una
+URL firmada de GCS con `expiresInSeconds: 600`. Ningún archivo se bufferiza
+en RAM ni se escribe a disco: la subida es un stream de punta a punta
+(busboy → guardia de tamaño → stream de escritura resumible a GCS), y al
+reemplazar o borrar un archivo el objeto anterior se limpia como huérfano.
+
+Variables de entorno (`backend/.env.example`):
+
+- `STORAGE_PROVIDER`: `gcs` (producción) o `memory` (solo en memoria del
+  proceso). `memory` nunca está permitido con `NODE_ENV=production` y pierde
+  todos los archivos al reiniciar — con él las descargas no funcionan.
+- `GCS_BUCKET`, `GCS_PROJECT_ID`: nombre del bucket y proyecto dueño.
+- `GCS_CREDENTIALS_JSON`: la llave de la cuenta de servicio, codificada en
+  base64 y guardada siempre fuera del repositorio (`base64 < llave.json | tr
+  -d '\n'`).
+
+**Verificación manual** (necesita el proveedor `gcs` y el bucket de
+desarrollo configurados):
+
+```bash
+cd backend
+npm run test:storage
+```
+
+**Aprovisionamiento** (siempre con `--project=pamirv2`; el proyecto necesita
+una cuenta de facturación activa antes de poder crear buckets):
+
+```bash
+gcloud storage buckets create gs://pamirv2-files-dev --project=pamirv2 --location=southamerica-west1 --default-storage-class=STANDARD --uniform-bucket-level-access --public-access-prevention
+gcloud storage buckets add-iam-policy-binding gs://pamirv2-files-dev --member=serviceAccount:pamirv2-storage-dev@pamirv2.iam.gserviceaccount.com --role=roles/storage.objectUser
+```
+
+El par de producción es idéntico, cambiando `dev` por `prod` en el nombre del
+bucket y de la cuenta de servicio.
+
 ### Verificarlo
 
 ```bash
@@ -356,7 +416,8 @@ mitad de camino).
 Arquitectura: un stack de Docker Compose en el VPS. El contenedor `nginx`
 (imagen del frontend) termina TLS con el certificado de origen de Cloudflare,
 sirve el SPA y proxea `/api` al contenedor `backend` (same-origin, sin CORS).
-La base de datos permanece en Neon.tech; los archivos van a Google Drive.
+La base de datos permanece en Neon.tech; los archivos van a un bucket privado
+de Google Cloud Storage (ver "Archivos en Google Cloud Storage" más abajo).
 Los contenedores son 100% stateless.
 
 ### CI/CD (GitHub Actions)
@@ -418,6 +479,6 @@ aplica el servicio `migrate` del compose en cada deploy.
 |---|---|---|
 | 1 | Andamiaje y configuración inicial | ✅ Completa |
 | 2 | Backend core y base de datos | ✅ Completa |
-| 3 | Integraciones (Google Auth + Drive) | ✅ Completa |
+| 3 | Integraciones (login por invitación + Google Cloud Storage) | ✅ Completa |
 | 4 | Frontend UI/UX (Wizard 5 pasos) | ✅ Completa |
 | 5 | Preparación para despliegue | ✅ Completa |

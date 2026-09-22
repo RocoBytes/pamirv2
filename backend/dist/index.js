@@ -8,7 +8,19 @@ import app from './app.js';
 // links a localhost en los correos (auth/cierres), rechaza todo el cron o no
 // puede enviar ningún correo transaccional.
 if (process.env.NODE_ENV === 'production') {
-    for (const key of ['DATABASE_URL', 'FRONTEND_URL', 'BACKEND_URL', 'CRON_SECRET', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS']) {
+    for (const key of [
+        'DATABASE_URL',
+        'FRONTEND_URL',
+        'BACKEND_URL',
+        'CRON_SECRET',
+        'SMTP_HOST',
+        'SMTP_PORT',
+        'SMTP_USER',
+        'SMTP_PASS',
+        'GCS_BUCKET',
+        'GCS_PROJECT_ID',
+        'GCS_CREDENTIALS_JSON',
+    ]) {
         if (!process.env[key]) {
             throw new Error(`Missing required env var: ${key}`);
         }

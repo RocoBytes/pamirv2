@@ -31,6 +31,19 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+// Conserva el status HTTP junto al mensaje: los controles de descarga de
+// archivos (ver fetchSalidaArchivoUrl y hermanas) lo necesitan para distinguir
+// 403 (sin permiso, el backend nombra el club) de 404 (ya no existe) sin
+// parsear el texto del mensaje.
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let message = `HTTP ${res.status}`
@@ -40,7 +53,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
     } catch {
       // ignore parse errors
     }
-    throw new Error(message)
+    throw new ApiError(message, res.status)
   }
   return res.json() as Promise<T>
 }
@@ -112,8 +125,8 @@ export async function getSalida(id: string): Promise<SalidaRecord> {
   return handleResponse<SalidaRecord>(res)
 }
 
-// gpxFileId/gpxFileName/gpxFileUrl nunca viajan en este payload: el GPX se
-// sube después, a través de uploadGpx(), una vez creada la salida.
+// Los metadatos del GPX nunca viajan en este payload: el archivo se sube
+// después, a través de uploadGpx(), una vez creada la salida.
 export async function createSalida(
   data: Omit<SalidaFormData, 'gpxFile'>,
 ): Promise<SalidaRecord> {
@@ -341,7 +354,9 @@ export interface DocumentoRecord {
   categoria: string
   nombre: string
   descripcion?: string | null
-  driveFileUrl?: string | null
+  // No null = tiene archivo subido; la URL de descarga se pide aparte y bajo
+  // demanda (ver fetchDocumentoUrl), nunca viaja en este payload.
+  driveFileId?: string | null
   // Solo presentes en la vista admin (GET /api/documentos/admin):
   visible?: boolean
   orden?: number
@@ -418,32 +433,39 @@ export async function fetchAdminStats(): Promise<AdminStats> {
   return handleResponse<AdminStats>(res)
 }
 
-// ─── Credencial de Google (refresh token rotable desde el panel) ─────────────
+// ─── Descarga de archivos (Google Cloud Storage) ─────────────────────────────
 
-export interface GoogleCredencial {
-  configurado: boolean
-  /** 'db' = pegado desde el panel; 'env' = el del servidor, como respaldo. */
-  origen: 'db' | 'env'
-  actualizadoAt: string | null
-  actualizadoPor: string | null
-  diasDesdeActualizacion: number | null
-  estado: { ok: boolean; motivo: string | null }
+// Las tres rutas de "url" nunca deben cachearse: la respuesta trae
+// Cache-Control: no-store y, cuando es una URL firmada, expira a los 10
+// minutos — cada click debe pedir una fresca (ver lib/file-download.ts).
+export interface DownloadUrlResponse {
+  url: string
+  expiresInSeconds: number | null
 }
 
-export async function fetchGoogleCredencial(): Promise<GoogleCredencial> {
-  const res = await fetch(`${API_BASE}/admin/google-credencial`, {
+export async function fetchSalidaArchivoUrl(
+  salidaId: string,
+  tipo: 'gpx' | 'pronostico',
+): Promise<DownloadUrlResponse> {
+  const res = await fetch(
+    `${API_BASE}/salidas/${encodeURIComponent(salidaId)}/archivos/${tipo}/url`,
+    { headers: authHeaders() },
+  )
+  return handleResponse<DownloadUrlResponse>(res)
+}
+
+export async function fetchDocumentoUrl(id: string): Promise<DownloadUrlResponse> {
+  const res = await fetch(`${API_BASE}/documentos/${encodeURIComponent(id)}/url`, {
     headers: authHeaders(),
   })
-  return handleResponse<GoogleCredencial>(res)
+  return handleResponse<DownloadUrlResponse>(res)
 }
 
-export async function saveGoogleCredencial(refreshToken: string): Promise<GoogleCredencial> {
-  const res = await fetch(`${API_BASE}/admin/google-credencial`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ refreshToken }),
+export async function fetchEventoItinerarioUrl(id: string): Promise<DownloadUrlResponse> {
+  const res = await fetch(`${API_BASE}/eventos/${encodeURIComponent(id)}/itinerario/url`, {
+    headers: authHeaders(),
   })
-  return handleResponse<GoogleCredencial>(res)
+  return handleResponse<DownloadUrlResponse>(res)
 }
 
 // ─── Admin analytics dashboard ──────────────────────────────────────────────────

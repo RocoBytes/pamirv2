@@ -32,7 +32,10 @@ export const TENANT_MODELS = [
 ] as const;
 
 // Modelos sin organizationId: no pertenecen a ningún club y jamás se filtran.
-export const GLOBAL_MODELS = ['AppSecret'] as const;
+// Vacía desde que el único modelo global (guardaba el refresh token de
+// Google, ya eliminado tras migrar el almacenamiento de archivos) dejó de
+// existir — el mecanismo se conserva tipado para el próximo modelo global.
+export const GLOBAL_MODELS = [] as const;
 
 // Organization no está en TENANT_MODELS (no tiene columna organizationId; ES
 // el club) ni en GLOBAL_MODELS (si hay un contexto de club activo, ese club

@@ -8,8 +8,6 @@ import {
   getDashboardLayout,
   saveDashboardLayout,
   deleteDashboardLayout,
-  getGoogleCredencial,
-  saveGoogleCredencial,
   listUsers,
   updateUserRol,
 } from '../controllers/admin.controller.js';
@@ -26,8 +24,6 @@ router.put('/dashboard-layout', saveDashboardLayout);
 router.delete('/dashboard-layout', deleteDashboardLayout);
 router.get('/salidas/:id/salud', getSaludSalida);
 router.post('/salidas/:id/enviar-salud', enviarSaludSalida);
-router.get('/google-credencial', getGoogleCredencial);
-router.put('/google-credencial', saveGoogleCredencial);
 router.get('/users', listUsers);
 router.patch('/users/:id/rol', updateUserRol);
 

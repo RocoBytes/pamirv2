@@ -231,23 +231,6 @@ test.describe('Panel de Administración — usuarios e invitaciones', () => {
         },
       })
     })
-    await page.route('**/api/admin/google-credencial', (route) => {
-      if (route.request().method() === 'GET') {
-        void route.fulfill({
-          status: 200,
-          json: {
-            configurado: false,
-            origen: 'env',
-            actualizadoAt: null,
-            actualizadoPor: null,
-            diasDesdeActualizacion: null,
-            estado: { ok: true, motivo: null },
-          },
-        })
-      } else {
-        void route.continue()
-      }
-    })
     await page.route('**/api/documentos/admin', (route) => {
       void route.fulfill({ status: 200, json: [] })
     })

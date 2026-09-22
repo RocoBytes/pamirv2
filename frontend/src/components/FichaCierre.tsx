@@ -424,7 +424,7 @@ function GpxFilePicker({ value, onChange }: GpxFilePickerProps) {
         <span className="text-[#757874] font-normal">(opcional)</span>
       </span>
       <p className="text-xs text-[#757874]">
-        Adjunta el archivo .gpx registrado durante la actividad. Se subirá a Google Drive al guardar.
+        Adjunta el archivo .gpx registrado durante la actividad. Se subirá al guardar.
       </p>
 
       {value ? (

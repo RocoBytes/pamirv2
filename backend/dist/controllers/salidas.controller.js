@@ -5,6 +5,11 @@ import { subjectRegistroSalida } from '../lib/email/subjects.js';
 import { isAdmin, puedeGestionarSalida } from '../lib/authz.js';
 import { instanteSantiago } from '../lib/santiago-time.js';
 import { errorFechaCalendario } from '../lib/fecha-calendario.js';
+import { serializeSalida } from '../lib/serializers/salida.js';
+import { getFileStorage } from '../lib/storage/get-file-storage.js';
+import { deleteStoredFileBestEffort } from '../lib/storage/delete-best-effort.js';
+import { resolveFileDownload } from '../lib/storage/resolve-file-download.js';
+const ARCHIVO_DOWNLOAD_SECONDS = 600;
 const asJson = (v) => v;
 async function sendSalidaParticipantEmails(participantObjs, salida, organization) {
     const participants = participantObjs;
@@ -189,7 +194,7 @@ export async function createSalida(req, res) {
                 },
             });
         });
-        res.status(201).json(salida);
+        res.status(201).json(serializeSalida(salida));
         // Los registros históricos del admin no notifican a los integrantes.
         if (!esRegistroHistorico) {
             sendSalidaParticipantEmails(participantesNormalizados, salida, req.user.organization).catch((err) => console.error('[salida-email]', err));
@@ -212,7 +217,7 @@ export async function getSalidas(req, res) {
                 orderBy: { createdAt: 'desc' },
                 include: { _count: { select: { cierres: true } } },
             });
-            res.json(salidas);
+            res.json(salidas.map(serializeSalida));
             return;
         }
         let userRut = null;
@@ -246,17 +251,38 @@ export async function getSalidas(req, res) {
             where: whereClause,
             orderBy: { createdAt: 'desc' },
         });
-        res.json(salidas);
+        res.json(salidas.map(serializeSalida));
     }
     catch (error) {
         console.error('[getSalidas]', error);
         res.status(500).json({ error: 'No se pudieron obtener las salidas' });
     }
 }
+/**
+ * Regla de visibilidad del detalle de una salida: el admin, el dueño, o un
+ * participante registrado (por RUT) pueden verla. Una salida sin dueño
+ * (userId null) no es visible para cualquiera: solo el admin o un
+ * participante. Compartida por getSalidaById y GET
+ * /:id/archivos/:tipo/url — misma regla, un solo lugar.
+ */
+async function puedeVerSalida(user, salida) {
+    if (puedeGestionarSalida(user, salida))
+        return true;
+    const requestUserEmail = user?.email;
+    if (!requestUserEmail)
+        return false;
+    const integrante = await prisma.integrante.findFirst({
+        where: { email: requestUserEmail },
+        select: { rut: true },
+    });
+    if (!integrante?.rut)
+        return false;
+    const parts = (salida.participantes ?? []);
+    return parts.some((p) => p.rut === integrante.rut);
+}
 export async function getSalidaById(req, res) {
     try {
         const id = req.params.id;
-        const requestUserEmail = req.user.email;
         const salida = await prisma.salida.findUnique({
             where: { id },
             include: { user: { select: { name: true, email: true } } },
@@ -265,31 +291,70 @@ export async function getSalidaById(req, res) {
             res.status(404).json({ error: 'Salida no encontrada' });
             return;
         }
-        let isParticipant = false;
-        if (requestUserEmail) {
-            const integrante = await prisma.integrante.findFirst({
-                where: { email: requestUserEmail },
-                select: { rut: true },
-            });
-            if (integrante && integrante.rut) {
-                const parts = (salida.participantes ?? []);
-                if (parts.some((p) => p.rut === integrante.rut)) {
-                    isParticipant = true;
-                }
-            }
-        }
-        // Puede ver el detalle: el admin, el dueño, o un participante registrado.
-        // Una salida sin dueño (userId null) ya no es visible para cualquiera:
-        // solo el admin o un participante.
-        if (!puedeGestionarSalida(req.user, salida) && !isParticipant) {
+        if (!(await puedeVerSalida(req.user, salida))) {
             res.status(403).json({ error: 'No tienes permiso para ver esta salida' });
             return;
         }
-        res.json(salida);
+        res.json(serializeSalida(salida));
     }
     catch (error) {
         console.error('[getSalidaById]', error);
         res.status(500).json({ error: 'No se pudo obtener la salida' });
+    }
+}
+/**
+ * GET /api/salidas/:id/archivos/:tipo/url — URL de descarga firmada (10
+ * minutos) del GPX o el pronóstico de una salida. Misma regla de acceso que
+ * GET /:id (puedeVerSalida).
+ */
+export async function getSalidaArchivoUrl(req, res) {
+    res.set('Cache-Control', 'no-store');
+    const id = req.params.id;
+    const tipo = req.params.tipo;
+    if (tipo !== 'gpx' && tipo !== 'pronostico') {
+        res.status(400).json({ error: 'Tipo de archivo inválido' });
+        return;
+    }
+    const tipoArchivo = tipo;
+    try {
+        const salida = await prisma.salida.findUnique({ where: { id } });
+        if (!salida) {
+            res.status(404).json({ error: 'Salida no encontrada' });
+            return;
+        }
+        if (!(await puedeVerSalida(req.user, salida))) {
+            res.status(403).json({ error: 'No tienes permiso para ver esta salida' });
+            return;
+        }
+        const fileId = tipoArchivo === 'gpx' ? salida.gpxFileId : salida.pronosticoFileId;
+        const legacyUrl = tipoArchivo === 'gpx' ? salida.gpxFileUrl : salida.pronosticoFileUrl;
+        const fileName = tipoArchivo === 'gpx' ? salida.gpxFileName : salida.pronosticoFileName;
+        const downloadName = fileName ?? `${tipoArchivo}-${salida.numeroSalida}`;
+        const resolution = resolveFileDownload({ fileId, legacyUrl, downloadName }, req.user.organizationId);
+        switch (resolution.kind) {
+            case 'absent':
+                res.status(404).json({ error: 'La salida no tiene ese archivo' });
+                return;
+            case 'mismatch':
+                console.error(`[getSalidaArchivoUrl] clave ${resolution.key} no pertenece al club solicitante`);
+                res.status(404).json({ error: 'La salida no tiene ese archivo' });
+                return;
+            case 'legacy':
+                res.json({ url: resolution.url, expiresInSeconds: null });
+                return;
+            case 'signed': {
+                const url = await getFileStorage().createSignedDownloadUrl(resolution.key, {
+                    expiresInSeconds: ARCHIVO_DOWNLOAD_SECONDS,
+                    downloadName: resolution.downloadName,
+                });
+                res.json({ url, expiresInSeconds: ARCHIVO_DOWNLOAD_SECONDS });
+                return;
+            }
+        }
+    }
+    catch (error) {
+        console.error('[getSalidaArchivoUrl]', error);
+        res.status(500).json({ error: 'No se pudo generar el enlace de descarga' });
     }
 }
 export async function updateSalida(req, res) {
@@ -353,7 +418,7 @@ export async function updateSalida(req, res) {
                 ...(body.incidentReport !== undefined && { incidentReport: body.incidentReport }),
             },
         });
-        res.json(salida);
+        res.json(serializeSalida(salida));
     }
     catch (error) {
         console.error('[updateSalida]', error);
@@ -417,7 +482,7 @@ export async function updateSalidaIntegrantes(req, res) {
                 integrantesAuditLog: asJson(nextLog),
             },
         });
-        res.json(salida);
+        res.json(serializeSalida(salida));
         // Notificar solo a los recién agregados (no re-enviar a los ya existentes).
         const prevRuts = new Set(prevParticipantes.filter((p) => p?.rut).map((p) => p.rut));
         const added = nextParticipantes.filter((p) => p?.rut && !prevRuts.has(p.rut));
@@ -449,6 +514,10 @@ export async function deleteSalida(req, res) {
         }
         await prisma.salida.delete({ where: { id } });
         res.status(204).send();
+        // Best-effort, después de responder: un id legado de Drive se ignora en
+        // silencio (Drive ya no existe) — ver el helper.
+        deleteStoredFileBestEffort(existing.gpxFileId, 'deleteSalida');
+        deleteStoredFileBestEffort(existing.pronosticoFileId, 'deleteSalida');
     }
     catch (error) {
         console.error('[deleteSalida]', error);
