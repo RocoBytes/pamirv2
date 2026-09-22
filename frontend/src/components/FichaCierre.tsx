@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   Mountain,
   X,
@@ -34,7 +35,11 @@ import {
   DESEMPENO_EQUIPO_LABELS,
 } from '../types/salida'
 import { fetchSalidas, uploadGpx, createCierre } from '../lib/api'
+import { originFromSubmitEvent, type RevealOrigin } from '../lib/reveal-geometry'
+import { useStepDirection } from '../hooks/useStepDirection'
 import { Button } from './ui/Button'
+import { stepVariants } from './ui/motion'
+import { SuccessReveal, type RevealStatus } from './ui/SuccessReveal'
 import { ClubLogo } from './ClubLogo'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -493,6 +498,10 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1)
   const [gpxFile, setGpxFile] = useState<File | null>(null)
+  /** Mientras no sea null hay una onda de confirmación en curso sobre el formulario. */
+  const [revealOrigin, setRevealOrigin] = useState<RevealOrigin | null>(null)
+
+  const direction = useStepDirection(currentStep)
 
   const {
     register,
@@ -585,7 +594,10 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
   }, [trigger])
 
   const onSubmit = useCallback(
-    async (values: CierreFormValues) => {
+    async (values: CierreFormValues, origin: RevealOrigin) => {
+      // La onda arranca ya, en el mismo cuadro del toque; lo que espera la
+      // confirmación del servidor es el check, no la expansión.
+      setRevealOrigin(origin)
       setIsSubmitting(true)
       setSubmitError(null)
       try {
@@ -617,30 +629,21 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
             await uploadGpx(values.salidaId, gpxFile)
           }
         setSubmitSuccess(true)
-        setTimeout(onDone, 1500)
+        // El `setTimeout(onDone, 1500)` que había acá se fue: ahora navega
+        // cuando SuccessReveal termina de leerse la confirmación, en vez de un
+        // reloj a ciegas compitiendo contra la animación.
       } catch (err) {
         setSubmitError(err instanceof Error ? err.message : 'Error al guardar el cierre')
         setIsSubmitting(false)
       }
     },
-    [onDone, gpxFile],
+    [gpxFile],
   )
 
-  // ─── Success screen ─────────────────────────────────────────────────────────
-
-  if (submitSuccess) {
-    return (
-      <div className="min-h-screen bg-alpine-canvas flex items-center justify-center px-4">
-        <div className="text-center">
-          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary-fixed mx-auto mb-4">
-            <Check size={32} className="text-primary" />
-          </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">Cierre registrado</h2>
-          <p className="text-on-surface-variant text-sm">Redirigiendo...</p>
-        </div>
-      </div>
-    )
-  }
+  // La pantalla de éxito ya no reemplaza el wizard con un `return` temprano: la
+  // onda se superpone y el formulario queda debajo, que es lo que hace que la
+  // confirmación parezca nacer de algo en vez de aparecer de la nada.
+  const revealStatus: RevealStatus = submitError ? 'error' : submitSuccess ? 'success' : 'saving'
 
   // ─── Main render ────────────────────────────────────────────────────────────
 
@@ -725,7 +728,28 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
         )}
 
         {!loadingSalidas && !loadError && (
-          <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
+          <form
+            // El origen se mide SÍNCRONAMENTE acá, pero la onda recién nace
+            // dentro del handler de submit VÁLIDO (ver el comentario homólogo
+            // en wizard/Step5Status): react-hook-form valida con `await` y
+            // para entonces el navegador ya limpió `currentTarget`.
+            onSubmit={(event) => {
+              const origin = originFromSubmitEvent(event)
+              void handleSubmit((values) => onSubmit(values, origin))(event)
+            }}
+            noValidate
+            className="flex flex-col gap-6"
+          >
+          <AnimatePresence mode="wait" initial={false} custom={direction}>
+            <motion.div
+              key={currentStep}
+              custom={direction}
+              variants={stepVariants(direction)}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="flex flex-col gap-6"
+            >
 
             {/* ── PASO 1: Cierre de Actividad ─────────────────────────── */}
             {currentStep === 1 && (
@@ -1494,7 +1518,10 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
 
                 {/* Error de envío */}
                 {submitError && (
-                  <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container">
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container"
+                  >
                     <AlertCircle size={15} className="mt-0.5 shrink-0" />
                     <span>{submitError}</span>
                   </div>
@@ -1524,9 +1551,22 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                 </div>
               </>
             )}
+            </motion.div>
+          </AnimatePresence>
           </form>
         )}
       </main>
+
+      {revealOrigin && (
+        <SuccessReveal
+          origin={revealOrigin}
+          status={revealStatus}
+          title="¡Listo!"
+          detail="Cierre registrado"
+          onFinished={onDone}
+          onRetracted={() => setRevealOrigin(null)}
+        />
+      )}
     </div>
   )
 }
