@@ -35,6 +35,8 @@
     "tenant:activate": "tsx src/scripts/tenant.ts activate",
     "pretenant:invite": "npm run db:guard",
     "tenant:invite": "tsx src/scripts/tenant.ts invite",
+    "pretenant:update": "npm run db:guard",
+    "tenant:update": "tsx src/scripts/tenant.ts update",
     "pretest:isolation": "npm run db:guard",
     "test:isolation": "tsx src/scripts/test-isolation.ts",
     "pretest:storage": "npm run db:guard",

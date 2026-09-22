@@ -5,7 +5,7 @@ import { MEMBRESIAS_PROPIAS } from '../lib/membresias.js';
 // Puro (sin Prisma, sin I/O): parsea y valida los argumentos de línea de
 // comandos de tenant.ts. Mismo estilo que create-user-args.ts.
 
-const COMANDOS = ['create', 'list', 'suspend', 'activate', 'invite'] as const;
+const COMANDOS = ['create', 'list', 'suspend', 'activate', 'invite', 'update'] as const;
 type Comando = (typeof COMANDOS)[number];
 
 const SLUG_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -30,7 +30,9 @@ Comandos:
   activate  --slug <slug>
             Reactiva un club suspendido.
   invite    --slug <slug> --admin-email <email>
-            Reemite la invitación de plataforma del primer ADMIN de un club existente (la anterior expiró o el email era incorrecto).`;
+            Reemite la invitación de plataforma del primer ADMIN de un club existente (la anterior expiró o el email era incorrecto).
+  update    --slug <slug> [--name "<nombre>"] [--short-name "<nombre corto>"] [--contact-name "<nombre>"] [--contact-email <email>] [--alert-email <email>]
+            Corrige uno o más datos de un club existente (al menos uno de los cinco flags editables). --slug, --membresia y el estado (suspend/activate) NO son editables acá.`;
 
 export interface CreateTenantArgs {
   command: 'create';
@@ -64,7 +66,25 @@ export interface InviteTenantArgs {
   adminEmail: string;
 }
 
-export type TenantArgs = CreateTenantArgs | ListTenantArgs | SuspendTenantArgs | ActivateTenantArgs | InviteTenantArgs;
+export interface UpdateTenantArgs {
+  command: 'update';
+  slug: string;
+  // undefined = no se pasó ese flag (no se toca); en shortName, null además
+  // significa "--short-name ''" (limpiar el nombre corto vigente).
+  name?: string;
+  shortName?: string | null;
+  contactName?: string;
+  contactEmail?: string;
+  alertEmail?: string;
+}
+
+export type TenantArgs =
+  | CreateTenantArgs
+  | ListTenantArgs
+  | SuspendTenantArgs
+  | ActivateTenantArgs
+  | InviteTenantArgs
+  | UpdateTenantArgs;
 
 export type ParseTenantArgsResult = { success: true; data: TenantArgs } | { success: false; errors: string[] };
 
@@ -273,6 +293,98 @@ function parseInviteArgs(argv: string[]): ParseTenantArgsResult {
   return { success: true, data: { command: 'invite', slug, adminEmail } };
 }
 
+const FLAGS_EDITABLES_UPDATE = ['--name', '--short-name', '--contact-name', '--contact-email', '--alert-email'];
+
+function parseUpdateArgs(argv: string[]): ParseTenantArgsResult {
+  let rawValues: {
+    slug?: string;
+    name?: string;
+    'short-name'?: string;
+    'contact-name'?: string;
+    'contact-email'?: string;
+    'alert-email'?: string;
+  };
+  try {
+    const parsed = parseArgs({
+      args: argv,
+      options: {
+        slug: { type: 'string' },
+        name: { type: 'string' },
+        'short-name': { type: 'string' },
+        'contact-name': { type: 'string' },
+        'contact-email': { type: 'string' },
+        'alert-email': { type: 'string' },
+      },
+      strict: true,
+      allowPositionals: false,
+    });
+    rawValues = parsed.values;
+  } catch {
+    return { success: false, errors: [`Flags inválidos para "update".\n\n${USAGE}`] };
+  }
+
+  const errors: string[] = [];
+  let slug: string | undefined;
+
+  const slugResult = validarSlug(rawValues.slug);
+  if ('error' in slugResult) errors.push(slugResult.error);
+  else slug = slugResult.value;
+
+  // A diferencia de "create", cada campo es OPCIONAL: se valida solo si vino
+  // (undefined = no tocar ese campo, nunca "bórralo").
+  let name: string | undefined;
+  if (rawValues.name !== undefined) {
+    const nameResult = validarNombre(rawValues.name, '--name');
+    if ('error' in nameResult) errors.push(nameResult.error);
+    else name = nameResult.value;
+  }
+
+  // Mismo criterio que "create": --short-name "" limpia el nombre corto
+  // vigente a null; omitir el flag por completo deja shortName en undefined.
+  let shortName: string | null | undefined;
+  if (rawValues['short-name'] !== undefined) {
+    const trimmed = rawValues['short-name'].trim();
+    shortName = trimmed === '' ? null : trimmed;
+  }
+
+  let contactName: string | undefined;
+  if (rawValues['contact-name'] !== undefined) {
+    const contactNameResult = validarNombre(rawValues['contact-name'], '--contact-name');
+    if ('error' in contactNameResult) errors.push(contactNameResult.error);
+    else contactName = contactNameResult.value;
+  }
+
+  let contactEmail: string | undefined;
+  if (rawValues['contact-email'] !== undefined) {
+    const contactEmailResult = validarEmail(rawValues['contact-email'], '--contact-email');
+    if ('error' in contactEmailResult) errors.push(contactEmailResult.error);
+    else contactEmail = contactEmailResult.value;
+  }
+
+  let alertEmail: string | undefined;
+  if (rawValues['alert-email'] !== undefined) {
+    const alertEmailResult = validarEmail(rawValues['alert-email'], '--alert-email');
+    if ('error' in alertEmailResult) errors.push(alertEmailResult.error);
+    else alertEmail = alertEmailResult.value;
+  }
+
+  if (
+    rawValues.name === undefined &&
+    rawValues['short-name'] === undefined &&
+    rawValues['contact-name'] === undefined &&
+    rawValues['contact-email'] === undefined &&
+    rawValues['alert-email'] === undefined
+  ) {
+    errors.push(`Debe indicarse al menos uno de estos flags para actualizar: ${FLAGS_EDITABLES_UPDATE.join(', ')}`);
+  }
+
+  if (errors.length > 0 || !slug) {
+    return { success: false, errors };
+  }
+
+  return { success: true, data: { command: 'update', slug, name, shortName, contactName, contactEmail, alertEmail } };
+}
+
 export function parseTenantArgs(argv: string[]): ParseTenantArgsResult {
   const [comandoRaw, ...rest] = argv;
   if (comandoRaw === undefined || !(COMANDOS as readonly string[]).includes(comandoRaw)) {
@@ -291,5 +403,7 @@ export function parseTenantArgs(argv: string[]): ParseTenantArgsResult {
       return parseSuspendActivateArgs(rest, 'activate');
     case 'invite':
       return parseInviteArgs(rest);
+    case 'update':
+      return parseUpdateArgs(rest);
   }
 }

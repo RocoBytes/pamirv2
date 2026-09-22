@@ -166,3 +166,97 @@ export async function invitarAdminClub(deps, slug, adminEmail) {
         body: { slug, inviteUrl: resultado.body.inviteUrl, emailEnviado: resultado.body.emailEnviado },
     };
 }
+// Valida solo los campos presentes en el input (los ausentes quedan
+// `undefined` y no se tocan), reusando los mismos validadores que
+// validarCamposClub usa para crearClub.
+function validarCamposActualizarClub(input) {
+    const data = {};
+    if (input.name !== undefined) {
+        const nameParsed = orgNameField.safeParse(input.name);
+        if (!nameParsed.success)
+            return { error: nameParsed.error.issues[0]?.message ?? 'Nombre inválido' };
+        data.name = nameParsed.data;
+    }
+    if (input.shortName !== undefined) {
+        if (input.shortName === null || input.shortName === '') {
+            data.shortName = null;
+        }
+        else {
+            const shortNameParsed = shortNameField.safeParse(input.shortName);
+            if (!shortNameParsed.success) {
+                return { error: shortNameParsed.error.issues[0]?.message ?? 'Nombre corto inválido' };
+            }
+            data.shortName = shortNameParsed.data;
+        }
+    }
+    if (input.contactName !== undefined) {
+        const contactNameParsed = nameField.safeParse(input.contactName);
+        if (!contactNameParsed.success) {
+            return { error: `Nombre de contacto: ${contactNameParsed.error.issues[0]?.message ?? 'inválido'}` };
+        }
+        data.contactName = contactNameParsed.data;
+    }
+    if (input.contactEmail !== undefined) {
+        const contactEmailParsed = emailField.safeParse(input.contactEmail);
+        if (!contactEmailParsed.success) {
+            return { error: `Email de contacto: ${contactEmailParsed.error.issues[0]?.message ?? 'inválido'}` };
+        }
+        data.contactEmail = contactEmailParsed.data.toLowerCase();
+    }
+    if (input.alertEmail !== undefined) {
+        const alertEmailParsed = emailField.safeParse(input.alertEmail);
+        if (!alertEmailParsed.success) {
+            return { error: `Email de alerta: ${alertEmailParsed.error.issues[0]?.message ?? 'inválido'}` };
+        }
+        data.alertEmail = alertEmailParsed.data.toLowerCase();
+    }
+    return { data };
+}
+export async function actualizarClub(deps, slug, input) {
+    const validado = validarCamposActualizarClub(input);
+    if ('error' in validado) {
+        return { ok: false, status: 400, error: validado.error };
+    }
+    const { name, shortName, contactName, contactEmail, alertEmail } = validado.data;
+    if (name === undefined &&
+        shortName === undefined &&
+        contactName === undefined &&
+        contactEmail === undefined &&
+        alertEmail === undefined) {
+        return { ok: false, status: 400, error: 'No se recibió ningún campo para actualizar' };
+    }
+    const organization = await deps.repo.findOrganizationBySlug(slug);
+    if (!organization) {
+        return { ok: false, status: 404, error: `No existe ningún club con slug="${slug}"` };
+    }
+    // Solo se agrega a `cambios` (y se envía al repo) lo que REALMENTE difiere
+    // de la fila actual: un valor idéntico al vigente no es un cambio, aunque
+    // el operador lo haya pasado explícitamente por flag.
+    const cambios = [];
+    const data = {};
+    if (name !== undefined && name !== organization.name) {
+        cambios.push({ campo: 'name', antes: organization.name, despues: name });
+        data.name = name;
+    }
+    if (shortName !== undefined && shortName !== organization.shortName) {
+        cambios.push({ campo: 'shortName', antes: organization.shortName, despues: shortName });
+        data.shortName = shortName;
+    }
+    if (contactName !== undefined && contactName !== organization.contactName) {
+        cambios.push({ campo: 'contactName', antes: organization.contactName, despues: contactName });
+        data.contactName = contactName;
+    }
+    if (contactEmail !== undefined && contactEmail !== organization.contactEmail) {
+        cambios.push({ campo: 'contactEmail', antes: organization.contactEmail, despues: contactEmail });
+        data.contactEmail = contactEmail;
+    }
+    if (alertEmail !== undefined && alertEmail !== organization.alertEmail) {
+        cambios.push({ campo: 'alertEmail', antes: organization.alertEmail, despues: alertEmail });
+        data.alertEmail = alertEmail;
+    }
+    if (cambios.length === 0) {
+        return { ok: true, status: 200, body: { slug, cambios: [], sinCambios: true } };
+    }
+    await deps.repo.updateOrganization(organization.id, data);
+    return { ok: true, status: 200, body: { slug, cambios, sinCambios: false } };
+}

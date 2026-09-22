@@ -16,6 +16,7 @@ import type {
   CrearClubData,
   CrearClubTransaccionResult,
   ClubListRow,
+  ActualizarClubData,
 } from './tenants.service.js';
 import type { DEFAULT_CATEGORIAS_EVENTO, buildDefaultDeclaracion } from '../lib/tenant-defaults.js';
 
@@ -28,6 +29,9 @@ interface OrganizationRecord {
   shortName: string | null;
   status: OrganizationStatus;
   membresiaPropia: string;
+  alertEmail: string;
+  contactName: string;
+  contactEmail: string;
   createdAt: Date;
 }
 
@@ -39,6 +43,9 @@ function toOrganizationRow(org: OrganizationRecord): OrganizationRow {
     shortName: org.shortName,
     status: org.status,
     membresiaPropia: org.membresiaPropia,
+    alertEmail: org.alertEmail,
+    contactName: org.contactName,
+    contactEmail: org.contactEmail,
     createdAt: org.createdAt,
   };
 }
@@ -131,6 +138,11 @@ export const tenantsRepoPrisma: TenantsRepo = {
 
   async updateOrganizationStatus(id, status) {
     const organization = await prisma.organization.update({ where: { id }, data: { status } });
+    return toOrganizationRow(organization);
+  },
+
+  async updateOrganization(id: string, data: ActualizarClubData): Promise<OrganizationRow> {
+    const organization = await prisma.organization.update({ where: { id }, data });
     return toOrganizationRow(organization);
   },
 };

@@ -8,7 +8,7 @@ import { prisma } from '../lib/prisma.js';
 import { verifyDbTargetOrExit as guardVerifyDbTargetOrExit } from '../lib/db-target-guard.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 import { parseTenantArgs } from './tenant-args.js';
-import { crearClub, listarClubes, cambiarEstadoClub, invitarAdminClub, } from '../services/tenants.service.js';
+import { crearClub, listarClubes, cambiarEstadoClub, invitarAdminClub, actualizarClub, } from '../services/tenants.service.js';
 import { tenantsRepoPrisma } from '../services/tenants.repo.prisma.js';
 import { invitacionesRepoPrisma } from '../services/invitaciones.repo.prisma.js';
 import { crearInvitacionPlataforma } from '../services/invitaciones.service.js';
@@ -183,6 +183,48 @@ async function runInvite(deps, slug, adminEmail) {
     console.log('[tenant] Enlace de invitación (un solo uso, expira en 7 días):');
     console.log(`  ${result.body.inviteUrl}`);
 }
+const ETIQUETAS_CAMPO = {
+    name: 'Nombre',
+    shortName: 'Nombre corto',
+    contactName: 'Nombre de contacto',
+    contactEmail: 'Email de contacto',
+    alertEmail: 'Email de alerta',
+};
+function formatValorCampo(valor) {
+    return valor === null ? '(sin nombre corto)' : valor;
+}
+async function runUpdate(deps, data) {
+    const input = {
+        name: data.name,
+        shortName: data.shortName,
+        contactName: data.contactName,
+        contactEmail: data.contactEmail,
+        alertEmail: data.alertEmail,
+    };
+    const result = await actualizarClub(deps, data.slug, input);
+    if (!result.ok) {
+        console.error(`[tenant] No se pudo actualizar el club: ${result.error}`);
+        process.exitCode = 1;
+        return;
+    }
+    const { cambios, sinCambios } = result.body;
+    if (sinCambios) {
+        console.log(`[tenant] El club "${data.slug}" ya tenía esos valores; no hubo cambios.`);
+        return;
+    }
+    console.log(`[tenant] Club "${data.slug}" actualizado:`);
+    for (const cambio of cambios) {
+        console.log(`  ${ETIQUETAS_CAMPO[cambio.campo]}: ${formatValorCampo(cambio.antes)} → ${formatValorCampo(cambio.despues)}`);
+    }
+    // El email de alerta es el destino de la alarma de seguridad "salida sin
+    // cierre" (lib/alert-recipient.ts, consumida por cron.controller.ts) y este
+    // comando no tiene ningún paso de verificación sobre él: un typo redirige
+    // la alarma en silencio, sin que nadie se entere hasta que haga falta.
+    if (cambios.some((cambio) => cambio.campo === 'alertEmail')) {
+        console.log('[tenant] ADVERTENCIA: cambiaste el email de alerta de seguridad ("salida sin cierre"). No hay paso de ' +
+            'verificación — revisa que esté bien escrito, un typo aquí redirige la alarma en silencio.');
+    }
+}
 // ─── Orquestación ──────────────────────────────────────────────────────────────
 function main() {
     return runAsPlatform(run);
@@ -213,6 +255,9 @@ async function run() {
             return;
         case 'invite':
             await runInvite(deps, parsed.data.slug, parsed.data.adminEmail);
+            return;
+        case 'update':
+            await runUpdate(deps, parsed.data);
             return;
     }
 }

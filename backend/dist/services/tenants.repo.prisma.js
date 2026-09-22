@@ -18,6 +18,9 @@ function toOrganizationRow(org) {
         shortName: org.shortName,
         status: org.status,
         membresiaPropia: org.membresiaPropia,
+        alertEmail: org.alertEmail,
+        contactName: org.contactName,
+        contactEmail: org.contactEmail,
         createdAt: org.createdAt,
     };
 }
@@ -96,6 +99,10 @@ export const tenantsRepoPrisma = {
     },
     async updateOrganizationStatus(id, status) {
         const organization = await prisma.organization.update({ where: { id }, data: { status } });
+        return toOrganizationRow(organization);
+    },
+    async updateOrganization(id, data) {
+        const organization = await prisma.organization.update({ where: { id }, data });
         return toOrganizationRow(organization);
     },
 };

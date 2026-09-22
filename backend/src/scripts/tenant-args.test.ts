@@ -206,3 +206,117 @@ describe('parseTenantArgs — invite', () => {
     assert.equal(result.success, false);
   });
 });
+
+describe('parseTenantArgs — update', () => {
+  it('un solo campo: los demás quedan undefined', () => {
+    const result = parseTenantArgs(['update', '--slug', 'pamir', '--name', 'Nuevo Nombre']);
+    assert.equal(result.success, true);
+    if (result.success) {
+      assert.deepEqual(result.data, {
+        command: 'update',
+        slug: 'pamir',
+        name: 'Nuevo Nombre',
+        shortName: undefined,
+        contactName: undefined,
+        contactEmail: undefined,
+        alertEmail: undefined,
+      });
+    }
+  });
+
+  it('varios campos a la vez', () => {
+    const result = parseTenantArgs([
+      'update',
+      '--slug', 'pamir',
+      '--name', 'Nuevo Nombre',
+      '--contact-name', 'Nuevo Contacto',
+      '--contact-email', 'nuevo@pamir.cl',
+    ]);
+    assert.equal(result.success, true);
+    if (result.success && result.data.command === 'update') {
+      assert.equal(result.data.name, 'Nuevo Nombre');
+      assert.equal(result.data.contactName, 'Nuevo Contacto');
+      assert.equal(result.data.contactEmail, 'nuevo@pamir.cl');
+      assert.equal(result.data.alertEmail, undefined);
+      assert.equal(result.data.shortName, undefined);
+    }
+  });
+
+  it('--short-name "" limpia el nombre corto a null', () => {
+    const result = parseTenantArgs(['update', '--slug', 'pamir', '--short-name', '']);
+    assert.equal(result.success, true);
+    if (result.success && result.data.command === 'update') {
+      assert.equal(result.data.shortName, null);
+    }
+  });
+
+  it('omitir --short-name lo deja undefined (no lo toca) — caso distinto de limpiarlo', () => {
+    const result = parseTenantArgs(['update', '--slug', 'pamir', '--name', 'Nuevo Nombre']);
+    assert.equal(result.success, true);
+    if (result.success && result.data.command === 'update') {
+      assert.equal(result.data.shortName, undefined);
+    }
+  });
+
+  it('rechaza sin --slug', () => {
+    const result = parseTenantArgs(['update', '--name', 'Nuevo Nombre']);
+    assert.equal(result.success, false);
+  });
+
+  it('rechaza sin ningún campo editable, y el mensaje lista los flags', () => {
+    const result = parseTenantArgs(['update', '--slug', 'pamir']);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.ok(result.errors.some((e) => e.includes('--name')));
+      assert.ok(result.errors.some((e) => e.includes('--short-name')));
+      assert.ok(result.errors.some((e) => e.includes('--contact-name')));
+      assert.ok(result.errors.some((e) => e.includes('--contact-email')));
+      assert.ok(result.errors.some((e) => e.includes('--alert-email')));
+    }
+  });
+
+  it('rechaza un slug reservado', () => {
+    const result = parseTenantArgs(['update', '--slug', 'admin', '--name', 'Nuevo Nombre']);
+    assert.equal(result.success, false);
+  });
+
+  it('rechaza un slug con formato inválido', () => {
+    const result = parseTenantArgs(['update', '--slug', 'Club Inválido!', '--name', 'Nuevo Nombre']);
+    assert.equal(result.success, false);
+  });
+
+  it('rechaza --name vacío', () => {
+    const result = parseTenantArgs(['update', '--slug', 'pamir', '--name', '']);
+    assert.equal(result.success, false);
+  });
+
+  it('rechaza un --contact-email inválido', () => {
+    const result = parseTenantArgs(['update', '--slug', 'pamir', '--contact-email', 'no-es-un-email']);
+    assert.equal(result.success, false);
+  });
+
+  it('rechaza un --alert-email inválido', () => {
+    const result = parseTenantArgs(['update', '--slug', 'pamir', '--alert-email', 'no-es-un-email']);
+    assert.equal(result.success, false);
+  });
+
+  it('normaliza el slug y los emails a minúsculas, y recorta espacios', () => {
+    const result = parseTenantArgs([
+      'update',
+      '--slug', '  PAMIR  ',
+      '--contact-email', '  Nuevo@Pamir.cl  ',
+      '--alert-email', '  Alertas@Pamir.cl  ',
+    ]);
+    assert.equal(result.success, true);
+    if (result.success && result.data.command === 'update') {
+      assert.equal(result.data.slug, 'pamir');
+      assert.equal(result.data.contactEmail, 'nuevo@pamir.cl');
+      assert.equal(result.data.alertEmail, 'alertas@pamir.cl');
+    }
+  });
+
+  it('rechaza un flag desconocido', () => {
+    const result = parseTenantArgs(['update', '--slug', 'pamir', '--name', 'Nuevo Nombre', '--bogus', 'x']);
+    assert.equal(result.success, false);
+  });
+});

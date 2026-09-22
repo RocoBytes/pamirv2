@@ -7,11 +7,13 @@ import {
   listarClubes,
   cambiarEstadoClub,
   invitarAdminClub,
+  actualizarClub,
   type TenantsDeps,
   type TenantsRepo,
   type OrganizationRow,
   type ClubListRow,
   type CrearClubInput,
+  type ActualizarClubInput,
 } from './tenants.service.js';
 
 // ─── Fake repo (en memoria, sin Prisma) ────────────────────────────────────────
@@ -20,11 +22,13 @@ function createFakeRepo(seed: OrganizationRow[] = []): {
   repo: TenantsRepo;
   organizations: OrganizationRow[];
   setFailTransaccion: (fail: boolean) => void;
+  updateOrganizationCallCount: () => number;
 } {
   const organizations = [...seed];
   let seq = 0;
   const nextId = (): string => `org-${++seq}`;
   let failTransaccion = false;
+  let updateOrganizationCalls = 0;
 
   const repo: TenantsRepo = {
     async findOrganizationBySlug(slug) {
@@ -47,6 +51,9 @@ function createFakeRepo(seed: OrganizationRow[] = []): {
         shortName: data.shortName,
         status: 'ACTIVE',
         membresiaPropia: data.membresiaPropia,
+        alertEmail: data.alertEmail,
+        contactName: data.contactName,
+        contactEmail: data.contactEmail,
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
       };
       organizations.push(organization);
@@ -75,9 +82,24 @@ function createFakeRepo(seed: OrganizationRow[] = []): {
       organizations[index] = actualizado;
       return actualizado;
     },
+    async updateOrganization(id, data) {
+      updateOrganizationCalls += 1;
+      const index = organizations.findIndex((o) => o.id === id);
+      if (index === -1) throw new Error(`org "${id}" no existe en el fake repo`);
+      // Mismo motivo que en updateOrganizationStatus: objeto nuevo, nunca
+      // mutación in place.
+      const actualizado: OrganizationRow = { ...organizations[index]!, ...data };
+      organizations[index] = actualizado;
+      return actualizado;
+    },
   };
 
-  return { repo, organizations, setFailTransaccion: (fail: boolean) => (failTransaccion = fail) };
+  return {
+    repo,
+    organizations,
+    setFailTransaccion: (fail: boolean) => (failTransaccion = fail),
+    updateOrganizationCallCount: () => updateOrganizationCalls,
+  };
 }
 
 function fakeInvitacionPublica(email: string): InvitacionPublica {
@@ -104,8 +126,9 @@ function createDeps(
   invitacionCalls: { organizationId: string; email: string }[];
   setFailTransaccion: (fail: boolean) => void;
   setInvitacionFalla: (falla: boolean) => void;
+  updateOrganizationCallCount: () => number;
 } {
-  const { repo, organizations, setFailTransaccion } = createFakeRepo(seed);
+  const { repo, organizations, setFailTransaccion, updateOrganizationCallCount } = createFakeRepo(seed);
   const invitacionCalls: { organizationId: string; email: string }[] = [];
   let invitacionFalla = false;
 
@@ -141,6 +164,7 @@ function createDeps(
     invitacionCalls,
     setFailTransaccion,
     setInvitacionFalla: (falla: boolean) => (invitacionFalla = falla),
+    updateOrganizationCallCount,
   };
 }
 
@@ -206,6 +230,9 @@ describe('crearClub', () => {
       shortName: null,
       status: 'ACTIVE',
       membresiaPropia: 'SOCIO_EL_MONTANISTA',
+      alertEmail: 'alertas@existente.cl',
+      contactName: 'Contacto Existente',
+      contactEmail: 'contacto@existente.cl',
       createdAt: new Date('2025-01-01T00:00:00.000Z'),
     };
     const { deps, organizations } = createDeps({}, [existente]);
@@ -234,6 +261,9 @@ describe('crearClub', () => {
       shortName: null,
       status: 'ACTIVE',
       membresiaPropia: 'SOCIO_EL_MONTANISTA',
+      alertEmail: 'alertas@existente.cl',
+      contactName: 'Contacto Existente',
+      contactEmail: 'contacto@existente.cl',
       createdAt: new Date('2025-01-01T00:00:00.000Z'),
     };
     const { deps, organizations } = createDeps({}, [existente]);
@@ -290,6 +320,9 @@ describe('listarClubes', () => {
       shortName: null,
       status: 'ACTIVE',
       membresiaPropia: 'SOCIO_ANDINO_PAMIR',
+      alertEmail: 'alertas@pamir.cl',
+      contactName: 'Contacto Pamir',
+      contactEmail: 'contacto@pamir.cl',
       createdAt: new Date('2025-01-01T00:00:00.000Z'),
     };
     const { deps } = createDeps({}, [seedOrg]);
@@ -307,6 +340,9 @@ describe('cambiarEstadoClub', () => {
     shortName: null,
     status: 'ACTIVE' as OrganizationStatus,
     membresiaPropia: 'SOCIO_ANDINO_PAMIR',
+    alertEmail: 'alertas@pamir.cl',
+    contactName: 'Contacto Pamir',
+    contactEmail: 'contacto@pamir.cl',
     createdAt: new Date('2025-01-01T00:00:00.000Z'),
   };
 
@@ -357,6 +393,9 @@ describe('invitarAdminClub', () => {
       shortName: null,
       status: 'ACTIVE',
       membresiaPropia: 'SOCIO_ANDINO_PAMIR',
+      alertEmail: 'alertas@pamir.cl',
+      contactName: 'Contacto Pamir',
+      contactEmail: 'contacto@pamir.cl',
       createdAt: new Date('2025-01-01T00:00:00.000Z'),
     };
     const { deps } = createDeps({}, [seedOrg]);
@@ -374,6 +413,9 @@ describe('invitarAdminClub', () => {
       shortName: null,
       status: 'ACTIVE',
       membresiaPropia: 'SOCIO_ANDINO_PAMIR',
+      alertEmail: 'alertas@pamir.cl',
+      contactName: 'Contacto Pamir',
+      contactEmail: 'contacto@pamir.cl',
       createdAt: new Date('2025-01-01T00:00:00.000Z'),
     };
     const { deps, invitacionCalls } = createDeps({}, [seedOrg]);
@@ -394,6 +436,9 @@ describe('invitarAdminClub', () => {
       shortName: null,
       status: 'ACTIVE',
       membresiaPropia: 'SOCIO_ANDINO_PAMIR',
+      alertEmail: 'alertas@pamir.cl',
+      contactName: 'Contacto Pamir',
+      contactEmail: 'contacto@pamir.cl',
       createdAt: new Date('2025-01-01T00:00:00.000Z'),
     };
     const { deps, setInvitacionFalla } = createDeps({}, [seedOrg]);
@@ -402,5 +447,147 @@ describe('invitarAdminClub', () => {
     assert.equal(result.ok, false);
     if (result.ok) return;
     assert.equal(result.status, 502);
+  });
+});
+
+describe('actualizarClub', () => {
+  const SEED_UPDATE: OrganizationRow = {
+    id: 'org-1',
+    slug: 'pamir',
+    name: 'Andino Club Pamir',
+    shortName: 'Pamir',
+    status: 'ACTIVE',
+    membresiaPropia: 'SOCIO_ANDINO_PAMIR',
+    alertEmail: 'alertas@pamir.cl',
+    contactName: 'Contacto Pamir',
+    contactEmail: 'contacto@pamir.cl',
+    createdAt: new Date('2025-01-01T00:00:00.000Z'),
+  };
+
+  it('devuelve 404 si el club no existe', async () => {
+    const { deps } = createDeps();
+    const result = await actualizarClub(deps, 'no-existe', { name: 'Nuevo nombre' });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.status, 404);
+  });
+
+  it('devuelve 400 si no se pasó ningún campo', async () => {
+    const { deps } = createDeps({}, [{ ...SEED_UPDATE }]);
+    const input: ActualizarClubInput = {};
+    const result = await actualizarClub(deps, 'pamir', input);
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.status, 400);
+  });
+
+  it('rechaza un nombre inválido', async () => {
+    const { deps } = createDeps({}, [{ ...SEED_UPDATE }]);
+    const result = await actualizarClub(deps, 'pamir', { name: 'x' });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.status, 400);
+  });
+
+  it('rechaza un nombre corto inválido', async () => {
+    const { deps } = createDeps({}, [{ ...SEED_UPDATE }]);
+    const result = await actualizarClub(deps, 'pamir', { shortName: 'x'.repeat(61) });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.status, 400);
+  });
+
+  it('rechaza un nombre de contacto inválido', async () => {
+    const { deps } = createDeps({}, [{ ...SEED_UPDATE }]);
+    const result = await actualizarClub(deps, 'pamir', { contactName: '' });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.status, 400);
+  });
+
+  it('rechaza un email de contacto inválido', async () => {
+    const { deps } = createDeps({}, [{ ...SEED_UPDATE }]);
+    const result = await actualizarClub(deps, 'pamir', { contactEmail: 'no-es-un-email' });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.status, 400);
+  });
+
+  it('rechaza un email de alerta inválido', async () => {
+    const { deps } = createDeps({}, [{ ...SEED_UPDATE }]);
+    const result = await actualizarClub(deps, 'pamir', { alertEmail: 'no-es-un-email' });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.status, 400);
+  });
+
+  it('cambia un solo campo y no toca slug, membresiaPropia ni status', async () => {
+    const { deps, organizations } = createDeps({}, [{ ...SEED_UPDATE }]);
+    const result = await actualizarClub(deps, 'pamir', { name: 'Nuevo Nombre Pamir' });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.body.sinCambios, false);
+    assert.deepEqual(result.body.cambios, [
+      { campo: 'name', antes: 'Andino Club Pamir', despues: 'Nuevo Nombre Pamir' },
+    ]);
+    assert.equal(organizations[0]?.name, 'Nuevo Nombre Pamir');
+    assert.equal(organizations[0]?.slug, 'pamir');
+    assert.equal(organizations[0]?.membresiaPropia, 'SOCIO_ANDINO_PAMIR');
+    assert.equal(organizations[0]?.status, 'ACTIVE');
+  });
+
+  it('cambia varios campos a la vez', async () => {
+    const { deps, organizations } = createDeps({}, [{ ...SEED_UPDATE }]);
+    const result = await actualizarClub(deps, 'pamir', {
+      name: 'Nuevo Nombre Pamir',
+      contactName: 'Nuevo Contacto',
+      contactEmail: 'nuevo-contacto@pamir.cl',
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.body.cambios.length, 3);
+    assert.equal(organizations[0]?.name, 'Nuevo Nombre Pamir');
+    assert.equal(organizations[0]?.contactName, 'Nuevo Contacto');
+    assert.equal(organizations[0]?.contactEmail, 'nuevo-contacto@pamir.cl');
+  });
+
+  it('limpia el nombre corto a null', async () => {
+    const { deps, organizations } = createDeps({}, [{ ...SEED_UPDATE }]);
+    const result = await actualizarClub(deps, 'pamir', { shortName: '' });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.deepEqual(result.body.cambios, [{ campo: 'shortName', antes: 'Pamir', despues: null }]);
+    assert.equal(organizations[0]?.shortName, null);
+  });
+
+  it('no-op: no llama al repositorio si ningún campo cambió realmente', async () => {
+    const { deps, organizations, updateOrganizationCallCount } = createDeps({}, [{ ...SEED_UPDATE }]);
+    const result = await actualizarClub(deps, 'pamir', { name: 'Andino Club Pamir' });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.body.sinCambios, true);
+    assert.deepEqual(result.body.cambios, []);
+    assert.equal(updateOrganizationCallCount(), 0);
+    assert.equal(organizations[0]?.name, 'Andino Club Pamir');
+  });
+
+  it('un email en mayúsculas que ya coincide (normalizado) no cuenta como cambio', async () => {
+    const { deps, updateOrganizationCallCount } = createDeps({}, [{ ...SEED_UPDATE }]);
+    const result = await actualizarClub(deps, 'pamir', { contactEmail: 'CONTACTO@PAMIR.CL' });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.body.sinCambios, true);
+    assert.equal(updateOrganizationCallCount(), 0);
+  });
+
+  it('cambia el email de alerta y lo refleja en el diff con el antes/después correctos', async () => {
+    const { deps, organizations } = createDeps({}, [{ ...SEED_UPDATE }]);
+    const result = await actualizarClub(deps, 'pamir', { alertEmail: 'nueva-alerta@pamir.cl' });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.deepEqual(result.body.cambios, [
+      { campo: 'alertEmail', antes: 'alertas@pamir.cl', despues: 'nueva-alerta@pamir.cl' },
+    ]);
+    assert.equal(organizations[0]?.alertEmail, 'nueva-alerta@pamir.cl');
   });
 });
