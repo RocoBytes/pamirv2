@@ -112,11 +112,30 @@ export function SuccessReveal({
     return () => window.removeEventListener('resize', recompute)
   }, [covered, retracting, origin])
 
+  // El aviso de "ya se puede navegar" se dispara UNA vez por confirmación, y
+  // para eso la cuenta no puede depender de la identidad de `onFinished`.
+  //
+  // Casi todos los llamadores pasan una flecha inline (`() => onComplete()`),
+  // que es un objeto nuevo en cada render. Con `onFinished` en las
+  // dependencias, cada render del formulario cancelaba el timeout y empezaba
+  // otro de cero: medido, la onda del registro de integrante seguía tapando la
+  // pantalla a los 3,5s y no se iba nunca. El wizard de salidas se salvaba de
+  // casualidad, solo porque pasa una función estable.
+  //
+  // Guardar el callback en un ref y depender solo de `showSuccess` hace que el
+  // componente funcione sin pedirle al que lo usa que memorice nada. Que la
+  // pantalla quede tapada para siempre es demasiado caro para dejarlo atado a
+  // una convención que el llamador puede no seguir.
+  const onFinishedRef = useRef(onFinished)
+  useEffect(() => {
+    onFinishedRef.current = onFinished
+  })
+
   useEffect(() => {
     if (!showSuccess) return
-    const id = setTimeout(onFinished, HOLD_MS)
+    const id = setTimeout(() => onFinishedRef.current(), HOLD_MS)
     return () => clearTimeout(id)
-  }, [showSuccess, onFinished])
+  }, [showSuccess])
 
   // La onda tapa el formulario entero: sin mover el foco, el teclado seguiría
   // recorriendo campos invisibles. Al desmontarse por un error, el foco vuelve

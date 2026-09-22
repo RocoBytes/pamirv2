@@ -274,6 +274,19 @@ test.describe('RegistroIntegrante – flujo de éxito', () => {
     expect(capturedBody).not.toBeNull()
     expect(capturedBody).not.toHaveProperty('membresiaClub')
     expect(capturedBody).not.toHaveProperty('nombreClub')
+
+    // La confirmación TIENE que irse sola. Mostrarla no alcanza: tapa la
+    // pantalla entera, así que si se queda pegada deja la app inusable y no
+    // hay forma de navegar a ningún lado.
+    //
+    // Esto no es hipotético, pasó: `SuccessReveal` tenía `onFinished` entre
+    // las dependencias del efecto que cuenta el tiempo de lectura, y como acá
+    // se le pasa una flecha inline (identidad nueva en cada render), cada
+    // render cancelaba la cuenta y arrancaba otra. Medido, el overlay seguía
+    // tapando la pantalla a los 3,5 segundos. Los otros tres wizards se
+    // salvaban solo porque pasan una función estable, que es justo la clase de
+    // casualidad que un test tiene que dejar de permitir.
+    await expect(page.getByText('Integrante registrado')).toHaveCount(0, { timeout: 5000 })
   })
 })
 
