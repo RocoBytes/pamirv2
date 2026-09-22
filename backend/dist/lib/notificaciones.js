@@ -26,6 +26,7 @@ function toOrgSummary(org) {
         alertEmail: org.alertEmail,
         contactName: org.contactName,
         contactEmail: org.contactEmail,
+        logoObjectKey: org.logoObjectKey,
     };
 }
 function buildEmailPorTipo(notif, extra) {

@@ -43,6 +43,8 @@ const ROUTERS: { prefix: string; modulePath: string }[] = [
   { prefix: '/cron', modulePath: './cron.route.js' },
   { prefix: '/admin', modulePath: './admin.route.js' },
   { prefix: '/invitaciones', modulePath: './invitaciones.route.js' },
+  { prefix: '/organizacion', modulePath: './organizacion.route.js' },
+  { prefix: '/clubes', modulePath: './clubes.route.js' },
 ];
 
 // Lista cerrada de rutas que SÍ pueden responder sin una sesión válida.
@@ -66,6 +68,10 @@ const PUBLIC_ROUTES: PublicRouteEntry[] = [
   { method: 'POST', path: '/api/evaluaciones/:token' },
   // Cronjob del VPS: protegido por CRON_SECRET (query param), no por sesión.
   { method: 'GET', path: '/api/cron/check-alertas' },
+  // Marca y logo del club por slug: pantallas SIN sesión (login previo a
+  // autenticar) necesitan poder pintarlos — ver clubes.controller.ts.
+  { method: 'GET', path: '/api/clubes/:slug/marca' },
+  { method: 'GET', path: '/api/clubes/:slug/logo' },
 ];
 
 function joinPath(prefix: string, routePath: string): string {

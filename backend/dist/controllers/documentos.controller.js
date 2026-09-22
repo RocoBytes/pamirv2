@@ -7,6 +7,7 @@ import { buildObjectKey } from '../lib/storage/object-key.js';
 import { deleteStoredFileBestEffort } from '../lib/storage/delete-best-effort.js';
 import { resolveFileDownload } from '../lib/storage/resolve-file-download.js';
 import { bindTenantContext } from '../lib/tenant-context.js';
+import { MagicBytesGuard, INVALID_FILE_TYPE } from '../lib/storage/magic-bytes-guard.js';
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
 const ALLOWED_DOC_EXT = /\.pdf$/i;
 const DOCUMENTO_DOWNLOAD_SECONDS = 600;
@@ -150,8 +151,12 @@ export async function createDocumento(req, res) {
             });
         });
         const key = buildObjectKey({ organizationId, kind: 'documento', extension: 'pdf' });
+        // La extensión la elige quien sube, así que no prueba nada por sí sola:
+        // el guard mira los primeros bytes reales y corta el stream antes de que
+        // nada llegue al bucket si el contenido no es un PDF.
+        const guarded = fileStream.pipe(new MagicBytesGuard());
         try {
-            await getFileStorage().upload(fileStream, {
+            await getFileStorage().upload(guarded, {
                 key,
                 contentType: mimeType || 'application/pdf',
                 maxBytes: MAX_FILE_SIZE,
@@ -189,6 +194,14 @@ export async function createDocumento(req, res) {
         }
         catch (err) {
             const code = err.code;
+            if (code === INVALID_FILE_TYPE) {
+                // Sobró con la cabecera: nada se escribió, no hay objeto que limpiar.
+                // 415 y no 400 porque el problema es el tipo de archivo, no un campo
+                // del formulario mal completado.
+                fileStream.resume();
+                safeRespond(415, { error: 'El archivo no es un PDF válido' });
+                return;
+            }
             if (code === 'FILE_TOO_LARGE') {
                 safeRespond(413, {
                     error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,

@@ -29,6 +29,7 @@ const org: OrganizationSummary = {
   alertEmail: 'alertas@elmontanista.cl',
   contactName: 'Secretaría El Montañista',
   contactEmail: 'contacto@elmontanista.cl',
+  logoObjectKey: null,
 };
 
 const branding = brandingFor(org);

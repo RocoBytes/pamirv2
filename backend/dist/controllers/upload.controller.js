@@ -2,6 +2,7 @@ import Busboy from 'busboy';
 import { getFileStorage } from '../lib/storage/get-file-storage.js';
 import { buildObjectKey } from '../lib/storage/object-key.js';
 import { deleteStoredFileBestEffort } from '../lib/storage/delete-best-effort.js';
+import { MagicBytesGuard, INVALID_FILE_TYPE, PDF_SIGNATURE, JPEG_SIGNATURE, PNG_SIGNATURE, XML_SIGNATURES, } from '../lib/storage/magic-bytes-guard.js';
 import { prisma } from '../lib/prisma.js';
 import { puedeGestionarSalida } from '../lib/authz.js';
 import { bindTenantContext } from '../lib/tenant-context.js';
@@ -102,8 +103,14 @@ export async function uploadGpx(req, res) {
         // Solo se acepta .gpx (ver ALLOWED_EXT, sin grupo de captura) — la
         // extensión del objeto siempre es literal, nunca depende del filename.
         const key = buildObjectKey({ organizationId, kind: 'gpx', extension: 'gpx' });
+        // La extensión la elige quien sube; el guard mira los bytes reales y
+        // corta antes de que nada llegue al bucket. Tolerante a propósito: un GPX
+        // es XML y los exportadores de relojes y apps de montaña anteponen BOM o
+        // saltos de línea sin dejar de ser válidos. Rechazar una traza buena le
+        // cuesta a alguien que está registrando su salida antes de perder señal.
+        const guardedGpx = fileStream.pipe(new MagicBytesGuard({ signatures: XML_SIGNATURES, allowLeadingWhitespace: true }));
         try {
-            await getFileStorage().upload(fileStream, {
+            await getFileStorage().upload(guardedGpx, {
                 key,
                 contentType: mimeType || 'application/gpx+xml',
                 maxBytes: MAX_FILE_SIZE,
@@ -133,6 +140,12 @@ export async function uploadGpx(req, res) {
         }
         catch (err) {
             const code = err.code;
+            if (code === INVALID_FILE_TYPE) {
+                // Nada se escribió: el guard cortó con la cabecera.
+                fileStream.resume();
+                safeRespond(415, { error: 'El archivo no es un GPX válido' });
+                return;
+            }
             if (code === 'FILE_TOO_LARGE') {
                 safeRespond(413, {
                     error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
@@ -212,8 +225,10 @@ export async function uploadPronostico(req, res) {
             kind: 'pronostico',
             extension: extractExtension(rawFilename, ALLOWED_PRONOSTICO_EXT_STRICT),
         });
+        // Formatos binarios: la cabecera está en el byte 0, sin ambigüedad.
+        const guardedPronostico = fileStream.pipe(new MagicBytesGuard({ signatures: [PDF_SIGNATURE, JPEG_SIGNATURE, PNG_SIGNATURE] }));
         try {
-            await getFileStorage().upload(fileStream, {
+            await getFileStorage().upload(guardedPronostico, {
                 key,
                 contentType: mimeType || 'application/octet-stream',
                 maxBytes: MAX_FILE_SIZE,
@@ -237,6 +252,11 @@ export async function uploadPronostico(req, res) {
         }
         catch (err) {
             const code = err.code;
+            if (code === INVALID_FILE_TYPE) {
+                fileStream.resume();
+                safeRespond(415, { error: 'El archivo no es un PDF ni una imagen válida' });
+                return;
+            }
             if (code === 'FILE_TOO_LARGE') {
                 safeRespond(413, {
                     error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,

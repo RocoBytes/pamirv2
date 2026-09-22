@@ -3,7 +3,15 @@ import { pipeline } from 'node:stream/promises';
 import { Storage } from '@google-cloud/storage';
 import { SizeGuard } from './size-guard.js';
 import { assertSafeObjectPrefix } from './object-key.js';
-import type { FileStorage, SignedDownloadOptions, UploadOptions } from './file-storage.js';
+import type { FileStorage, SignedDownloadOptions, StoredFileMetadata, UploadOptions } from './file-storage.js';
+
+// Metadata cruda que devuelve el SDK — solo los campos que este adaptador
+// necesita, nunca el objeto Metadata completo de GCS.
+export interface GcsObjectMetadata {
+  contentType?: string;
+  size?: string | number;
+  etag?: string;
+}
 
 // Superficie mínima que este adaptador usa del SDK de GCS — angosta a
 // propósito para que los tests inyecten un cliente falso sin tocar la red ni
@@ -18,6 +26,8 @@ export interface GcsFileLike {
     responseDisposition: string;
   }): Promise<[string]>;
   delete(options?: { ignoreNotFound?: boolean }): Promise<unknown>;
+  createReadStream(): NodeJS.ReadableStream;
+  getMetadata(): Promise<[GcsObjectMetadata, ...unknown[]]>;
 }
 
 export interface GcsBucketLike {
@@ -97,6 +107,26 @@ export function createGcsStorage(params: CreateGcsStorageParams): FileStorage {
       assertSafeObjectPrefix(prefix);
       const [files] = await bucket.getFiles({ prefix });
       await Promise.all(files.map((file) => file.delete({ ignoreNotFound: true })));
+    },
+
+    async readMetadata(key: string): Promise<StoredFileMetadata | null> {
+      try {
+        const [metadata] = await bucket.file(key).getMetadata();
+        return {
+          contentType: metadata.contentType ?? 'application/octet-stream',
+          size: Number(metadata.size ?? 0),
+          etag: metadata.etag ?? '',
+        };
+      } catch (err) {
+        // El SDK reporta "no encontrado" como error con code 404 — se traduce
+        // a null en vez de propagar la excepción (ver StoredFileMetadata).
+        if ((err as { code?: number }).code === 404) return null;
+        throw err;
+      }
+    },
+
+    createReadStream(key: string): NodeJS.ReadableStream {
+      return bucket.file(key).createReadStream();
     },
   };
 }

@@ -64,6 +64,7 @@ export async function checkAlertas(req: Request, res: Response): Promise<void> {
               alertEmail: true,
               contactName: true,
               contactEmail: true,
+              logoObjectKey: true,
             },
           },
         },

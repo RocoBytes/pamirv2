@@ -44,6 +44,24 @@ describe('FileStorage — contrato (adaptador de memoria)', () => {
     assert.equal(storage.has(keyB), false);
   });
 
+  it('readMetadata/createReadStream: ida y vuelta, y clave inexistente da null', async () => {
+    const storage = createMemoryStorage();
+    const key = buildObjectKey({ organizationId: 'org-ddddddd', kind: 'logo', extension: 'png' });
+
+    await storage.upload(streamOf('bytes-del-logo'), { key, contentType: 'image/png', maxBytes: 1024 });
+
+    const metadata = await storage.readMetadata(key);
+    assert.equal(metadata?.contentType, 'image/png');
+    assert.equal(metadata?.size, Buffer.from('bytes-del-logo').length);
+    assert.ok(metadata?.etag && metadata.etag.length > 0);
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of storage.createReadStream(key)) chunks.push(chunk as Buffer);
+    assert.equal(Buffer.concat(chunks).toString(), 'bytes-del-logo');
+
+    assert.equal(await storage.readMetadata('orgs/otro/logo/no-existe.png'), null);
+  });
+
   it('rechaza un upload que excede maxBytes y no deja rastro', async () => {
     const storage = createMemoryStorage();
     const key = buildObjectKey({ organizationId: 'org-ccccccc', kind: 'documento', extension: 'pdf' });

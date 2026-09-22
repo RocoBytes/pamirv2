@@ -614,7 +614,7 @@ async function runHttpChecks(baseUrl, seedA, seedB) {
         const res = await getJson(baseUrl, tokenA, `/api/salidas/${seedB.salidaId}`);
         assert.equal(res.status, 404);
     });
-    await check('GET /api/me — cada admin ve la organización pública de SU PROPIO club (5 campos, sin datos privados)', async () => {
+    await check('GET /api/me — cada admin ve la organización pública de SU PROPIO club (7 campos, sin datos privados)', async () => {
         const [resA, resB] = await Promise.all([getJson(baseUrl, tokenA, '/api/me'), getJson(baseUrl, tokenB, '/api/me')]);
         assert.equal(resA.status, 200);
         assert.equal(resB.status, 200);
@@ -622,7 +622,14 @@ async function runHttpChecks(baseUrl, seedA, seedB) {
         const orgB = resB.body.user.organization;
         assert.ok(orgA);
         assert.ok(orgB);
-        assert.deepEqual(Object.keys(orgA).sort(), ['id', 'membresiaPropia', 'name', 'shortName', 'slug']);
+        // Igualdad estricta a propósito: si algún día se filtra alertEmail,
+        // contactEmail o la clave cruda del logo (logoObjectKey), esto falla.
+        assert.deepEqual(Object.keys(orgA).sort(), [
+            'hasLogo', 'id', 'logoVersion', 'membresiaPropia', 'name', 'shortName', 'slug',
+        ]);
+        // Ningún club de este fixture subió un logo propio.
+        assert.equal(orgA.hasLogo, false);
+        assert.equal(orgA.logoVersion, null);
         assert.equal(orgA.slug, SLUG_A);
         assert.equal(orgA.membresiaPropia, MEMBRESIA_A);
         assert.equal(orgB.slug, SLUG_B);
@@ -701,7 +708,11 @@ async function runHttpChecks(baseUrl, seedA, seedB) {
         assert.equal(consultada.status, 200);
         const body = consultada.body;
         assert.ok(body.organization);
-        assert.deepEqual(Object.keys(body.organization).sort(), ['name', 'shortName', 'slug']);
+        assert.deepEqual(Object.keys(body.organization).sort(), [
+            'hasLogo', 'logoVersion', 'name', 'shortName', 'slug',
+        ]);
+        assert.equal(body.organization.hasLogo, false);
+        assert.equal(body.organization.logoVersion, null);
         assert.equal(body.organization.slug, SLUG_A);
         assert.equal(body.organization.name, seedA.organizationName);
     });
@@ -711,7 +722,11 @@ async function runHttpChecks(baseUrl, seedA, seedB) {
         const body = (await res.json().catch(() => undefined));
         assert.equal(res.status, 200);
         assert.ok(body?.organization);
-        assert.deepEqual(Object.keys(body.organization).sort(), ['name', 'shortName', 'slug']);
+        assert.deepEqual(Object.keys(body.organization).sort(), [
+            'hasLogo', 'logoVersion', 'name', 'shortName', 'slug',
+        ]);
+        assert.equal(body.organization.hasLogo, false);
+        assert.equal(body.organization.logoVersion, null);
         assert.equal(body.organization.slug, SLUG_A);
     });
     // ─── Invitaciones emitidas por la plataforma (bootstrap del primer ADMIN) ───
@@ -1096,6 +1111,93 @@ async function runFileDownloadChecks(baseUrl, seedA, seedB) {
 // el club que crea (slug "iso-test-cli-<sufijo>") lo purga el mismo barrido
 // final que ya purga A y B (purgeAllIsoTestOrganizations filtra por prefijo
 // de slug, no por id, así que no hace falta extenderlo).
+// Logo propio del club: es el ÚNICO recurso del bucket que se sirve por una
+// ruta pública (GET /api/clubes/:slug/logo, sin sesión, porque el login tiene
+// que poder pintarlo). Justo por eso necesita sus propios checks de
+// aislamiento: el slug viaja en la URL y es lo único que elige de qué club se
+// leen bytes.
+async function runClubLogoChecks(baseUrl, seedA, seedB) {
+    const storage = assertMemoryStorage();
+    const socioTokenA = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
+    const tokenB = signToken({ userId: seedB.adminUserId, email: seedB.adminEmail });
+    const marca = async (slug) => {
+        const res = await fetch(`${baseUrl}/api/clubes/${slug}/marca`);
+        const body = (await res.json().catch(() => undefined));
+        return { status: res.status, body };
+    };
+    await check('sin logo subido, la marca pública de cada club dice hasLogo:false', async () => {
+        for (const slug of [SLUG_A, SLUG_B]) {
+            const res = await marca(slug);
+            assert.equal(res.status, 200);
+            assert.equal(res.body?.hasLogo, false);
+            assert.equal(res.body?.logoVersion, null);
+        }
+    });
+    await check('sin logo subido, GET /api/clubes/:slug/logo responde 404', async () => {
+        const res = await fetch(`${baseUrl}/api/clubes/${SLUG_A}/logo`);
+        assert.equal(res.status, 404);
+    });
+    await check('un slug que no existe no revela nada: 404 en la marca pública', async () => {
+        const res = await marca(`iso-test-no-existe-${RANDOM_SUFFIX}`);
+        assert.equal(res.status, 404);
+    });
+    // A partir de acá SOLO el club A tiene logo. Todo lo que siga comprueba que
+    // eso no se derrama al club B por ninguna vía.
+    const logoBytes = Buffer.from('iso-test-logo-png-del-club-A');
+    const logoKeyA = buildObjectKey({ organizationId: seedA.organizationId, kind: 'logo', extension: 'png' });
+    await storage.upload(Readable.from([logoBytes]), {
+        key: logoKeyA,
+        contentType: 'image/png',
+        maxBytes: 4096,
+    });
+    await runAsPlatform(() => prisma.organization.update({ where: { id: seedA.organizationId }, data: { logoObjectKey: logoKeyA } }));
+    await check('el logo del club A se sirve bajo SU slug, con sus bytes y su Content-Type', async () => {
+        const res = await fetch(`${baseUrl}/api/clubes/${SLUG_A}/logo`);
+        assert.equal(res.status, 200);
+        assert.equal(res.headers.get('content-type'), 'image/png');
+        assert.ok(res.headers.get('etag'), 'debería venir un ETag');
+        const descargado = Buffer.from(await res.arrayBuffer());
+        assert.ok(descargado.equals(logoBytes), 'los bytes servidos no son los del club A');
+    });
+    await check('el logo del club A NO se sirve bajo el slug del club B', async () => {
+        const res = await fetch(`${baseUrl}/api/clubes/${SLUG_B}/logo`);
+        assert.equal(res.status, 404);
+    });
+    await check('la marca pública refleja el logo solo en el club que lo subió', async () => {
+        const a = await marca(SLUG_A);
+        assert.equal(a.body?.hasLogo, true);
+        assert.equal(typeof a.body?.logoVersion, 'string');
+        const b = await marca(SLUG_B);
+        assert.equal(b.body?.hasLogo, false);
+        assert.equal(b.body?.logoVersion, null);
+    });
+    await check('la marca pública nunca expone la clave cruda del objeto', async () => {
+        const a = await marca(SLUG_A);
+        assert.deepEqual(Object.keys(a.body).sort(), ['hasLogo', 'logoVersion', 'name', 'shortName', 'slug']);
+        assert.ok(!JSON.stringify(a.body).includes(logoKeyA), 'se filtró logoObjectKey en la marca pública');
+    });
+    await check('un SOCIO no puede quitar el logo de su propio club (solo ADMIN)', async () => {
+        const res = await deleteJson(baseUrl, socioTokenA, '/api/organizacion/logo');
+        assert.equal(res.status, 403);
+    });
+    await check('el admin del club B quitando su logo no toca el del club A', async () => {
+        const res = await deleteJson(baseUrl, tokenB, '/api/organizacion/logo');
+        assert.equal(res.status, 200);
+        const a = await marca(SLUG_A);
+        assert.equal(a.body?.hasLogo, true);
+        assert.equal(await storage.has(logoKeyA), true);
+    });
+    await check('el admin del club A quita su logo: deja de servirse y el objeto desaparece', async () => {
+        const tokenA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+        const res = await deleteJson(baseUrl, tokenA, '/api/organizacion/logo');
+        assert.equal(res.status, 200);
+        const a = await marca(SLUG_A);
+        assert.equal(a.body?.hasLogo, false);
+        const logo = await fetch(`${baseUrl}/api/clubes/${SLUG_A}/logo`);
+        assert.equal(logo.status, 404);
+        assert.equal(await storage.has(logoKeyA), false);
+    });
+}
 async function runTenantCliChecks(baseUrl, seedA, seedB) {
     const cliSlug = `iso-test-cli-${RANDOM_SUFFIX}`;
     const cliAdminEmail = `admin-cli-${RANDOM_SUFFIX}@iso-test.local`;
@@ -1218,12 +1320,16 @@ async function runTenantCliChecks(baseUrl, seedA, seedB) {
         assert.equal(detalleBody.estado, 'PUBLICADO');
         assert.equal(detalleBody.declaracionVigente?.version, '2026-08');
     });
-    await check('POST /api/auth/login devuelve la organización pública propia del club recién creado (5 campos, sin datos privados)', async () => {
+    await check('POST /api/auth/login devuelve la organización pública propia del club recién creado (7 campos, sin datos privados)', async () => {
         const login = await postJson(baseUrl, '/api/auth/login', { email: cliAdminEmail, password: CLI_PASSWORD });
         assert.equal(login.status, 200);
         const org = login.body.user.organization;
         assert.ok(org);
-        assert.deepEqual(Object.keys(org).sort(), ['id', 'membresiaPropia', 'name', 'shortName', 'slug']);
+        assert.deepEqual(Object.keys(org).sort(), [
+            'hasLogo', 'id', 'logoVersion', 'membresiaPropia', 'name', 'shortName', 'slug',
+        ]);
+        assert.equal(org.hasLogo, false);
+        assert.equal(org.logoVersion, null);
         assert.equal(org.slug, cliSlug);
         assert.equal(org.membresiaPropia, MEMBRESIA_A);
     });
@@ -1340,6 +1446,7 @@ async function main() {
         server = started.server;
         await runHttpChecks(started.baseUrl, seedA, seedB);
         await runFileDownloadChecks(started.baseUrl, seedA, seedB);
+        await runClubLogoChecks(started.baseUrl, seedA, seedB);
         await runTenantCliChecks(started.baseUrl, seedA, seedB);
     }
     catch (err) {

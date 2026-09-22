@@ -39,6 +39,7 @@ export async function authMiddleware(
               alertEmail: true,
               contactName: true,
               contactEmail: true,
+              logoObjectKey: true,
             },
           },
         },
@@ -73,6 +74,7 @@ export async function authMiddleware(
         alertEmail: user.organization.alertEmail,
         contactName: user.organization.contactName,
         contactEmail: user.organization.contactEmail,
+        logoObjectKey: user.organization.logoObjectKey,
       },
     };
     // Todo lo que siga en la cadena de middlewares/handler corre dentro del

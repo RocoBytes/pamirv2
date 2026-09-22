@@ -47,6 +47,7 @@ function toOrgSummary(org: Organization): OrganizationSummary {
     alertEmail: org.alertEmail,
     contactName: org.contactName,
     contactEmail: org.contactEmail,
+    logoObjectKey: org.logoObjectKey,
   };
 }
 

@@ -12,15 +12,21 @@ class FakeFile implements GcsFileLike {
   writeStreamOptions: { resumable: boolean; contentType: string } | undefined;
   signedUrlOptions: Parameters<GcsFileLike['getSignedUrl']>[0] | undefined;
   deleteCalls: Array<{ ignoreNotFound?: boolean } | undefined> = [];
+  // false hasta que createWriteStream reciba al menos un write — así
+  // getMetadata/createReadStream pueden distinguir un objeto real de uno que
+  // nunca se subió, igual que hace GCS con un 404.
+  written = false;
 
   constructor(public readonly key: string) {}
 
   createWriteStream(options: { resumable: boolean; contentType: string }): NodeJS.WritableStream {
     this.writeStreamOptions = options;
     const chunks = this.chunks;
+    // Arrow function: captura `this` léxicamente, sin necesitar alias.
     return new Writable({
-      write(chunk: Buffer, _enc, cb) {
+      write: (chunk: Buffer, _enc, cb) => {
         chunks.push(chunk);
+        this.written = true;
         cb();
       },
     });
@@ -34,6 +40,20 @@ class FakeFile implements GcsFileLike {
   async delete(options?: { ignoreNotFound?: boolean }): Promise<unknown> {
     this.deleteCalls.push(options);
     return [{}];
+  }
+
+  createReadStream(): NodeJS.ReadableStream {
+    return Readable.from(Buffer.concat(this.chunks));
+  }
+
+  async getMetadata(): ReturnType<GcsFileLike['getMetadata']> {
+    if (!this.written) {
+      throw Object.assign(new Error('Not Found'), { code: 404 });
+    }
+    return [
+      { contentType: this.writeStreamOptions?.contentType, size: String(Buffer.concat(this.chunks).length), etag: `etag-${this.key}` },
+      {},
+    ];
   }
 }
 
@@ -150,5 +170,31 @@ describe('createGcsStorage', () => {
     for (const bad of ['', 'orgs/', '/', 'orgs/../']) {
       await assert.rejects(() => storage.deleteByPrefix(bad));
     }
+  });
+
+  it('readMetadata devuelve contentType/size/etag de un objeto subido', async () => {
+    const { storage, bucket } = buildStorage();
+    await storage.upload(streamOf('logo-bytes'), { key: 'orgs/a/logo/1.png', contentType: 'image/png', maxBytes: 1024 });
+
+    const metadata = await storage.readMetadata('orgs/a/logo/1.png');
+    assert.deepEqual(metadata, {
+      contentType: 'image/png',
+      size: Buffer.from('logo-bytes').length,
+      etag: `etag-${bucket.file('orgs/a/logo/1.png').key}`,
+    });
+  });
+
+  it('readMetadata traduce un 404 del SDK a null en vez de propagar la excepción', async () => {
+    const { storage } = buildStorage();
+    assert.equal(await storage.readMetadata('orgs/a/logo/no-existe.png'), null);
+  });
+
+  it('createReadStream devuelve los bytes subidos', async () => {
+    const { storage } = buildStorage();
+    await storage.upload(streamOf('logo-bytes'), { key: 'orgs/a/logo/1.png', contentType: 'image/png', maxBytes: 1024 });
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of storage.createReadStream('orgs/a/logo/1.png')) chunks.push(chunk as Buffer);
+    assert.equal(Buffer.concat(chunks).toString(), 'logo-bytes');
   });
 });

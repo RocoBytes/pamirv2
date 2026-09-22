@@ -356,7 +356,24 @@ npm run tenant:activate -- --slug el-montanista
 
 # Reemitir el link del primer ADMIN (la invitación anterior expiró o el email era incorrecto)
 npm run tenant:invite -- --slug el-montanista --admin-email otro-admin@elmontanista.cl
+
+# Corregir uno o más datos de un club ya existente
+npm run tenant:update -- --slug el-montanista \
+  --name "Club El Montañista" \
+  --contact-name "Nombre del contacto" \
+  --contact-email contacto@elmontanista.cl
 ```
+
+`tenant:update` corrige `--name`, `--short-name`, `--contact-name`, `--contact-email` y
+`--alert-email` de un club existente (al menos uno de los cinco, los demás quedan
+sin tocar). **`--slug`, `--membresia` y el estado (`suspend`/`activate`) NO son
+editables ahí**: el slug rompería URLs y la lista de slugs reservados, la
+membresía es la clave del puente entre clubes, y el estado ya tiene su propio
+flujo. `--short-name ""` limpia el nombre corto vigente. El comando solo
+imprime lo que realmente cambió (un valor idéntico al vigente no cuenta como
+cambio) y, si `--alert-email` cambió, advierte que ese correo es el destino de
+la alerta de seguridad "salida sin cierre" y que no tiene paso de
+verificación.
 
 `tenant:create` crea, en una sola transacción: la `Organization`, sus 6
 categorías de evento por defecto (las mismas que tiene Pamir hoy) y su
@@ -540,6 +557,25 @@ URL firmada de GCS con `expiresInSeconds: 600`. Ningún archivo se bufferiza
 en RAM ni se escribe a disco: la subida es un stream de punta a punta
 (busboy → guardia de tamaño → stream de escritura resumible a GCS), y al
 reemplazar o borrar un archivo el objeto anterior se limpia como huérfano.
+
+**Excepción — logo del club** (`orgs/{organizationId}/logo/{uuid}.{png|jpg}`):
+es marca pública, no un documento privado, y tiene que renderizarse en un
+`<img>` en pantallas sin sesión (login previo a autenticar), donde una URL
+firmada de 10 minutos no sirve (expira, arrastra `Content-Disposition:
+attachment` y exige una ronda de red autenticada antes de pintar). Por eso se
+sirve **por bytes desde el backend** en vez de con una URL firmada:
+
+- `GET /api/clubes/:slug/marca` — público, `{ slug, name, shortName, hasLogo,
+  logoVersion }`.
+- `GET /api/clubes/:slug/logo` — público, los bytes del logo con `ETag` y
+  `Cache-Control` (`public, max-age=31536000, immutable` con `?v=<logoVersion>`;
+  `public, max-age=300` sin ese parámetro, honrando `If-None-Match`).
+
+La mitad importante de la regla general se mantiene intacta: en la base
+**nunca** se guarda ni se devuelve una URL, solo la clave del objeto
+(`Organization.logoObjectKey`). Ninguna otra ruta de `/api` declara
+`Cache-Control: public` — no crear una regla de Cloudflare que cachee todo
+`/api/` a partir de esta excepción.
 
 Variables de entorno (`backend/.env.example`):
 

@@ -62,7 +62,7 @@ function buildPublicDeps(): InvitacionesDeps {
     getOrganizationBrand: async (organizationId) => {
       const org = await prisma.organization.findUnique({
         where: { id: organizationId },
-        select: { slug: true, name: true, shortName: true },
+        select: { slug: true, name: true, shortName: true, logoObjectKey: true },
       });
       return org ? toPublicOrganizationBrand(org) : null;
     },

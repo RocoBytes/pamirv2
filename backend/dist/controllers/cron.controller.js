@@ -60,6 +60,7 @@ export async function checkAlertas(req, res) {
                         alertEmail: true,
                         contactName: true,
                         contactEmail: true,
+                        logoObjectKey: true,
                     },
                 },
             },

@@ -14,10 +14,21 @@ export interface SignedDownloadOptions {
   downloadName: string;
 }
 
+export interface StoredFileMetadata {
+  contentType: string;
+  size: number;
+  etag: string;
+}
+
 export interface FileStorage {
   upload(stream: Readable, options: UploadOptions): Promise<void>;
   createSignedDownloadUrl(key: string, options: SignedDownloadOptions): Promise<string>;
   // Idempotente: que el objeto no exista no es un error.
   delete(key: string): Promise<void>;
   deleteByPrefix(prefix: string): Promise<void>;
+  // null si el objeto no existe — "no encontrado" nunca es una excepción.
+  // Usado por el logo del club (único archivo que se lee por bytes en vez de
+  // firmar una URL de descarga — ver GET /api/clubes/:slug/logo).
+  readMetadata(key: string): Promise<StoredFileMetadata | null>;
+  createReadStream(key: string): NodeJS.ReadableStream;
 }

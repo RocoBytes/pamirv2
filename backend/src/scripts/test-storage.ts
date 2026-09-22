@@ -95,6 +95,38 @@ async function main(): Promise<void> {
       if (!downloaded.equals(content)) throw new Error('el contenido descargado no coincide con el subido');
     });
 
+    // Lectura directa (la usa GET /api/clubes/:slug/logo, que sirve los bytes
+    // en vez de firmar una URL). Contra el SDK real, no contra un fake: lo que
+    // los tests unitarios no pueden probar es la forma de getMetadata y la
+    // traducción del error 404 del SDK a null.
+    await check('readMetadata devuelve el contentType, el tamaño y un etag reales', async () => {
+      const metadata = await storage.readMetadata(key);
+      if (!metadata) throw new Error('readMetadata devolvió null para un objeto existente');
+      if (metadata.contentType !== 'application/gpx+xml') {
+        throw new Error(`contentType inesperado: ${metadata.contentType}`);
+      }
+      if (metadata.size !== content.byteLength) {
+        throw new Error(`tamaño inesperado: ${metadata.size} (esperado ${content.byteLength})`);
+      }
+      if (!metadata.etag) throw new Error('el etag vino vacío');
+    });
+
+    await check('createReadStream devuelve exactamente los mismos bytes', async () => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of storage.createReadStream(key)) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
+      }
+      if (!Buffer.concat(chunks).equals(content)) {
+        throw new Error('el contenido leído no coincide con el subido');
+      }
+    });
+
+    await check('readMetadata de una clave inexistente devuelve null, no lanza', async () => {
+      const ausente = buildObjectKey({ organizationId: TEST_ORG_ID, kind: 'logo', extension: 'png' });
+      const metadata = await storage.readMetadata(ausente);
+      if (metadata !== null) throw new Error('se esperaba null para un objeto que no existe');
+    });
+
     await check('un upload que excede maxBytes se rechaza con FILE_TOO_LARGE', async () => {
       let threw = false;
       try {

@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 
 // Tipos de archivo que este backend guarda en el bucket de almacenamiento —
 // ver buildObjectKey. Agregar uno nuevo es una decisión explícita acá.
-export type FileKind = 'gpx' | 'pronostico' | 'documento' | 'itinerario';
+export type FileKind = 'gpx' | 'pronostico' | 'documento' | 'itinerario' | 'logo';
 
-const FILE_KINDS: readonly FileKind[] = ['gpx', 'pronostico', 'documento', 'itinerario'];
+const FILE_KINDS: readonly FileKind[] = ['gpx', 'pronostico', 'documento', 'itinerario', 'logo'];
 
 // Mismo patrón conservador que el resto de la app asume para Organization.id
 // (uuid() por defecto, pero nunca se depende del formato exacto): sin "/",

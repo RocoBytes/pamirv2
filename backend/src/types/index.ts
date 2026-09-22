@@ -12,6 +12,10 @@ export interface OrganizationSummary {
   alertEmail: string;
   contactName: string;
   contactEmail: string;
+  // Clave del objeto de logo en el bucket, o null. Uso interno — nunca se
+  // serializa tal cual (ver lib/serializers/organization.ts, que deriva
+  // hasLogo/logoVersion a partir de este campo).
+  logoObjectKey: string | null;
 }
 
 export interface AuthUser {

@@ -1,4 +1,5 @@
-import { Writable } from 'node:stream';
+import { randomUUID } from 'node:crypto';
+import { Readable, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { SizeGuard } from './size-guard.js';
 import { assertSafeObjectPrefix } from './object-key.js';
@@ -22,7 +23,7 @@ export function createMemoryStorage() {
                     cb();
                 },
             }));
-            objects.set(options.key, { buffer: Buffer.concat(chunks), contentType: options.contentType });
+            objects.set(options.key, { buffer: Buffer.concat(chunks), contentType: options.contentType, etag: randomUUID() });
         },
         async createSignedDownloadUrl(key, options) {
             const expires = Date.now() + options.expiresInSeconds * 1000;
@@ -38,6 +39,28 @@ export function createMemoryStorage() {
                 if (key.startsWith(prefix))
                     objects.delete(key);
             }
+        },
+        async readMetadata(key) {
+            const obj = objects.get(key);
+            if (!obj)
+                return null;
+            return { contentType: obj.contentType, size: obj.buffer.length, etag: obj.etag };
+        },
+        createReadStream(key) {
+            const obj = objects.get(key);
+            // Igual que el adaptador de GCS: el error de "no encontrado" llega como
+            // evento 'error' del stream, no como excepción sincrónica — así un
+            // consumidor que hace `.pipe(res)` se comporta igual con ambos.
+            return new Readable({
+                read() {
+                    if (!obj) {
+                        this.emit('error', Object.assign(new Error('Objeto no encontrado'), { code: 404 }));
+                        return;
+                    }
+                    this.push(obj.buffer);
+                    this.push(null);
+                },
+            });
         },
         has(key) {
             return objects.has(key);

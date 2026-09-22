@@ -22,7 +22,7 @@ export async function getEvaluacion(req: Request, res: Response): Promise<void> 
         where: { token },
         include: {
           salida: { select: { nombreActividad: true, fechaInicio: true } },
-          organization: { select: { slug: true, name: true, shortName: true } },
+          organization: { select: { slug: true, name: true, shortName: true, logoObjectKey: true } },
         },
       }),
     );

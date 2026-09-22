@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-const FILE_KINDS = ['gpx', 'pronostico', 'documento', 'itinerario'];
+const FILE_KINDS = ['gpx', 'pronostico', 'documento', 'itinerario', 'logo'];
 // Mismo patrón conservador que el resto de la app asume para Organization.id
 // (uuid() por defecto, pero nunca se depende del formato exacto): sin "/",
 // "." ni espacios, para que jamás pueda alterar la forma del prefijo del

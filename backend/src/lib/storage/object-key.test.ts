@@ -18,6 +18,12 @@ describe('buildObjectKey', () => {
     assert.equal(isObjectKey(key), true);
   });
 
+  it('acepta el kind "logo"', () => {
+    const key = buildObjectKey({ organizationId: ORG, kind: 'logo', extension: 'png' });
+    assert.match(key, new RegExp(`^orgs/${ORG}/logo/[0-9a-f-]{36}\\.png$`));
+    assert.equal(isObjectKey(key), true);
+  });
+
   it('genera una clave distinta en cada llamada', () => {
     const a = buildObjectKey({ organizationId: ORG, kind: 'documento', extension: 'pdf' });
     const b = buildObjectKey({ organizationId: ORG, kind: 'documento', extension: 'pdf' });

@@ -50,5 +50,25 @@ export function createGcsStorage(params) {
             const [files] = await bucket.getFiles({ prefix });
             await Promise.all(files.map((file) => file.delete({ ignoreNotFound: true })));
         },
+        async readMetadata(key) {
+            try {
+                const [metadata] = await bucket.file(key).getMetadata();
+                return {
+                    contentType: metadata.contentType ?? 'application/octet-stream',
+                    size: Number(metadata.size ?? 0),
+                    etag: metadata.etag ?? '',
+                };
+            }
+            catch (err) {
+                // El SDK reporta "no encontrado" como error con code 404 — se traduce
+                // a null en vez de propagar la excepción (ver StoredFileMetadata).
+                if (err.code === 404)
+                    return null;
+                throw err;
+            }
+        },
+        createReadStream(key) {
+            return bucket.file(key).createReadStream();
+        },
     };
 }

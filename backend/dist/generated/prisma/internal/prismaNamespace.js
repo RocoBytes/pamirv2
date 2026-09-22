@@ -104,6 +104,7 @@ export const OrganizationScalarFieldEnum = {
     contactName: 'contactName',
     contactEmail: 'contactEmail',
     ultimoNumeroSalida: 'ultimoNumeroSalida',
+    logoObjectKey: 'logoObjectKey',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
 };

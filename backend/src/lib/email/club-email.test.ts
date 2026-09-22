@@ -14,6 +14,7 @@ const org: OrganizationSummary = {
   alertEmail: 'alertas@elmontanista.cl',
   contactName: 'Secretaría',
   contactEmail: 'contacto@elmontanista.cl',
+  logoObjectKey: null,
 };
 
 describe('buildClubSender', () => {

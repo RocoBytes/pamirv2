@@ -15,6 +15,7 @@ const RUN_AS_PLATFORM_ALLOWED_FILES = [
   'src/controllers/invitaciones.controller.ts',
   'src/controllers/evaluaciones.controller.ts',
   'src/controllers/cron.controller.ts',
+  'src/controllers/clubes.controller.ts',
   'src/services/invitaciones.repo.prisma.ts',
   'src/scripts/**',
   '**/*.test.ts',

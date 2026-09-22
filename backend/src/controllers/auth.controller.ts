@@ -65,7 +65,15 @@ export async function login(req: Request, res: Response): Promise<void> {
         where: { email: normalizedEmail },
         include: {
           organization: {
-            select: { id: true, slug: true, name: true, shortName: true, status: true, membresiaPropia: true },
+            select: {
+              id: true,
+              slug: true,
+              name: true,
+              shortName: true,
+              status: true,
+              membresiaPropia: true,
+              logoObjectKey: true,
+            },
           },
         },
       }),
@@ -173,6 +181,7 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
               alertEmail: true,
               contactName: true,
               contactEmail: true,
+              logoObjectKey: true,
             },
           },
         },
