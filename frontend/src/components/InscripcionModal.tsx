@@ -1,10 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { AnimatePresence, motion } from 'motion/react'
 import { AlertCircle, Car, CarFront, ChevronLeft, Minus, Plus, ScrollText, X } from 'lucide-react'
 
 import type { DeclaracionVigente, EventoDetail } from '../types/evento'
 import { inscribirseEvento } from '../lib/api'
+import { originFromElement, type RevealOrigin } from '../lib/reveal-geometry'
+import { useStepDirection } from '../hooks/useStepDirection'
 import { Button } from './ui/Button'
+import { stepVariants } from './ui/motion'
+import { SuccessReveal, type RevealStatus } from './ui/SuccessReveal'
 
 interface InscripcionModalProps {
   evento: EventoDetail
@@ -20,8 +25,20 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
   const [aceptados, setAceptados] = useState<boolean[]>(declaracion.items.map(() => false))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+  /** Mientras no sea null hay una onda de confirmación en curso sobre el modal. */
+  const [revealOrigin, setRevealOrigin] = useState<RevealOrigin | null>(null)
+
+  const direction = useStepDirection(step)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   const todosAceptados = aceptados.length > 0 && aceptados.every(Boolean)
+
+  // A diferencia de los wizards de pantalla completa, acá no hay `window` que
+  // desplazar: el scroll vive dentro del propio modal.
+  useEffect(() => {
+    contentRef.current?.scrollTo(0, 0)
+  }, [step])
 
   function elegirVehiculo(valor: boolean) {
     setTieneVehiculo(valor)
@@ -37,8 +54,11 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
     setAceptados((prev) => prev.map((v, i) => (i === index ? !v : v)))
   }
 
-  async function confirmar() {
+  async function confirmar(origin: RevealOrigin) {
     if (tieneVehiculo === null || !todosAceptados) return
+    // La onda arranca ya, en el mismo cuadro del toque; lo que espera la
+    // confirmación del servidor es el check, no la expansión.
+    setRevealOrigin(origin)
     setSubmitting(true)
     setError(null)
     try {
@@ -48,18 +68,25 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
         declaracionVersionId: declaracion.id,
         itemsAceptados: aceptados,
       })
-      onSuccess()
+      setSuccess(true)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No se pudo enviar la inscripción'
-      // Doble submit / pestaña vieja: ya existe la postulación, refrescar igual
+      // Doble submit / pestaña vieja: ya existe la postulación — para quien
+      // se inscribió, estar ya inscrito ES el éxito, así que también muestra
+      // la onda en vez de un error.
       if (/Ya estás inscrito/i.test(message)) {
-        onSuccess()
+        setSuccess(true)
         return
       }
       setError(message)
       setSubmitting(false)
     }
   }
+
+  // La onda se superpone al modal en vez de cerrarlo con un `onSuccess()`
+  // inmediato: el formulario queda debajo, que es lo que hace que la
+  // confirmación parezca nacer del botón en vez de aparecer de la nada.
+  const revealStatus: RevealStatus = error ? 'error' : success ? 'success' : 'saving'
 
   return createPortal(
     <div
@@ -85,7 +112,16 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
           </button>
         </div>
 
-        <div className="px-5 py-5 overflow-y-auto">
+        <div ref={contentRef} className="px-5 py-5 overflow-y-auto">
+          <AnimatePresence mode="wait" initial={false} custom={direction}>
+            <motion.div
+              key={step}
+              custom={direction}
+              variants={stepVariants(direction)}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+            >
           {step === 1 && (
             <div className="flex flex-col gap-4">
               <p className="text-sm font-semibold text-slate-900">¿Cuento con vehículo propio?</p>
@@ -202,15 +238,28 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
                   size="sm"
                   disabled={!todosAceptados || submitting}
                   loading={submitting}
-                  onClick={() => void confirmar()}
+                  onClick={(e) => void confirmar(originFromElement(e.currentTarget))}
                 >
                   Confirmar inscripción
                 </Button>
               </div>
             </div>
           )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
+
+      {revealOrigin && (
+        <SuccessReveal
+          origin={revealOrigin}
+          status={revealStatus}
+          title="¡Listo!"
+          detail="Inscripción confirmada"
+          onFinished={onSuccess}
+          onRetracted={() => setRevealOrigin(null)}
+        />
+      )}
     </div>,
     document.body,
   )
