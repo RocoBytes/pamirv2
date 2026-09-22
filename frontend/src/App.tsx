@@ -208,7 +208,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout }: Re
   }
 
   if (route === 'documentos' && (esSocioClubActual || isAdmin)) {
-    return <DocumentosPage onBack={() => setRoute('dashboard')} shell={shell} />
+    return <DocumentosPage onBack={() => setRoute('dashboard')} shell={shell} isAdmin={isAdmin} />
   }
 
   // Contactos de emergencia: visible para todos los usuarios logueados (sin gate).

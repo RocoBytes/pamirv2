@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { BookOpen, Loader2, AlertCircle, FileText, Download, FolderOpen } from 'lucide-react'
 import { fetchDocumentos, fetchDocumentoUrl } from '../lib/api'
 import type { DocumentoRecord } from '../lib/api'
@@ -6,6 +6,7 @@ import { CATEGORIA_LABELS, CATEGORIA_ORDEN } from '../lib/documentos'
 import { useOrganization } from '../hooks/useOrganization'
 import { AppShell, type ShellContext } from './shell/AppShell'
 import { FileDownloadButton } from './FileDownloadButton'
+import { DocumentosAdminSection } from './documentos/DocumentosAdminSection'
 
 function agruparPorCategoria(docs: DocumentoRecord[]): [string, DocumentoRecord[]][] {
   const grupos = new Map<string, DocumentoRecord[]>()
@@ -24,20 +25,32 @@ function agruparPorCategoria(docs: DocumentoRecord[]): [string, DocumentoRecord[
 interface DocumentosPageProps {
   onBack: () => void
   shell: ShellContext
+  /** Solo un admin puede subir o borrar documentos del club. */
+  isAdmin?: boolean
 }
 
-export function DocumentosPage({ onBack, shell }: DocumentosPageProps) {
+export function DocumentosPage({ onBack, shell, isAdmin = false }: DocumentosPageProps) {
   const { memberBadge } = useOrganization()
   const [documentos, setDocumentos] = useState<DocumentoRecord[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  // El error se limpia dentro de la promesa y no antes de lanzarla: un
+  // setState síncrono acá se ejecutaría también en el primer render (lo llama
+  // un efecto) y dispararía un render en cascada.
+  const cargar = useCallback(() => {
     fetchDocumentos()
-      .then(setDocumentos)
+      .then((docs) => {
+        setDocumentos(docs)
+        setError(null)
+      })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : 'No se pudieron cargar los documentos')
       })
   }, [])
+
+  useEffect(() => {
+    cargar()
+  }, [cargar])
 
   const grupos = documentos ? agruparPorCategoria(documentos) : []
 
@@ -136,6 +149,14 @@ export function DocumentosPage({ onBack, shell }: DocumentosPageProps) {
                 </ul>
               </section>
             ))}
+          </div>
+        )}
+
+        {/* Al final y no arriba: un admin entra a esta pantalla a consultar,
+            igual que cualquier socio; subir es la acción ocasional. */}
+        {isAdmin && (
+          <div className="mt-8 pt-6 border-t border-outline-variant/40">
+            <DocumentosAdminSection variant="inline" onChanged={cargar} />
           </div>
         )}
     </AppShell>
