@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { ChevronLeft, Send } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { FilePicker } from '../ui/FilePicker'
+import { originFromSubmitEvent, type RevealOrigin } from '../../lib/reveal-geometry'
 import type { RiesgoIdentificado } from '../../types/salida'
 import { RIESGO_IDENTIFICADO_LABELS } from '../../types/salida'
 
@@ -138,7 +139,8 @@ interface Step5TechnicalPlanProps {
   isSubmitting: boolean
   onFileChange: (file: File | null) => void
   onPronosticoFileChange: (file: File | null) => void
-  onSubmit: (data: Step5Data) => Promise<void>
+  /** `origin` es el centro del botón que envió: de ahí nace la onda de confirmación. */
+  onSubmit: (data: Step5Data, origin: RevealOrigin) => Promise<void>
   onBack: () => void
 }
 
@@ -170,7 +172,16 @@ export function Step5Status({
 
   return (
     <form
-      onSubmit={handleSubmit(onSubmit)}
+      // El origen se mide SÍNCRONAMENTE acá, pero la onda recién nace dentro
+      // del handler de submit VÁLIDO. Los dos detalles importan:
+      // react-hook-form valida con `await` y para entonces el navegador ya
+      // limpió `currentTarget`; y si la onda arrancara en este mismo lugar,
+      // también se dispararía cuando la validación rechaza el envío — hay un
+      // test e2e que cubre justamente ese caso.
+      onSubmit={(event) => {
+        const origin = originFromSubmitEvent(event)
+        void handleSubmit((data) => onSubmit(data, origin))(event)
+      }}
       noValidate
       className="flex flex-col gap-6"
     >
