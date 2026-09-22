@@ -4,20 +4,28 @@
 // nombre corto configurado): los helpers de club-brand.ts hacen fallback a
 // name. membresiaPropia identifica qué valor de MembresiaClub corresponde a
 // "ser socio de ESTE club" (ver esSocioDelClub en lib/club-brand.ts).
+// hasLogo/logoVersion nunca traen la clave del objeto en el bucket — solo si
+// hay un logo propio subido y una versión para cachear su URL (ver
+// clubLogoSrc en lib/club-brand.ts).
 export interface Organization {
   id: string
   slug: string
   name: string
   shortName: string | null
   membresiaPropia: MembresiaClub | string
+  hasLogo: boolean
+  logoVersion: string | null
 }
 
 // Versión mínima de Organization para pantallas SIN sesión (consultar una
-// invitación, evaluación express): alcanza para pintar logo + nombre.
+// invitación, evaluación express, login previo a autenticar): alcanza para
+// pintar logo + nombre.
 export interface OrganizationBrand {
   slug: string
   name: string
   shortName: string | null
+  hasLogo: boolean
+  logoVersion: string | null
 }
 
 export interface User {

@@ -910,3 +910,40 @@ export async function resetNavPreferences(): Promise<void> {
   })
   await handleResponse<{ preferences: null }>(res)
 }
+
+// ─── Clubes: marca pública y logo propio (branding) ──────────────────────────
+
+// Público, sin sesión a propósito: lo consume AuthPage antes de autenticar
+// (ver club-preferido.ts) para pintar el logo y el nombre del club preferido.
+export async function fetchMarcaClub(slug: string): Promise<OrganizationBrand> {
+  const res = await fetch(`${API_BASE}/clubes/${encodeURIComponent(slug)}/marca`)
+  return handleResponse<OrganizationBrand>(res)
+}
+
+export interface OrganizacionLogoResponse {
+  hasLogo: boolean
+  logoVersion: string | null
+}
+
+// Solo ADMIN. El campo del FormData se llama "file" — busboy no valida su
+// nombre (ver uploadOrganizacionLogo en el backend), pero se mantiene el
+// mismo nombre que el resto de los uploads (uploadGpx, uploadDocumento).
+export async function uploadOrganizacionLogo(file: File): Promise<OrganizacionLogoResponse> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const res = await fetch(`${API_BASE}/organizacion/logo`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData,
+  })
+  return handleResponse<OrganizacionLogoResponse>(res)
+}
+
+export async function deleteOrganizacionLogo(): Promise<{ hasLogo: false }> {
+  const res = await fetch(`${API_BASE}/organizacion/logo`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  return handleResponse<{ hasLogo: false }>(res)
+}

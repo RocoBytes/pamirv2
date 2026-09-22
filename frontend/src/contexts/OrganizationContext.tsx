@@ -20,7 +20,7 @@ export function OrganizationProvider({ organization, children }: OrganizationPro
       displayName: clubDisplayName(org),
       shortName: clubShortName(org),
       memberBadge: clubMemberBadge(org),
-      logoSrc: clubLogoSrc(org?.slug),
+      logoSrc: clubLogoSrc(org),
     }
   }, [organization])
 

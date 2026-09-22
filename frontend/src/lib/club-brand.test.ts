@@ -3,6 +3,7 @@ import {
   clubDisplayName,
   clubShortName,
   clubLogoSrc,
+  clubLogoCandidates,
   clubMemberBadge,
   esSocioDelClub,
   documentTitle,
@@ -16,6 +17,8 @@ const PAMIR: Organization = {
   name: 'Andino Club Pamir',
   shortName: 'Pamir',
   membresiaPropia: 'SOCIO_ANDINO_PAMIR',
+  hasLogo: false,
+  logoVersion: null,
 }
 
 const EL_MONTANISTA: Organization = {
@@ -24,6 +27,8 @@ const EL_MONTANISTA: Organization = {
   name: 'Club Andino El Montañista',
   shortName: 'El Montañista',
   membresiaPropia: 'SOCIO_EL_MONTANISTA',
+  hasLogo: false,
+  logoVersion: null,
 }
 
 describe('clubDisplayName', () => {
@@ -52,22 +57,60 @@ describe('clubShortName', () => {
 })
 
 describe('clubLogoSrc', () => {
-  it('arma la ruta a partir de un slug válido', () => {
-    expect(clubLogoSrc('pamir')).toBe('/logos/pamir.png')
-    expect(clubLogoSrc('el-montanista')).toBe('/logos/el-montanista.png')
+  it('arma la ruta estática a partir de un slug válido sin logo propio', () => {
+    expect(clubLogoSrc(PAMIR)).toBe('/logos/pamir.png')
+    expect(clubLogoSrc(EL_MONTANISTA)).toBe('/logos/el-montanista.png')
   })
 
-  it('cae al logo por defecto sin slug', () => {
+  it('prefiere el logo subido cuando hasLogo es true', () => {
+    expect(clubLogoSrc({ ...PAMIR, hasLogo: true, logoVersion: 'abcd1234' })).toBe(
+      '/api/clubes/pamir/logo?v=abcd1234',
+    )
+  })
+
+  it('cae al logo por defecto sin organización', () => {
     expect(clubLogoSrc(null)).toBe(DEFAULT_CLUB_LOGO)
     expect(clubLogoSrc(undefined)).toBe(DEFAULT_CLUB_LOGO)
-    expect(clubLogoSrc('')).toBe(DEFAULT_CLUB_LOGO)
+  })
+
+  it('cae al logo por defecto sin slug o con slug vacío', () => {
+    expect(clubLogoSrc({ ...PAMIR, slug: '' })).toBe(DEFAULT_CLUB_LOGO)
   })
 
   it('rechaza un slug con formato inválido (mayúsculas, espacios, path traversal)', () => {
-    expect(clubLogoSrc('Pamir')).toBe(DEFAULT_CLUB_LOGO)
-    expect(clubLogoSrc('../etc/passwd')).toBe(DEFAULT_CLUB_LOGO)
-    expect(clubLogoSrc('pamir club')).toBe(DEFAULT_CLUB_LOGO)
-    expect(clubLogoSrc('-pamir')).toBe(DEFAULT_CLUB_LOGO)
+    expect(clubLogoSrc({ ...PAMIR, slug: 'Pamir' })).toBe(DEFAULT_CLUB_LOGO)
+    expect(clubLogoSrc({ ...PAMIR, slug: '../etc/passwd' })).toBe(DEFAULT_CLUB_LOGO)
+    expect(clubLogoSrc({ ...PAMIR, slug: 'pamir club' })).toBe(DEFAULT_CLUB_LOGO)
+    expect(clubLogoSrc({ ...PAMIR, slug: '-pamir' })).toBe(DEFAULT_CLUB_LOGO)
+  })
+})
+
+// ─── clubLogoCandidates: los tres niveles de precedencia ─────────────────────
+// ClubLogo.tsx recorre esta lista un escalón por vez ante cada error de carga
+// (ver el componente): el orden y el contenido exacto de la lista son el
+// contrato que sostiene ese fallback "nunca salta directo al neutral".
+describe('clubLogoCandidates', () => {
+  it('con logo subido: [subido, estático, neutral], en ese orden', () => {
+    const org = { ...PAMIR, hasLogo: true, logoVersion: 'abcd1234' }
+    expect(clubLogoCandidates(org)).toEqual([
+      '/api/clubes/pamir/logo?v=abcd1234',
+      '/logos/pamir.png',
+      DEFAULT_CLUB_LOGO,
+    ])
+  })
+
+  it('logo subido sin logoVersion: la URL no lleva ?v= (nunca debería pasar en la práctica, pero no debe romper)', () => {
+    const org = { ...PAMIR, hasLogo: true, logoVersion: null }
+    expect(clubLogoCandidates(org)[0]).toBe('/api/clubes/pamir/logo')
+  })
+
+  it('sin logo propio: [estático, neutral], sin el nivel subido', () => {
+    expect(clubLogoCandidates(PAMIR)).toEqual(['/logos/pamir.png', DEFAULT_CLUB_LOGO])
+  })
+
+  it('sin slug válido: solo [neutral]', () => {
+    expect(clubLogoCandidates(null)).toEqual([DEFAULT_CLUB_LOGO])
+    expect(clubLogoCandidates({ ...PAMIR, slug: 'Slug Invalido' })).toEqual([DEFAULT_CLUB_LOGO])
   })
 })
 

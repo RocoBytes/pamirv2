@@ -22,12 +22,36 @@ export function clubShortName(org: NameSource | null | undefined): string {
 
 // Un slug de club es siempre minúsculas/números/guiones (ver la validación
 // del backend en tenants.service.ts): cualquier otra cosa cae al logo neutral
-// en vez de intentar armar una URL con datos no confiables.
-const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/
+// en vez de intentar armar una URL con datos no confiables. Exportado para que
+// club-preferido.ts valide con el mismo criterio el slug que viene de la URL o
+// de localStorage — ninguno de los dos es un dato confiable por sí solo.
+export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
-export function clubLogoSrc(slug: string | null | undefined): string {
-  if (!slug || !SLUG_PATTERN.test(slug)) return DEFAULT_CLUB_LOGO
-  return `/logos/${encodeURIComponent(slug)}.png`
+type LogoSource = Pick<Organization | OrganizationBrand, 'slug' | 'hasLogo' | 'logoVersion'>
+
+// Lista de candidatos en orden de preferencia: logo subido por el club →
+// convención estática del repo (/logos/<slug>.png) → neutral. ClubLogo.tsx
+// recorre esta lista un escalón a la vez ante cada error de carga, en vez de
+// rendirse directo al neutral — así un logo subido roto todavía prueba el
+// estático antes de caer al default. clubLogoSrc() es el primer candidato:
+// lo que se pinta antes de que nada falle.
+export function clubLogoCandidates(org: LogoSource | null | undefined): string[] {
+  const slug = org?.slug
+  if (!slug || !SLUG_PATTERN.test(slug)) return [DEFAULT_CLUB_LOGO]
+
+  const safe = encodeURIComponent(slug)
+  const candidates: string[] = []
+  if (org?.hasLogo) {
+    const v = org.logoVersion ? `?v=${encodeURIComponent(org.logoVersion)}` : ''
+    candidates.push(`/api/clubes/${safe}/logo${v}`)
+  }
+  candidates.push(`/logos/${safe}.png`)
+  candidates.push(DEFAULT_CLUB_LOGO)
+  return candidates
+}
+
+export function clubLogoSrc(org: LogoSource | null | undefined): string {
+  return clubLogoCandidates(org)[0]!
 }
 
 // Etiqueta para "socios de ESTE club" (p.ej. la tarjeta de Documentación del

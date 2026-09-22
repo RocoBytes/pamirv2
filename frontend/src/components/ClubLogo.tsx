@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useOrganization } from '../hooks/useOrganization'
-import { clubDisplayName, clubLogoSrc, DEFAULT_CLUB_LOGO } from '../lib/club-brand'
+import { clubDisplayName, clubLogoCandidates } from '../lib/club-brand'
 import type { Organization, OrganizationBrand } from '../types/salida'
 
 interface ClubLogoProps {
@@ -16,21 +16,30 @@ interface ClubLogoProps {
   org?: Organization | OrganizationBrand | null
 }
 
-// Renderiza /logos/<slug>.png; sin club conocido, o si ese archivo no existe,
-// cae UNA sola vez al logo neutral — nunca queda pegada en un bucle de error,
-// y nunca muestra el logo de otro club.
+// Renderiza el logo subido por el club (si tiene uno), y si falla baja UN
+// escalón a la convención estática /logos/<slug>.png, y si esa también falla
+// baja al neutral — nunca salta directo al neutral desde el logo subido, y
+// nunca queda pegada en un bucle de error ni muestra el logo de otro club.
 export function ClubLogo({ className, alt, org }: ClubLogoProps) {
   const ctx = useOrganization()
   const usingOverride = org !== undefined
   const effectiveOrg = usingOverride ? org : ctx.organization
-  const logoSrc = usingOverride ? clubLogoSrc(effectiveOrg?.slug) : ctx.logoSrc
   const displayName = usingOverride ? clubDisplayName(effectiveOrg) : ctx.displayName
 
-  // Recuerda el último src que falló: si logoSrc cambia (otro club, u otra
-  // sesión en el mismo árbol de React) vuelve a intentar el logo real antes
-  // de rendirse de nuevo al default.
-  const [erroredSrc, setErroredSrc] = useState<string | null>(null)
-  const resolvedSrc = erroredSrc === logoSrc ? DEFAULT_CLUB_LOGO : logoSrc
+  const candidates = clubLogoCandidates(effectiveOrg)
+
+  // Índice del candidato mostrado. Se resetea a 0 en cuanto cambia la lista
+  // de candidatos (otro club, u otra sesión en el mismo árbol de React) —
+  // ajustando el estado durante el render, no en un efecto, para que el logo
+  // de un club nunca sobreviva un cambio de sesión mostrando el último
+  // candidato que había fallado antes.
+  const candidatesKey = candidates.join('|')
+  const [state, setState] = useState({ key: candidatesKey, index: 0 })
+  if (state.key !== candidatesKey) {
+    setState({ key: candidatesKey, index: 0 })
+  }
+  const index = state.key === candidatesKey ? state.index : 0
+  const resolvedSrc = candidates[Math.min(index, candidates.length - 1)]
 
   return (
     <img
@@ -38,7 +47,11 @@ export function ClubLogo({ className, alt, org }: ClubLogoProps) {
       alt={alt ?? displayName}
       className={className}
       onError={() => {
-        if (resolvedSrc === logoSrc) setErroredSrc(logoSrc)
+        // Baja un escalón nada más: un logo subido roto todavía prueba el
+        // estático antes de rendirse al neutral.
+        setState((prev) =>
+          prev.index < candidates.length - 1 ? { key: prev.key, index: prev.index + 1 } : prev,
+        )
       }}
     />
   )
