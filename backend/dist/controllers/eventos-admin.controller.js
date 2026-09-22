@@ -7,6 +7,7 @@ import { isAdmin } from '../lib/authz.js';
 import { despacharNotificacionesPendientes, DispatchEnCursoError, } from '../lib/notificaciones.js';
 import { uploadToGoogleDrive, deleteFromGoogleDrive } from '../lib/google-drive.js';
 import { ALLOWED_PRONOSTICO_EXT_STRICT, sanitizePronosticoFilename } from './upload.controller.js';
+import { bindTenantContext, requireOrganizationId } from '../lib/tenant-context.js';
 // Itinerary attachment (PDF/JPG/PNG) size cap, streamed straight to Drive
 const MAX_ADJUNTO_BYTES = 15 * 1024 * 1024;
 // Errores con código HTTP lanzados desde dentro de la transacción de
@@ -370,7 +371,10 @@ export async function uploadItinerarioAdjunto(req, res) {
         },
     });
     let fileSeen = false;
-    busboy.on('file', async (_fieldname, fileStream, info) => {
+    // Obligatorio, no defensivo: AsyncLocalStorage no propaga de forma
+    // confiable hacia los callbacks de eventos de busboy. El update de más
+    // abajo necesita el contexto de club capturado ANTES de req.pipe(busboy).
+    busboy.on('file', bindTenantContext(async (_fieldname, fileStream, info) => {
         fileSeen = true;
         const { filename: rawFilename, mimeType } = info;
         if (!ALLOWED_PRONOSTICO_EXT_STRICT.test(rawFilename)) {
@@ -420,7 +424,7 @@ export async function uploadItinerarioAdjunto(req, res) {
             console.error('[uploadItinerarioAdjunto] Error subiendo a Google Drive:', err);
             safeRespond(500, { error: 'Error al subir el adjunto a Google Drive' });
         }
-    });
+    }));
     busboy.on('error', (err) => {
         console.error('[uploadItinerarioAdjunto] Busboy error:', err);
         safeRespond(500, { error: 'Error procesando el archivo' });
@@ -724,10 +728,13 @@ export async function finalizarEvento(req, res) {
             return;
         }
         const resultado = await prisma.$transaction(async (tx) => {
-            // F1: FOR UPDATE serializa finalizaciones concurrentes sobre el evento
+            // F1: FOR UPDATE serializa finalizaciones concurrentes sobre el evento.
+            // El SQL crudo es invisible para la extensión de aislamiento de
+            // lib/prisma.ts (no pasa por $allOperations), así que el filtro por
+            // club se agrega acá a mano, parametrizado.
             const filas = await tx.$queryRaw `
           SELECT id, cupos FROM "eventos"
-          WHERE id = ${id} AND estado = 'PUBLICADO'::"EstadoEvento"
+          WHERE id = ${id} AND estado = 'PUBLICADO'::"EstadoEvento" AND organization_id = ${requireOrganizationId()}
           FOR UPDATE`;
             if (filas.length === 0) {
                 throw new HttpError(409, 'El evento ya fue finalizado o cancelado');

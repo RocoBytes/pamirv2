@@ -2,6 +2,7 @@ import Busboy from 'busboy';
 import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../lib/authz.js';
 import { uploadToGoogleDrive, deleteFromGoogleDrive } from '../lib/google-drive.js';
+import { bindTenantContext } from '../lib/tenant-context.js';
 const MEMBRESIA_SOCIO_PAMIR = 'SOCIO_ANDINO_PAMIR';
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
 const ALLOWED_DOC_EXT = /\.pdf$/i;
@@ -109,7 +110,10 @@ export async function createDocumento(req, res) {
     busboy.on('field', (name, value) => {
         fields[name] = value;
     });
-    busboy.on('file', async (_fieldname, fileStream, info) => {
+    // Obligatorio, no defensivo: AsyncLocalStorage no propaga de forma
+    // confiable hacia los callbacks de eventos de busboy. El create de más
+    // abajo necesita el contexto de club capturado ANTES de req.pipe(busboy).
+    busboy.on('file', bindTenantContext(async (_fieldname, fileStream, info) => {
         fileSeen = true;
         const { filename: rawFilename, mimeType } = info;
         if (!ALLOWED_DOC_EXT.test(rawFilename)) {
@@ -176,7 +180,7 @@ export async function createDocumento(req, res) {
             console.error('[createDocumento] Error subiendo a Google Drive:', err);
             safeRespond(500, { error: 'Error al subir el documento a Google Drive' });
         }
-    });
+    }));
     busboy.on('error', (err) => {
         console.error('[createDocumento] Busboy error:', err);
         safeRespond(500, { error: 'Error procesando el archivo' });

@@ -1,24 +1,43 @@
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/jwt.js';
 import { isAdmin, canInvite } from '../lib/authz.js';
-export async function authMiddleware(req, _res, next) {
+import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
+import { isOrganizationSuspended, CLUB_SUSPENDIDO_MENSAJE } from '../lib/organization-status.js';
+export async function authMiddleware(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
         req.user = null;
-        return next();
+        next();
+        return;
     }
     const token = authHeader.slice(7);
     try {
         const { userId } = verifyToken(token);
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        req.user = user
-            ? { id: user.id, organizationId: user.organizationId, email: user.email, name: user.name, rol: user.rol }
-            : null;
+        // La cuenta se busca por id en todo el sistema (no se sabe todavía a qué
+        // club pertenece), así que este findUnique corre en contexto de plataforma.
+        const user = await runAsPlatform(() => prisma.user.findUnique({
+            where: { id: userId },
+            include: { organization: { select: { status: true } } },
+        }));
+        if (!user) {
+            req.user = null;
+            next();
+            return;
+        }
+        if (isOrganizationSuspended(user.organization.status)) {
+            res.status(403).json({ error: CLUB_SUSPENDIDO_MENSAJE });
+            return;
+        }
+        req.user = { id: user.id, organizationId: user.organizationId, email: user.email, name: user.name, rol: user.rol };
+        // Todo lo que siga en la cadena de middlewares/handler corre dentro del
+        // contexto del club del usuario: es lo que hace que prisma.ts filtre
+        // automáticamente cada consulta de este request por su organizationId.
+        runWithOrganization(user.organizationId, () => next());
     }
     catch {
         req.user = null;
+        next();
     }
-    next();
 }
 export function requireAuth(req, res, next) {
     if (!req.user) {

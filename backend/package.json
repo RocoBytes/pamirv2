@@ -24,7 +24,9 @@
     "predb:studio": "npm run db:guard",
     "db:studio": "prisma studio",
     "predb:create-user": "npm run db:guard",
-    "db:create-user": "tsx src/scripts/create-user.ts"
+    "db:create-user": "tsx src/scripts/create-user.ts",
+    "pretest:isolation": "npm run db:guard",
+    "test:isolation": "tsx src/scripts/test-isolation.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.7.0",

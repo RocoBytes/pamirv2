@@ -10,6 +10,7 @@ import { prisma } from '../lib/prisma.js';
 import { describeTarget, isAllowedTarget } from '../lib/db-target.js';
 import { passwordField, SALT_ROUNDS } from '../lib/auth-fields.js';
 import { parseCreateUserArgs } from './create-user-args.js';
+import { runAsPlatform } from '../lib/tenant-context.js';
 
 interface DbTargetConfig {
   allowedHostFragment: string;
@@ -127,7 +128,14 @@ async function readPassword(): Promise<string | null> {
   return readLineFromStdin();
 }
 
-async function main(): Promise<void> {
+// Script administrativo: opera sobre cualquier club (busca la organización
+// por slug, puede crear o actualizar un usuario de esa organización), así que
+// corre siempre en contexto de plataforma.
+function main(): Promise<void> {
+  return runAsPlatform(run);
+}
+
+async function run(): Promise<void> {
   verifyDbTargetOrExit();
 
   const parsed = parseCreateUserArgs(process.argv.slice(2));

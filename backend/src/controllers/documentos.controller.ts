@@ -3,6 +3,7 @@ import Busboy from 'busboy';
 import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../lib/authz.js';
 import { uploadToGoogleDrive, deleteFromGoogleDrive } from '../lib/google-drive.js';
+import { bindTenantContext } from '../lib/tenant-context.js';
 
 const MEMBRESIA_SOCIO_PAMIR = 'SOCIO_ANDINO_PAMIR';
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
@@ -122,85 +123,91 @@ export async function createDocumento(req: Request, res: Response): Promise<void
     fields[name] = value;
   });
 
-  busboy.on('file', async (_fieldname, fileStream, info) => {
-    fileSeen = true;
-    const { filename: rawFilename, mimeType } = info;
+  // Obligatorio, no defensivo: AsyncLocalStorage no propaga de forma
+  // confiable hacia los callbacks de eventos de busboy. El create de más
+  // abajo necesita el contexto de club capturado ANTES de req.pipe(busboy).
+  busboy.on(
+    'file',
+    bindTenantContext(async (_fieldname, fileStream, info) => {
+      fileSeen = true;
+      const { filename: rawFilename, mimeType } = info;
 
-    if (!ALLOWED_DOC_EXT.test(rawFilename)) {
-      fileStream.resume();
-      safeRespond(400, { error: 'Solo se permiten archivos PDF' });
-      return;
-    }
+      if (!ALLOWED_DOC_EXT.test(rawFilename)) {
+        fileStream.resume();
+        safeRespond(400, { error: 'Solo se permiten archivos PDF' });
+        return;
+      }
 
-    const categoria = (fields.categoria ?? '').trim();
-    const nombre = (fields.nombre ?? '').trim();
-    const descripcion = (fields.descripcion ?? '').trim();
-    const ordenRaw = (fields.orden ?? '').trim();
+      const categoria = (fields.categoria ?? '').trim();
+      const nombre = (fields.nombre ?? '').trim();
+      const descripcion = (fields.descripcion ?? '').trim();
+      const ordenRaw = (fields.orden ?? '').trim();
 
-    if (!DOCUMENTO_CATEGORIAS.includes(categoria)) {
-      fileStream.resume();
-      safeRespond(400, { error: 'Categoría inválida' });
-      return;
-    }
-    if (!nombre) {
-      fileStream.resume();
-      safeRespond(400, { error: 'El nombre es obligatorio' });
-      return;
-    }
-    const orden = ordenRaw !== '' && Number.isFinite(Number(ordenRaw))
-      ? parseInt(ordenRaw, 10)
-      : 0;
+      if (!DOCUMENTO_CATEGORIAS.includes(categoria)) {
+        fileStream.resume();
+        safeRespond(400, { error: 'Categoría inválida' });
+        return;
+      }
+      if (!nombre) {
+        fileStream.resume();
+        safeRespond(400, { error: 'El nombre es obligatorio' });
+        return;
+      }
+      const orden = ordenRaw !== '' && Number.isFinite(Number(ordenRaw))
+        ? parseInt(ordenRaw, 10)
+        : 0;
 
-    fileStream.on('limit', () => {
-      fileStream.resume();
-      safeRespond(413, {
-        error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
-      });
-    });
-
-    try {
-      const result = await uploadToGoogleDrive(
-        fileStream,
-        sanitizeDocFilename(rawFilename),
-        mimeType || 'application/pdf',
-        MAX_FILE_SIZE,
-      );
-
-      const documento = await prisma.documento.create({
-        data: {
-          organizationId: req.user!.organizationId,
-          categoria,
-          nombre,
-          descripcion: descripcion || null,
-          driveFileId: result.fileId,
-          driveFileUrl: result.webViewLink,
-          orden,
-          visible: true,
-        },
-        select: {
-          id: true,
-          categoria: true,
-          nombre: true,
-          descripcion: true,
-          driveFileUrl: true,
-          visible: true,
-          orden: true,
-        },
-      });
-
-      safeRespond(201, documento);
-    } catch (err: unknown) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code === 'FILE_TOO_LARGE') {
+      fileStream.on('limit', () => {
+        fileStream.resume();
         safeRespond(413, {
           error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
         });
-        return;
+      });
+
+      try {
+        const result = await uploadToGoogleDrive(
+          fileStream,
+          sanitizeDocFilename(rawFilename),
+          mimeType || 'application/pdf',
+          MAX_FILE_SIZE,
+        );
+
+        const documento = await prisma.documento.create({
+          data: {
+            organizationId: req.user!.organizationId,
+            categoria,
+            nombre,
+            descripcion: descripcion || null,
+            driveFileId: result.fileId,
+            driveFileUrl: result.webViewLink,
+            orden,
+            visible: true,
+          },
+          select: {
+            id: true,
+            categoria: true,
+            nombre: true,
+            descripcion: true,
+            driveFileUrl: true,
+            visible: true,
+            orden: true,
+          },
+        });
+
+        safeRespond(201, documento);
+      } catch (err: unknown) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === 'FILE_TOO_LARGE') {
+          safeRespond(413, {
+            error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
+          });
+          return;
+        }
+        console.error('[createDocumento] Error subiendo a Google Drive:', err);
+        safeRespond(500, { error: 'Error al subir el documento a Google Drive' });
       }
-      console.error('[createDocumento] Error subiendo a Google Drive:', err);
-      safeRespond(500, { error: 'Error al subir el documento a Google Drive' });
-    }
-  });
+    }),
+  );
 
   busboy.on('error', (err) => {
     console.error('[createDocumento] Busboy error:', err);

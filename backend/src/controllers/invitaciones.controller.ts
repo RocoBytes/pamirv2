@@ -16,6 +16,7 @@ import { invitacionesRepoPrisma } from '../services/invitaciones.repo.prisma.js'
 import { sendEmail as enviarCorreoGmail } from '../lib/google-gmail.js';
 import { buildInvitationEmail } from '../lib/email-templates.js';
 import { SALT_ROUNDS } from '../lib/auth-fields.js';
+import { runAsPlatform } from '../lib/tenant-context.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
@@ -111,7 +112,9 @@ export async function consultarInvitacion(req: Request, res: Response): Promise<
     return;
   }
   try {
-    const result = await consultarInvitacionService(deps, parsed.data);
+    // Público: el token identifica la invitación (y su club) por sí solo, sin
+    // sesión ni contexto de club previo — corre en contexto de plataforma.
+    const result = await runAsPlatform(() => consultarInvitacionService(deps, parsed.data));
     respond(res, result);
   } catch (error) {
     console.error('[consultarInvitacion]', error);
@@ -127,10 +130,14 @@ export async function aceptarInvitacion(req: Request, res: Response): Promise<vo
     return;
   }
   try {
-    const result = await aceptarInvitacionService(deps, parsedToken.data, {
-      name: req.body?.name,
-      password: req.body?.password,
-    });
+    // Público: el usuario nuevo hereda el organizationId de la invitación, no
+    // de ningún contexto previo — corre en contexto de plataforma.
+    const result = await runAsPlatform(() =>
+      aceptarInvitacionService(deps, parsedToken.data, {
+        name: req.body?.name,
+        password: req.body?.password,
+      }),
+    );
     respond(res, result);
   } catch (error) {
     console.error('[aceptarInvitacion]', error);

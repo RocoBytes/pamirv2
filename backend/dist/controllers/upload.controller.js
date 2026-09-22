@@ -2,6 +2,7 @@ import Busboy from 'busboy';
 import { uploadToGoogleDrive } from '../lib/google-drive.js';
 import { prisma } from '../lib/prisma.js';
 import { puedeGestionarSalida } from '../lib/authz.js';
+import { bindTenantContext } from '../lib/tenant-context.js';
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
 const ALLOWED_EXT = /\.gpx$/i;
 export const ALLOWED_PRONOSTICO_EXT_STRICT = /\.(pdf|jpg|jpeg|png)$/i;
@@ -66,7 +67,13 @@ export async function uploadGpx(req, res) {
             fileSize: MAX_FILE_SIZE,
         },
     });
-    busboy.on('file', async (_fieldname, fileStream, info) => {
+    // AsyncLocalStorage no propaga de forma confiable hacia los callbacks de
+    // eventos de busboy (problema conocido de Node/Express): sin este bind, el
+    // update de más abajo se ejecutaría sin contexto de club y lanzaría. Esto es
+    // obligatorio, no defensivo — bindTenantContext se crea ANTES de
+    // req.pipe(busboy), mientras todavía estamos dentro del contexto del
+    // request.
+    busboy.on('file', bindTenantContext(async (_fieldname, fileStream, info) => {
         const { filename: rawFilename, mimeType } = info;
         const filename = sanitizeGpxFilename(rawFilename);
         // Validar extensión
@@ -111,7 +118,7 @@ export async function uploadGpx(req, res) {
             console.error('[uploadGpx] Error subiendo a Google Drive:', err);
             safeRespond(500, { error: 'Error al subir el archivo a Google Drive' });
         }
-    });
+    }));
     busboy.on('error', (err) => {
         console.error('[uploadGpx] Busboy error:', err);
         safeRespond(500, { error: 'Error procesando el archivo' });
@@ -157,7 +164,10 @@ export async function uploadPronostico(req, res) {
             fileSize: MAX_FILE_SIZE,
         },
     });
-    busboy.on('file', async (_fieldname, fileStream, info) => {
+    // Obligatorio, no defensivo — ver el comentario equivalente en uploadGpx:
+    // el update de más abajo necesita el contexto de club capturado ANTES de
+    // req.pipe(busboy).
+    busboy.on('file', bindTenantContext(async (_fieldname, fileStream, info) => {
         const { filename: rawFilename, mimeType } = info;
         const filename = sanitizePronosticoFilename(rawFilename);
         if (!ALLOWED_PRONOSTICO_EXT_STRICT.test(rawFilename)) {
@@ -199,7 +209,7 @@ export async function uploadPronostico(req, res) {
             console.error('[uploadPronostico] Error subiendo a Google Drive:', err);
             safeRespond(500, { error: 'Error al subir el archivo a Google Drive' });
         }
-    });
+    }));
     busboy.on('error', (err) => {
         console.error('[uploadPronostico] Busboy error:', err);
         safeRespond(500, { error: 'Error procesando el archivo' });

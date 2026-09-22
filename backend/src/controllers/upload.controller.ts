@@ -3,6 +3,7 @@ import Busboy from 'busboy';
 import { uploadToGoogleDrive } from '../lib/google-drive.js';
 import { prisma } from '../lib/prisma.js';
 import { puedeGestionarSalida } from '../lib/authz.js';
+import { bindTenantContext } from '../lib/tenant-context.js';
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
 const ALLOWED_EXT = /\.gpx$/i;
@@ -77,63 +78,72 @@ export async function uploadGpx(req: Request, res: Response): Promise<void> {
     },
   });
 
-  busboy.on('file', async (_fieldname, fileStream, info) => {
-    const { filename: rawFilename, mimeType } = info;
-    const filename = sanitizeGpxFilename(rawFilename);
+  // AsyncLocalStorage no propaga de forma confiable hacia los callbacks de
+  // eventos de busboy (problema conocido de Node/Express): sin este bind, el
+  // update de más abajo se ejecutaría sin contexto de club y lanzaría. Esto es
+  // obligatorio, no defensivo — bindTenantContext se crea ANTES de
+  // req.pipe(busboy), mientras todavía estamos dentro del contexto del
+  // request.
+  busboy.on(
+    'file',
+    bindTenantContext(async (_fieldname, fileStream, info) => {
+      const { filename: rawFilename, mimeType } = info;
+      const filename = sanitizeGpxFilename(rawFilename);
 
-    // Validar extensión
-    if (!ALLOWED_EXT.test(rawFilename)) {
-      fileStream.resume(); // drenar para evitar backpressure
-      safeRespond(400, { error: 'Solo se permiten archivos .gpx' });
-      return;
-    }
-
-    // Busboy emite 'limit' en el fileStream si el archivo supera fileSize
-    fileStream.on('limit', () => {
-      fileStream.resume();
-      safeRespond(413, {
-        error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
-      });
-    });
-
-    try {
-      const result = await uploadToGoogleDrive(
-        fileStream,
-        filename,
-        mimeType || 'application/gpx+xml',
-        MAX_FILE_SIZE,
-      );
-
-      // Actualizar la salida con los datos del archivo en Drive
-      await prisma.salida.update({
-        where: { id: salidaId },
-        data: {
-          gpxFileId: result.fileId,
-          gpxFileName: result.fileName,
-          gpxFileUrl: result.webViewLink,
-        },
-      });
-
-      safeRespond(200, {
-        message: 'Archivo GPX subido exitosamente',
-        gpxFileId: result.fileId,
-        gpxFileName: result.fileName,
-        gpxFileUrl: result.webViewLink,
-      });
-    } catch (err: unknown) {
-      const code = (err as NodeJS.ErrnoException).code;
-
-      if (code === 'FILE_TOO_LARGE') {
-        safeRespond(413, {
-          error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
-        });
+      // Validar extensión
+      if (!ALLOWED_EXT.test(rawFilename)) {
+        fileStream.resume(); // drenar para evitar backpressure
+        safeRespond(400, { error: 'Solo se permiten archivos .gpx' });
         return;
       }
 
-      console.error('[uploadGpx] Error subiendo a Google Drive:', err);
-      safeRespond(500, { error: 'Error al subir el archivo a Google Drive' });
-    }
-  });
+      // Busboy emite 'limit' en el fileStream si el archivo supera fileSize
+      fileStream.on('limit', () => {
+        fileStream.resume();
+        safeRespond(413, {
+          error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
+        });
+      });
+
+      try {
+        const result = await uploadToGoogleDrive(
+          fileStream,
+          filename,
+          mimeType || 'application/gpx+xml',
+          MAX_FILE_SIZE,
+        );
+
+        // Actualizar la salida con los datos del archivo en Drive
+        await prisma.salida.update({
+          where: { id: salidaId },
+          data: {
+            gpxFileId: result.fileId,
+            gpxFileName: result.fileName,
+            gpxFileUrl: result.webViewLink,
+          },
+        });
+
+        safeRespond(200, {
+          message: 'Archivo GPX subido exitosamente',
+          gpxFileId: result.fileId,
+          gpxFileName: result.fileName,
+          gpxFileUrl: result.webViewLink,
+        });
+      } catch (err: unknown) {
+        const code = (err as NodeJS.ErrnoException).code;
+
+        if (code === 'FILE_TOO_LARGE') {
+          safeRespond(413, {
+            error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
+          });
+          return;
+        }
+
+        console.error('[uploadGpx] Error subiendo a Google Drive:', err);
+        safeRespond(500, { error: 'Error al subir el archivo a Google Drive' });
+      }
+    }),
+  );
 
   busboy.on('error', (err) => {
     console.error('[uploadGpx] Busboy error:', err);
@@ -187,58 +197,64 @@ export async function uploadPronostico(req: Request, res: Response): Promise<voi
     },
   });
 
-  busboy.on('file', async (_fieldname, fileStream, info) => {
-    const { filename: rawFilename, mimeType } = info;
-    const filename = sanitizePronosticoFilename(rawFilename);
+  // Obligatorio, no defensivo — ver el comentario equivalente en uploadGpx:
+  // el update de más abajo necesita el contexto de club capturado ANTES de
+  // req.pipe(busboy).
+  busboy.on(
+    'file',
+    bindTenantContext(async (_fieldname, fileStream, info) => {
+      const { filename: rawFilename, mimeType } = info;
+      const filename = sanitizePronosticoFilename(rawFilename);
 
-    if (!ALLOWED_PRONOSTICO_EXT_STRICT.test(rawFilename)) {
-      fileStream.resume();
-      safeRespond(400, { error: 'Solo se permiten archivos PDF, JPG o PNG' });
-      return;
-    }
+      if (!ALLOWED_PRONOSTICO_EXT_STRICT.test(rawFilename)) {
+        fileStream.resume();
+        safeRespond(400, { error: 'Solo se permiten archivos PDF, JPG o PNG' });
+        return;
+      }
 
-    fileStream.on('limit', () => {
-      fileStream.resume();
-      safeRespond(413, {
-        error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
-      });
-    });
-
-    try {
-      const result = await uploadToGoogleDrive(
-        fileStream,
-        filename,
-        mimeType || 'application/octet-stream',
-        MAX_FILE_SIZE,
-      );
-
-      await prisma.salida.update({
-        where: { id: salidaId },
-        data: {
-          pronosticoFileId: result.fileId,
-          pronosticoFileName: result.fileName,
-          pronosticoFileUrl: result.webViewLink,
-        },
-      });
-
-      safeRespond(200, {
-        message: 'Archivo de pronóstico subido exitosamente',
-        pronosticoFileId: result.fileId,
-        pronosticoFileName: result.fileName,
-        pronosticoFileUrl: result.webViewLink,
-      });
-    } catch (err: unknown) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code === 'FILE_TOO_LARGE') {
+      fileStream.on('limit', () => {
+        fileStream.resume();
         safeRespond(413, {
           error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
         });
-        return;
+      });
+
+      try {
+        const result = await uploadToGoogleDrive(
+          fileStream,
+          filename,
+          mimeType || 'application/octet-stream',
+          MAX_FILE_SIZE,
+        );
+
+        await prisma.salida.update({
+          where: { id: salidaId },
+          data: {
+            pronosticoFileId: result.fileId,
+            pronosticoFileName: result.fileName,
+            pronosticoFileUrl: result.webViewLink,
+          },
+        });
+
+        safeRespond(200, {
+          message: 'Archivo de pronóstico subido exitosamente',
+          pronosticoFileId: result.fileId,
+          pronosticoFileName: result.fileName,
+          pronosticoFileUrl: result.webViewLink,
+        });
+      } catch (err: unknown) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === 'FILE_TOO_LARGE') {
+          safeRespond(413, {
+            error: `El archivo supera el límite de ${MAX_FILE_SIZE / 1024 / 1024} MB`,
+          });
+          return;
+        }
+        console.error('[uploadPronostico] Error subiendo a Google Drive:', err);
+        safeRespond(500, { error: 'Error al subir el archivo a Google Drive' });
       }
-      console.error('[uploadPronostico] Error subiendo a Google Drive:', err);
-      safeRespond(500, { error: 'Error al subir el archivo a Google Drive' });
-    }
-  });
+    }),
+  );
 
   busboy.on('error', (err) => {
     console.error('[uploadPronostico] Busboy error:', err);

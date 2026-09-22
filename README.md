@@ -154,21 +154,97 @@ Gestión de usuarios (solo `ADMIN`, bajo `/api/admin`):
 
 ## Clubes (multi-tenant)
 
-La app nació para un solo club (Andino Club Pamir) y está migrando a servir
-varios. Cada tabla de negocio lleva una columna `organization_id` (modelo
-`Organization` en `backend/prisma/schema.prisma`, tabla `organizations`), y
-una prueba estática (`backend/src/lib/schema-organization.test.ts`) falla si
-se agrega un modelo nuevo sin ella. Una cuenta (`User.email`) pertenece a
-exactamente un club — no hay cuentas compartidas entre clubes. `numeroSalida`
-es un correlativo por club (no una secuencia global de Postgres): se asigna
-dentro de una transacción que incrementa `organizations.ultimo_numero_salida`.
-El CLI `db:create-user` acepta `--org <slug>` (por defecto `pamir`) para
-elegir el club del usuario a crear.
+La app nació para un solo club (Andino Club Pamir) y sirve varios. Cada tabla
+de negocio lleva una columna `organization_id` (modelo `Organization` en
+`backend/prisma/schema.prisma`, tabla `organizations`), y una prueba estática
+(`backend/src/lib/schema-organization.test.ts`) falla si se agrega un modelo
+nuevo sin ella. Una cuenta (`User.email`) pertenece a exactamente un club — no
+hay cuentas compartidas entre clubes. `numeroSalida` es un correlativo por
+club (no una secuencia global de Postgres): se asigna dentro de una
+transacción que incrementa `organizations.ultimo_numero_salida`. El CLI
+`db:create-user` acepta `--org <slug>` (por defecto `pamir`) para elegir el
+club del usuario a crear.
 
-Esta fase solo agrega el modelo de datos y hace viajar `organizationId` en
-cada escritura. El aislamiento real entre clubes (derivar la organización
-vigente de la sesión o, en flujos públicos por token, de la fila padre, y
-filtrar cada lectura) llega en la fase siguiente.
+Los clubes guardan datos MÉDICOS de sus socios, así que el aislamiento entre
+ellos es estricto y **falla cerrado**: cualquier consulta que no declare
+explícitamente su alcance se rechaza, en vez de arriesgarse a filtrar de más.
+
+### Cómo se aplica
+
+El aislamiento se enforza en un solo lugar, no en cada uno de los ~130 sitios
+de llamada `prisma.<modelo>.<operacion>` repartidos por controllers/services/
+scripts:
+
+- `backend/src/lib/tenant-context.ts` guarda, con `AsyncLocalStorage`, el
+  **contexto de tenant** vigente para la ejecución async actual (el request
+  completo, incluidas sus consultas anidadas y transacciones).
+- `backend/src/lib/scope-args.ts` es una función pura que, dado un modelo, una
+  operación de Prisma y el contexto vigente, decide los argumentos reales a
+  ejecutar — agrega `organizationId` al `where`/`data` que corresponda, o
+  lanza `TenantContextError` si algo no calza.
+- `backend/src/lib/prisma.ts` envuelve el cliente único de Prisma con
+  `$extends({ query: { $allModels: { $allOperations(...) } } })`, que llama a
+  `scopeArgs` antes de cada consulta. Aplica también dentro de
+  `prisma.$transaction(...)` (interactiva o en arreglo), porque el cliente
+  extendido se propaga a `tx`.
+
+Tres estados de contexto, nunca "ninguno" en una consulta real:
+
+1. **Contexto de club** (`runWithOrganization(organizationId, fn)`): toda
+   consulta a un modelo de tenant queda filtrada por ese `organizationId`, y
+   crear/mover una fila a otro club lanza.
+2. **Contexto de plataforma** (`runAsPlatform(fn)`): ve todos los clubes sin
+   filtrar. Reservado para los pocos flujos genuinamente cross-club: login,
+   verificación de email, recuperación de contraseña, consultar/aceptar una
+   invitación por token, resolver el token de una evaluación, el barrido del
+   cron de alarmas y los scripts de administración. ESLint (`no-restricted-
+   imports` en `eslint.config.mjs`) restringe el import de `runAsPlatform` a
+   esa lista corta de archivos — cualquier otro import falla el lint. La
+   lista se mantiene corta a propósito: cada archivo nuevo es una decisión
+   explícita y revisada, no un permiso heredado.
+3. **Sin contexto**: una consulta ejecutada fuera de ambos lanza siempre
+   (`store === undefined` es un bug, no un caso a tolerar).
+
+`Organization` es un caso aparte ("auto-alcanzado"): en contexto de club,
+cualquier operación sobre ella queda fijada a su propia fila
+(`where.id === organizationId`); `AppSecret` es el único modelo realmente
+global (sin club) y pasa sin filtrar en cualquier contexto.
+
+### Reglas que no se pueden saltar
+
+- **Busboy** (subida de `.gpx`, pronóstico, documentos y adjuntos de
+  itinerario): `AsyncLocalStorage` no propaga de forma confiable hacia los
+  callbacks de eventos de busboy (problema conocido de Node/Express). Los
+  cuatro sitios de subida capturan el contexto con `bindTenantContext(...)`
+  **antes** de `req.pipe(busboy)` y envuelven con él cada listener que toca la
+  base de datos. Esto es obligatorio, no defensivo.
+- **SQL crudo** (`$queryRaw`/`$executeRaw`): es invisible para la extensión
+  del cliente (no pasa por `$allOperations`), así que cada ocurrencia agrega
+  el filtro `organization_id = ...` a mano. Una prueba estática
+  (`backend/src/lib/raw-sql-guard.test.ts`) escanea el código fuente y falla
+  si aparece una ocurrencia nueva sin ese filtro.
+
+### Qué NO garantiza
+
+El aislamiento filtra la consulta de nivel superior de cada operación; una
+relación cargada con `include`/`select` anidado **no se vuelve a comprobar**.
+La seguridad depende de que cada FK (`salidaId`, `eventoId`, `usuarioId`,
+etc.) provenga siempre de una fila ya resuelta dentro del mismo contexto —
+nunca de un id que llegue crudo del cliente sin pasar antes por una consulta
+scopeada.
+
+### Verificarlo
+
+```bash
+cd backend
+npm run test:isolation
+```
+
+Corre contra la base de datos real de desarrollo (protegida por `db:guard`,
+igual que `db:push`/`db:migrate`), crea dos clubes efímeros con datos que
+colisionan a propósito (mismo RUT, mismo slug de categoría, mismo número de
+salida), verifica el aislamiento a nivel de base de datos y de HTTP, y borra
+todo lo que creó al terminar (incluso si algo falla a mitad de camino).
 
 ---
 

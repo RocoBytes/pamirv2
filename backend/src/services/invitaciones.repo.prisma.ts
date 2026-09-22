@@ -3,17 +3,27 @@
 // probar con un repositorio en memoria, sin tocar la base de datos.
 import { prisma } from '../lib/prisma.js';
 import { Prisma } from '../generated/prisma/client.js';
+import { runAsPlatform } from '../lib/tenant-context.js';
 import type {
   InvitacionesRepo,
   InvitacionConInvitador,
 } from './invitaciones.service.js';
 
 export const invitacionesRepoPrisma: InvitacionesRepo = {
+  // SIEMPRE en contexto de plataforma, sin importar el contexto del llamador:
+  // User.email es único en TODA la plataforma, no por club. Si esta consulta
+  // se dejara heredar el contexto de club ambiente (el del ADMIN/LIDER que
+  // invita), quedaría filtrada por organizationId y un correo que ya tiene
+  // cuenta en OTRO club pasaría la validación de "no existe" acá y fallaría
+  // recién más abajo, con un error de unique constraint en vez del 409 claro
+  // que espera el servicio.
   async findUserByEmail(email) {
-    return prisma.user.findUnique({
-      where: { email },
-      select: { id: true, email: true, name: true, rol: true },
-    });
+    return runAsPlatform(() =>
+      prisma.user.findUnique({
+        where: { email },
+        select: { id: true, email: true, name: true, rol: true },
+      }),
+    );
   },
 
   async findUserById(id) {

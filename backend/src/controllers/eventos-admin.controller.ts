@@ -12,6 +12,7 @@ import {
 } from '../lib/notificaciones.js';
 import { uploadToGoogleDrive, deleteFromGoogleDrive } from '../lib/google-drive.js';
 import { ALLOWED_PRONOSTICO_EXT_STRICT, sanitizePronosticoFilename } from './upload.controller.js';
+import { bindTenantContext, requireOrganizationId } from '../lib/tenant-context.js';
 
 // Itinerary attachment (PDF/JPG/PNG) size cap, streamed straight to Drive
 const MAX_ADJUNTO_BYTES = 15 * 1024 * 1024;
@@ -399,68 +400,74 @@ export async function uploadItinerarioAdjunto(req: Request, res: Response): Prom
 
   let fileSeen = false;
 
-  busboy.on('file', async (_fieldname, fileStream, info) => {
-    fileSeen = true;
-    const { filename: rawFilename, mimeType } = info;
+  // Obligatorio, no defensivo: AsyncLocalStorage no propaga de forma
+  // confiable hacia los callbacks de eventos de busboy. El update de más
+  // abajo necesita el contexto de club capturado ANTES de req.pipe(busboy).
+  busboy.on(
+    'file',
+    bindTenantContext(async (_fieldname, fileStream, info) => {
+      fileSeen = true;
+      const { filename: rawFilename, mimeType } = info;
 
-    if (!ALLOWED_PRONOSTICO_EXT_STRICT.test(rawFilename)) {
-      fileStream.resume();
-      safeRespond(400, { error: 'Solo se permiten archivos PDF, JPG o PNG' });
-      return;
-    }
-
-    fileStream.on('limit', () => {
-      fileStream.resume();
-      safeRespond(413, {
-        error: `El archivo supera el límite de ${MAX_ADJUNTO_BYTES / 1024 / 1024} MB`,
-      });
-    });
-
-    try {
-      const anteriorId = evento.itinerarioFileId;
-      const result = await uploadToGoogleDrive(
-        fileStream,
-        sanitizePronosticoFilename(rawFilename),
-        mimeType || 'application/octet-stream',
-        MAX_ADJUNTO_BYTES,
-      );
-
-      let actualizado;
-      try {
-        actualizado = await prisma.evento.update({
-          where: { id: evento.id },
-          data: {
-            itinerarioFileId: result.fileId,
-            itinerarioFileName: result.fileName,
-            itinerarioFileUrl: result.webViewLink,
-          },
-          include: { categoria: true },
-        });
-      } catch (err) {
-        // Do not leave the freshly uploaded file orphaned
-        await deleteFromGoogleDrive(result.fileId).catch(() => undefined);
-        throw err;
+      if (!ALLOWED_PRONOSTICO_EXT_STRICT.test(rawFilename)) {
+        fileStream.resume();
+        safeRespond(400, { error: 'Solo se permiten archivos PDF, JPG o PNG' });
+        return;
       }
 
-      safeRespond(200, actualizado);
-
-      if (anteriorId && anteriorId !== result.fileId) {
-        deleteFromGoogleDrive(anteriorId).catch((err) =>
-          console.error('[uploadItinerarioAdjunto] Could not delete previous attachment from Drive:', err),
-        );
-      }
-    } catch (err: unknown) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code === 'FILE_TOO_LARGE') {
+      fileStream.on('limit', () => {
+        fileStream.resume();
         safeRespond(413, {
           error: `El archivo supera el límite de ${MAX_ADJUNTO_BYTES / 1024 / 1024} MB`,
         });
-        return;
+      });
+
+      try {
+        const anteriorId = evento.itinerarioFileId;
+        const result = await uploadToGoogleDrive(
+          fileStream,
+          sanitizePronosticoFilename(rawFilename),
+          mimeType || 'application/octet-stream',
+          MAX_ADJUNTO_BYTES,
+        );
+
+        let actualizado;
+        try {
+          actualizado = await prisma.evento.update({
+            where: { id: evento.id },
+            data: {
+              itinerarioFileId: result.fileId,
+              itinerarioFileName: result.fileName,
+              itinerarioFileUrl: result.webViewLink,
+            },
+            include: { categoria: true },
+          });
+        } catch (err) {
+          // Do not leave the freshly uploaded file orphaned
+          await deleteFromGoogleDrive(result.fileId).catch(() => undefined);
+          throw err;
+        }
+
+        safeRespond(200, actualizado);
+
+        if (anteriorId && anteriorId !== result.fileId) {
+          deleteFromGoogleDrive(anteriorId).catch((err) =>
+            console.error('[uploadItinerarioAdjunto] Could not delete previous attachment from Drive:', err),
+          );
+        }
+      } catch (err: unknown) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === 'FILE_TOO_LARGE') {
+          safeRespond(413, {
+            error: `El archivo supera el límite de ${MAX_ADJUNTO_BYTES / 1024 / 1024} MB`,
+          });
+          return;
+        }
+        console.error('[uploadItinerarioAdjunto] Error subiendo a Google Drive:', err);
+        safeRespond(500, { error: 'Error al subir el adjunto a Google Drive' });
       }
-      console.error('[uploadItinerarioAdjunto] Error subiendo a Google Drive:', err);
-      safeRespond(500, { error: 'Error al subir el adjunto a Google Drive' });
-    }
-  });
+    }),
+  );
 
   busboy.on('error', (err) => {
     console.error('[uploadItinerarioAdjunto] Busboy error:', err);
@@ -797,10 +804,13 @@ export async function finalizarEvento(req: Request, res: Response): Promise<void
 
     const resultado = await prisma.$transaction(
       async (tx) => {
-        // F1: FOR UPDATE serializa finalizaciones concurrentes sobre el evento
+        // F1: FOR UPDATE serializa finalizaciones concurrentes sobre el evento.
+        // El SQL crudo es invisible para la extensión de aislamiento de
+        // lib/prisma.ts (no pasa por $allOperations), así que el filtro por
+        // club se agrega acá a mano, parametrizado.
         const filas = await tx.$queryRaw<{ id: string; cupos: number | null }[]>`
           SELECT id, cupos FROM "eventos"
-          WHERE id = ${id} AND estado = 'PUBLICADO'::"EstadoEvento"
+          WHERE id = ${id} AND estado = 'PUBLICADO'::"EstadoEvento" AND organization_id = ${requireOrganizationId()}
           FOR UPDATE`;
         if (filas.length === 0) {
           throw new HttpError(409, 'El evento ya fue finalizado o cancelado');

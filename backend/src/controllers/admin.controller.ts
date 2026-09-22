@@ -10,6 +10,7 @@ import {
   guardarRefreshToken,
   probarRefreshToken,
 } from '../lib/google-credentials.js';
+import { requireOrganizationId } from '../lib/tenant-context.js';
 
 interface MesRow {
   // DATE_TRUNC returns timestamp-without-tz; some driver versions deliver
@@ -39,10 +40,13 @@ export async function getStats(_req: Request, res: Response): Promise<void> {
       // Timezone contract: fecha_inicio is stored as midnight UTC of the
       // user's intended calendar date, so UTC DATE_TRUNC yields the intended
       // month directly — converting with AT TIME ZONE would shift it wrong.
+      // El SQL crudo es invisible para la extensión de aislamiento de
+      // lib/prisma.ts (no pasa por $allOperations), así que el filtro por
+      // club se agrega acá a mano, parametrizado.
       prisma.$queryRaw<MesRow[]>`
         SELECT DATE_TRUNC('month', fecha_inicio) AS mes, COUNT(*) AS total
         FROM "salidas"
-        WHERE fecha_inicio >= NOW() - INTERVAL '12 months'
+        WHERE fecha_inicio >= NOW() - INTERVAL '12 months' AND organization_id = ${requireOrganizationId()}
         GROUP BY mes
         ORDER BY mes DESC
       `,

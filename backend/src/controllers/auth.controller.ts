@@ -7,6 +7,8 @@ import { signToken } from '../lib/jwt.js';
 import { sendEmail } from '../lib/google-gmail.js';
 import { buildPasswordResetEmail } from '../lib/email-templates.js';
 import { emailField, passwordField, SALT_ROUNDS } from '../lib/auth-fields.js';
+import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
+import { isOrganizationSuspended, CLUB_SUSPENDIDO_MENSAJE } from '../lib/organization-status.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
@@ -20,19 +22,23 @@ export async function verifyEmail(req: Request, res: Response): Promise<void> {
   const token = req.params['token'] as string;
 
   try {
-    const user = await prisma.user.findUnique({ where: { verificationToken: token } });
+    // El token de verificación identifica la cuenta por sí solo (todavía no se
+    // sabe a qué club pertenece), así que este flujo corre en contexto de plataforma.
+    await runAsPlatform(async () => {
+      const user = await prisma.user.findUnique({ where: { verificationToken: token } });
 
-    if (!user || !user.verificationTokenExpiry || user.verificationTokenExpiry < new Date()) {
-      res.redirect(`${FRONTEND_URL}?verified=error`);
-      return;
-    }
+      if (!user || !user.verificationTokenExpiry || user.verificationTokenExpiry < new Date()) {
+        res.redirect(`${FRONTEND_URL}?verified=error`);
+        return;
+      }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { emailVerified: true, verificationToken: null, verificationTokenExpiry: null },
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true, verificationToken: null, verificationTokenExpiry: null },
+      });
+
+      res.redirect(`${FRONTEND_URL}?verified=1`);
     });
-
-    res.redirect(`${FRONTEND_URL}?verified=1`);
   } catch (error) {
     console.error('[verifyEmail]', error);
     res.redirect(`${FRONTEND_URL}?verified=error`);
@@ -51,7 +57,14 @@ export async function login(req: Request, res: Response): Promise<void> {
   const normalizedEmail = email.toLowerCase();
 
   try {
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    // El email es único en toda la plataforma (todavía no se sabe a qué club
+    // pertenece la cuenta), así que la búsqueda corre en contexto de plataforma.
+    const user = await runAsPlatform(() =>
+      prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        include: { organization: { select: { status: true } } },
+      }),
+    );
 
     if (!user || !user.passwordHash) {
       res.status(401).json({ error: 'Email o contraseña incorrectos' });
@@ -69,8 +82,15 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    if (isOrganizationSuspended(user.organization.status)) {
+      res.status(403).json({ error: CLUB_SUSPENDIDO_MENSAJE });
+      return;
+    }
+
     const token = signToken({ userId: user.id, email: user.email });
-    const gestorCategorias = await gestorCategoriasDe(user.id);
+    // gestorCategoriasDe consulta un modelo de tenant (GestorCategoria): corre
+    // ya dentro del contexto del club del usuario autenticado.
+    const gestorCategorias = await runWithOrganization(user.organizationId, () => gestorCategoriasDe(user.id));
 
     res.json({
       token,
@@ -127,14 +147,21 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
   const normalizedEmail = email.toLowerCase();
 
   try {
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    // El email es único en toda la plataforma, así que este flujo corre en
+    // contexto de plataforma. El envío del correo también se dispara ACÁ
+    // adentro (aunque sea fire-and-forget): sendEmail termina leyendo la
+    // credencial de Google (AppSecret) por debajo, y esa lectura también
+    // exige un contexto de tenant activo — si se disparara después de salir
+    // de runAsPlatform, en una ruta pública como esta no quedaría ninguno.
+    await runAsPlatform(async () => {
+      const found = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+      if (!found) return;
 
-    if (user) {
       const resetToken = randomUUID();
       const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
 
       await prisma.user.update({
-        where: { id: user.id },
+        where: { id: found.id },
         data: { resetToken, resetTokenExpiry },
       });
 
@@ -142,9 +169,9 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
       sendEmail(
         normalizedEmail,
         'Restablece tu contraseña — Pamir',
-        buildPasswordResetEmail(user.name, resetUrl),
+        buildPasswordResetEmail(found.name, resetUrl),
       ).catch((err) => console.error('[forgotPassword] email error:', err));
-    }
+    });
 
     // Siempre responder 200 para no revelar si el email existe
     res.json({ message: 'Si el email está registrado, recibirás un enlace para restablecer tu contraseña.' });
@@ -165,28 +192,38 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
   const { token, password } = parsed.data;
 
   try {
-    const user = await prisma.user.findUnique({ where: { resetToken: token } });
+    // El token de restablecimiento identifica la cuenta por sí solo, así que
+    // este flujo corre en contexto de plataforma.
+    const ok = await runAsPlatform(async () => {
+      const user = await prisma.user.findUnique({ where: { resetToken: token } });
 
-    if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
+      if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
+        return false;
+      }
+
+      const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+      // El enlace de restablecimiento se envió a esa casilla de correo, lo que
+      // prueba su titularidad: se aprovecha para verificar el email también.
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash,
+          resetToken: null,
+          resetTokenExpiry: null,
+          emailVerified: true,
+          verificationToken: null,
+          verificationTokenExpiry: null,
+        },
+      });
+
+      return true;
+    });
+
+    if (!ok) {
       res.status(400).json({ error: 'El enlace de restablecimiento es inválido o ha expirado' });
       return;
     }
-
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-
-    // El enlace de restablecimiento se envió a esa casilla de correo, lo que
-    // prueba su titularidad: se aprovecha para verificar el email también.
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash,
-        resetToken: null,
-        resetTokenExpiry: null,
-        emailVerified: true,
-        verificationToken: null,
-        verificationTokenExpiry: null,
-      },
-    });
 
     res.json({ message: 'Contraseña actualizada correctamente. Ahora puedes iniciar sesión.' });
   } catch (error) {
