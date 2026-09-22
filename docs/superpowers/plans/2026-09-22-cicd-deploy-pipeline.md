@@ -61,7 +61,17 @@ Build the current image and probe it with three different `Host` headers.
 ```bash
 cd frontend
 docker build -t pamir-frontend:hosttest .
-docker run -d --rm --name pamir-hosttest -p 8088:80 pamir-frontend:hosttest
+
+# This image cannot boot standalone as-is: nginx resolves the `backend`
+# upstream and loads the TLS certs at startup, and neither exists outside
+# the compose network. Stub both. Nothing here is committed.
+CERTS=$(mktemp -d)
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+  -keyout "$CERTS/origin.key" -out "$CERTS/origin.pem" -subj "/CN=localhost" 2>/dev/null
+
+docker run -d --rm --name pamir-hosttest -p 8088:80 \
+  --add-host=backend:127.0.0.1 -v "$CERTS:/etc/nginx/certs:ro" \
+  pamir-frontend:hosttest
 sleep 2
 
 echo "--- Host: andinoclubpamir.app (expect 301 to https)"
@@ -121,7 +131,9 @@ Leave both existing `server` blocks exactly as they are. They keep their explici
 cd frontend
 docker rm -f pamir-hosttest
 docker build -t pamir-frontend:hosttest .
-docker run -d --rm --name pamir-hosttest -p 8088:80 pamir-frontend:hosttest
+docker run -d --rm --name pamir-hosttest -p 8088:80 \
+  --add-host=backend:127.0.0.1 -v "$CERTS:/etc/nginx/certs:ro" \
+  pamir-frontend:hosttest
 sleep 2
 ```
 
