@@ -261,7 +261,14 @@ git commit -m "build(deploy): pin container images to an explicit tag"
 - [ ] **Step 1: Confirm nothing references the blueprint**
 
 ```bash
-grep -rn "render.yaml\|render\.com\|RENDER" --include="*.ts" --include="*.tsx" --include="*.json" --include="*.yml" --include="*.md" . | grep -v node_modules | grep -v backend/dist
+# The extension filters must cover the two files this task touches:
+# render.yaml is .yaml (not .yml) and .env.example matches neither.
+# Search for `process.env.RENDER` rather than a bare RENDER, which also
+# matches the Spanish word RENDERIZA in the frontend.
+grep -rn "render\.yaml\|render\.com\|process\.env\.RENDER" \
+  --include="*.ts" --include="*.tsx" --include="*.json" \
+  --include="*.yml" --include="*.yaml" --include="*.md" --include="*.example" . \
+  | grep -v node_modules | grep -v backend/dist
 ```
 
 Expected: matches only in `render.yaml` itself, in `backend/.env.example`, and in prose inside `README.md`. If any TypeScript file reads a `RENDER*` environment variable, stop and report it — that would mean the retirement is incomplete and is outside this task's scope.
