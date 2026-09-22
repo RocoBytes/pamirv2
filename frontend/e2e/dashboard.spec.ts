@@ -43,13 +43,15 @@ test.describe('Dashboard – estado bloqueado (sin integrante)', () => {
   test('el botón Completar de la alerta navega al formulario de integrante', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Completar', exact: true }).click()
-    await expect(page.getByText('Información Personal y de Contacto')).toBeVisible()
+    // El título del paso 1 aparece SOLO en su encabezado — el indicador de
+    // progreso de arriba solo dice "Paso 1 de 4" (ver RegistroIntegrante.tsx).
+    await expect(page.getByRole('heading', { name: 'Información Personal y de Contacto' })).toBeVisible()
   })
 
   test('el botón Completar mi Ficha navega al formulario de integrante', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: /Completar mi Ficha/i }).click()
-    await expect(page.getByText('Información Personal y de Contacto')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Información Personal y de Contacto' })).toBeVisible()
   })
 })
 

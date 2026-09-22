@@ -3,6 +3,7 @@ import { sendClubEmail } from '../lib/email/club-email.js';
 import { buildConfirmationEmail, brandingFor } from '../lib/email-templates.js';
 import { subjectConfirmacionRegistro } from '../lib/email/subjects.js';
 import { isAdmin } from '../lib/authz.js';
+import { membresiaParaNuevaFicha } from '../lib/integrante-membresia.js';
 // POST /api/integrantes
 export async function createIntegrante(req, res) {
     try {
@@ -19,6 +20,7 @@ export async function createIntegrante(req, res) {
             res.status(409).json({ error: 'Ya existe un integrante registrado con ese RUT' });
             return;
         }
+        const { membresiaClub, nombreClub } = membresiaParaNuevaFicha({ organization: req.user.organization });
         const integrante = await prisma.integrante.create({
             data: {
                 organizationId,
@@ -47,8 +49,8 @@ export async function createIntegrante(req, res) {
                 cirugiasLesionesDetalle: data.cirugiasLesionesDetalle ?? null,
                 fuma: data.fuma,
                 usaLentes: data.usaLentes,
-                membresiaClub: data.membresiaClub,
-                nombreClub: data.nombreClub ?? null,
+                membresiaClub,
+                nombreClub,
                 declaracionSalud: data.declaracionSalud,
                 aceptacionRiesgo: data.aceptacionRiesgo,
                 consentimientoDatos: data.consentimientoDatos,

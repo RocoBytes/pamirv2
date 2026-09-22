@@ -267,6 +267,16 @@ ahí en vez de volver a consultar `Organization`.
   (`backend/src/lib/documentos-access.ts`). Dos personas con la misma
   afiliación de socio pueden obtener resultados distintos si consultan desde
   clubes distintos.
+- **Wizard de registro y membresía asignada por el servidor** (`POST
+  /api/integrantes`): el formulario `RegistroIntegrante` (un wizard de 4
+  pasos — ver "Frontend: branding y sesión por club" abajo) ya no pregunta a
+  qué club dice pertenecer quien se registra; el servidor asigna siempre
+  `membresiaClub = req.user.organization.membresiaPropia` y `nombreClub:
+  null`, e ignora cualquier valor que el body traiga para esos dos campos —
+  incluido un frontend cacheado viejo o un cliente que intente enviar la
+  membresía de otro club (`backend/src/lib/integrante-membresia.ts`,
+  `membresiaParaNuevaFicha`). Toda ficha nueva es socia del club donde se
+  crea, sin excepción.
 - **Fichas de salud entre clubes**: comportamiento deliberado, no un bug. Tras
   el aislamiento, un participante cuya ficha de `Integrante` vive en OTRO club
   simplemente no existe acá: el resumen de salud de una salida y el correo
@@ -308,11 +318,15 @@ que además expone valores ya listos para pintar (`displayName`, `shortName`,
   (`pamir_integrantes`); usuario distinto → los purga antes de escribir la
   sesión nueva. Cerrar sesión NO purga nada a propósito: recargar en la
   montaña sin señal no debe perder la ficha en curso.
-- **Las listas de membresía siguen siendo dato cruzado entre clubes**: las
-  opciones de `RegistroIntegrante`/`Step3Equipment` (`Socio Andino Club
-  Pamir`, `Socio Club El Montañista`, …) describen a QUÉ CLUB dice pertenecer
-  una persona, y un socio de un club puede participar en una salida de otro —
-  eso no es branding del tenant y no se toca.
+- **`RegistroIntegrante` ya no pregunta a qué club pertenece la persona**: la
+  ficha pertenece al club donde se crea, así que el servidor asigna siempre su
+  `membresiaPropia` (`nombreClub: null`) — ver "Wizard de registro y membresía
+  asignada por el servidor" más abajo. **La lista de membresía de
+  `Step3Equipment` sigue siendo dato cruzado entre clubes**: sus opciones
+  (`Socio Andino Club Pamir`, `Socio Club El Montañista`, …) describen a QUÉ
+  CLUB dice pertenecer un PARTICIPANTE de una salida (un socio de un club
+  puede participar en la salida de otro) — eso no es branding del tenant y no
+  se toca.
 
 ### Alta y administración de clubes (CLI `tenant`)
 
@@ -369,8 +383,10 @@ que `tenant:create` lo comprueba a mano y rechaza un código ya usado por otro
 club: dos clubes con la misma membresía propia leerían la biblioteca de
 documentos del otro (ver `lib/documentos-access.ts` más arriba). Dar de alta
 un **tercer club** requiere agregar su código en `MEMBRESIAS_PROPIAS` (además
-de en las listas del formulario de socios y del filtro de administración del
-frontend) antes de poder crearlo.
+de las etiquetas `CLUB_BADGE_LABELS`/`CLUB_FILTER_LABELS` en
+`frontend/src/types/salida.ts`, que usan las insignias y el filtro "Club" de
+administración) antes de poder crearlo — el formulario de registro
+(`RegistroIntegrante`) ya no lista clubes, así que no hay que tocarlo.
 
 **Slugs reservados** (rechazados por `tenant:create`/`suspend`/`activate`/
 `invite`, no por el servicio en sí): cualquiera que empiece con `iso-test-`

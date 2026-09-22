@@ -762,6 +762,74 @@ async function runHttpChecks(baseUrl, seedA, seedB) {
         const body = res.body;
         assert.equal(body.invitaciones.some((i) => i.email === email), false);
     });
+    // ─── Puente multi-club: la membresía de una ficha nueva la decide el servidor ──
+    // El formulario de registro ya no pregunta a qué club dice pertenecer la
+    // persona (esa pregunta se eliminó): toda ficha nueva es socia del club
+    // donde se crea, y el body puede traer membresiaClub/nombreClub de un
+    // frontend cacheado o de un cliente malicioso — el servidor debe ignorarlos
+    // siempre (ver membresiaParaNuevaFicha en lib/integrante-membresia.ts).
+    await check('POST /api/integrantes — la membresía de una ficha nueva es SIEMPRE la propia del club, aunque el body envíe la de otro', async () => {
+        const fichaPayload = (rut, email) => ({
+            nombreCompleto: 'Puente Multi-Club',
+            rut,
+            nacionalidad: 'Chilena',
+            genero: 'OTRO',
+            fechaNacimiento: '1990-01-01',
+            direccion: 'Calle Falsa 789',
+            comuna: 'Santiago',
+            region: 'Metropolitana',
+            telefonoCelular: '+56900000004',
+            email,
+            previsionSalud: 'FONASA',
+            nombreContacto: 'Contacto Emergencia',
+            parentesco: 'Hermano',
+            telefonoContacto: '+56900000005',
+            grupoSanguineo: 'O+',
+            alergiasTiene: false,
+            enfermedadesCronicasTiene: false,
+            medicamentosTiene: false,
+            cirugiasLesionesTiene: false,
+            fuma: false,
+            usaLentes: false,
+            declaracionSalud: true,
+            aceptacionRiesgo: true,
+            consentimientoDatos: true,
+            derechoImagen: true,
+        });
+        // Literales distintos de SHARED_RUT/SOCIO_RUT (arriba): no colisionan con
+        // ninguna otra ficha sembrada en A o B durante esta corrida.
+        const rutA = '33.333.333-3';
+        const rutB = '44.444.444-4';
+        const emailA = `bridge-ficha-a-${RANDOM_SUFFIX}@iso-test.local`;
+        const emailB = `bridge-ficha-b-${RANDOM_SUFFIX}@iso-test.local`;
+        // Club A: el body pide la membresía y el nombre de club de B — debe quedar
+        // con la propia de A y nombreClub null.
+        const creadaA = await postJsonAuth(baseUrl, tokenA, '/api/integrantes', {
+            ...fichaPayload(rutA, emailA),
+            membresiaClub: MEMBRESIA_B,
+            nombreClub: 'Club Ajeno',
+        });
+        assert.equal(creadaA.status, 201);
+        // Club B: mismo intento, en sentido inverso.
+        const creadaB = await postJsonAuth(baseUrl, tokenB, '/api/integrantes', {
+            ...fichaPayload(rutB, emailB),
+            membresiaClub: MEMBRESIA_A,
+            nombreClub: 'Otro Club',
+        });
+        assert.equal(creadaB.status, 201);
+        const [resA, resB] = await Promise.all([
+            getJson(baseUrl, tokenA, `/api/integrantes/by-rut/${encodeURIComponent(rutA)}`),
+            getJson(baseUrl, tokenB, `/api/integrantes/by-rut/${encodeURIComponent(rutB)}`),
+        ]);
+        assert.equal(resA.status, 200);
+        assert.equal(resB.status, 200);
+        const fichaA = resA.body;
+        const fichaB = resB.body;
+        assert.equal(fichaA.membresiaClub, MEMBRESIA_A);
+        assert.equal(fichaA.nombreClub, null);
+        assert.equal(fichaB.membresiaClub, MEMBRESIA_B);
+        assert.equal(fichaB.nombreClub, null);
+    });
     await check('suspender el club B: su token pasa a 403 y el club A sigue en 200', async () => {
         await runAsPlatform(() => prisma.organization.update({ where: { id: seedB.organizationId }, data: { status: 'SUSPENDED' } }));
         const [resA, resB] = await Promise.all([getJson(baseUrl, tokenA, '/api/salidas'), getJson(baseUrl, tokenB, '/api/salidas')]);

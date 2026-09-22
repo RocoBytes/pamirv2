@@ -4,7 +4,12 @@ import { sendClubEmail } from '../lib/email/club-email.js';
 import { buildConfirmationEmail, brandingFor } from '../lib/email-templates.js';
 import { subjectConfirmacionRegistro } from '../lib/email/subjects.js';
 import { isAdmin } from '../lib/authz.js';
+import { membresiaParaNuevaFicha } from '../lib/integrante-membresia.js';
 
+// membresiaClub/nombreClub NO son parte del contrato de entrada: el
+// formulario de registro pertenece al club donde se crea, así que el
+// servidor decide la membresía (ver membresiaParaNuevaFicha) y nunca lee esos
+// campos del body, aunque un frontend cacheado viejo todavía los envíe.
 interface CreateIntegranteBody {
   nombreCompleto: string;
   rut: string;
@@ -31,8 +36,6 @@ interface CreateIntegranteBody {
   cirugiasLesionesDetalle?: string;
   fuma: boolean;
   usaLentes: boolean;
-  membresiaClub: string;
-  nombreClub?: string;
   declaracionSalud: boolean;
   aceptacionRiesgo: boolean;
   consentimientoDatos: boolean;
@@ -58,6 +61,8 @@ export async function createIntegrante(req: Request, res: Response): Promise<voi
       res.status(409).json({ error: 'Ya existe un integrante registrado con ese RUT' });
       return;
     }
+
+    const { membresiaClub, nombreClub } = membresiaParaNuevaFicha({ organization: req.user!.organization });
 
     const integrante = await prisma.integrante.create({
       data: {
@@ -87,8 +92,8 @@ export async function createIntegrante(req: Request, res: Response): Promise<voi
         cirugiasLesionesDetalle: data.cirugiasLesionesDetalle ?? null,
         fuma: data.fuma,
         usaLentes: data.usaLentes,
-        membresiaClub: data.membresiaClub,
-        nombreClub: data.nombreClub ?? null,
+        membresiaClub,
+        nombreClub,
         declaracionSalud: data.declaracionSalud,
         aceptacionRiesgo: data.aceptacionRiesgo,
         consentimientoDatos: data.consentimientoDatos,

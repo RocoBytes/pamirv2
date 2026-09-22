@@ -102,15 +102,16 @@ async function mockMontanistaScreens(page: Page) {
 }
 
 // ─── Invariante: nada de Pamir se filtra a la sesión de otro club ────────────
-// EXCEPCIÓN DOCUMENTADA: las listas de opciones de membresía (el filtro "Club"
-// de AdminDashboard y el selector de RegistroIntegrante) ofrecen legítimamente
-// "Socio Andino Club Pamir" como afiliación de una PERSONA — es dato cruzado
-// entre clubes, no branding del tenant (ver el comentario junto a cada uno en
-// el código fuente). Ambos llevan `data-cross-club-options="true"` en su
-// contenedor: este helper los quita del DOM antes de leer el texto, así que
-// el barrido queda acotado a esa excepción exacta y a nada más. Si algún día
-// se agrega una lista nueva de este tipo sin el atributo, este test debe
-// fallar y forzar a marcarla explícitamente en vez de excluirla en silencio.
+// EXCEPCIÓN DOCUMENTADA: el filtro "Club" de AdminDashboard ofrece
+// legítimamente "Socio Andino Club Pamir" como afiliación de un PARTICIPANTE
+// — es dato cruzado entre clubes, no branding del tenant (ver el comentario
+// junto a él en el código fuente). Lleva `data-cross-club-options="true"` en
+// su contenedor: este helper lo quita del DOM antes de leer el texto, así que
+// el barrido queda acotado a esa excepción exacta y a nada más. RegistroIntegrante
+// ya NO tiene esta excepción: el formulario pertenece al club donde se crea la
+// ficha y el servidor asigna su membresía, así que dejó de listar clubes. Si
+// algún día se agrega una lista nueva de este tipo sin el atributo, este test
+// debe fallar y forzar a marcarla explícitamente en vez de excluirla en silencio.
 async function expectNoPamirLeak(page: Page) {
   const bodyText = await page.evaluate(() => {
     // Muta el DOM vivo (no un clon: innerText en un nodo desconectado no

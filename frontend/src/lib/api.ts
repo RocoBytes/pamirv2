@@ -202,6 +202,10 @@ export async function uploadPronostico(salidaId: string, file: File): Promise<Pr
 
 // ─── Integrantes ─────────────────────────────────────────────────────────────
 
+// membresiaClub/nombreClub NO van en este payload: el servidor asigna
+// siempre la membresía propia del club donde se crea la ficha (ver
+// membresiaParaNuevaFicha en backend/src/lib/integrante-membresia.ts) — el
+// formulario de registro ya no pregunta a qué club pertenece la persona.
 export interface CreateIntegrantePayload {
   nombreCompleto: string
   rut: string
@@ -228,8 +232,6 @@ export interface CreateIntegrantePayload {
   cirugiasLesionesDetalle?: string
   fuma: boolean
   usaLentes: boolean
-  membresiaClub: string
-  nombreClub?: string
   declaracionSalud: boolean
   aceptacionRiesgo: boolean
   consentimientoDatos: boolean

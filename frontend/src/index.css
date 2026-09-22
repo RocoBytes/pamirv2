@@ -12,4 +12,18 @@
   --color-neutral-light: #f0f4fb;
   --color-bg: #f0f4fb;
   --font-family-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  /* Transición de paso del wizard de RegistroIntegrante (motion-safe:animate-step-in):
+     solo opacidad/transform, 200ms — motion-reduce la deshabilita automáticamente. */
+  --animate-step-in: step-in 200ms ease-out;
+}
+
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
