@@ -275,6 +275,45 @@ ahí en vez de volver a consultar `Organization`.
   agregarlo como participante express o pedirle que complete su propia ficha
   en ese club. Los datos médicos nunca se comparten entre clubes.
 
+### Frontend: branding y sesión por club
+
+El frontend nunca hardcodea el nombre o el logo de un club. `login`/`GET
+/api/me` devuelven `user.organization` (`id`, `slug`, `name`, `shortName`,
+`membresiaPropia`); `App.tsx` lo pasa a `OrganizationProvider`
+(`frontend/src/contexts/OrganizationContext.tsx`), y cualquier componente lo
+lee con el hook `useOrganization()` (`frontend/src/hooks/useOrganization.ts`),
+que además expone valores ya listos para pintar (`displayName`, `shortName`,
+`memberBadge`, `logoSrc`) calculados por los helpers puros de
+`frontend/src/lib/club-brand.ts`.
+
+- **Logos**: cada club sirve el suyo en `frontend/public/logos/<slug>.png` —
+  agregar uno nuevo es subir ese único archivo, sin tocar código.
+  `frontend/public/logos/_default.svg` es el logo neutral: se usa mientras no
+  se conoce el club (pre-login) y cae ahí automáticamente si el PNG del club
+  no existe (`ClubLogo`, componente en `frontend/src/components/ClubLogo.tsx`,
+  cambia el `src` una sola vez ante un error de carga — nunca queda pegado en
+  un bucle ni muestra el logo de otro club).
+- **Pantallas sin sesión**: el login es neutral por diseño (nunca se sabe a
+  qué club pertenece quien mira la pantalla antes de autenticar). Aceptar una
+  invitación y la evaluación express sí muestran marca — la del club que la
+  API resuelve para ESE token (`organization` en la respuesta de `POST
+  /api/auth/invitaciones/consultar` y de `GET /api/evaluaciones/:token`), no
+  la de la sesión.
+- **Borradores por usuario, no por navegador**: `frontend/src/lib/storage.ts`
+  guarda `pamir_owner` (el id del último usuario autenticado en ese
+  navegador) y lo compara en cada inicio de sesión (`establishSession`,
+  llamada desde `login`, el refresco de `/me` al montar la app, y el login
+  automático tras aceptar una invitación). Mismo usuario → conserva el
+  borrador de salida (`pamir_draft`) y la caché de integrantes
+  (`pamir_integrantes`); usuario distinto → los purga antes de escribir la
+  sesión nueva. Cerrar sesión NO purga nada a propósito: recargar en la
+  montaña sin señal no debe perder la ficha en curso.
+- **Las listas de membresía siguen siendo dato cruzado entre clubes**: las
+  opciones de `RegistroIntegrante`/`Step3Equipment` (`Socio Andino Club
+  Pamir`, `Socio Club El Montañista`, …) describen a QUÉ CLUB dice pertenecer
+  una persona, y un socio de un club puede participar en una salida de otro —
+  eso no es branding del tenant y no se toca.
+
 ### Alta y administración de clubes (CLI `tenant`)
 
 Dar de alta un club nuevo es más que una fila de `Organization`: sin

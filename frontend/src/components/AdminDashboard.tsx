@@ -7,8 +7,9 @@ import {
   Filter,
   LayoutDashboard,
 } from 'lucide-react'
-import logoPamir from '../assets/logo_PAMIR.png'
+import { useOrganization } from '../hooks/useOrganization'
 import { Button } from './ui/Button'
+import { ClubLogo } from './ClubLogo'
 import { Select } from './ui/Select'
 import { fetchAdminDashboard } from '../lib/api'
 import type { AdminDashboard as AdminDashboardData, DashboardFiltros } from '../lib/api'
@@ -40,6 +41,7 @@ type StringFilterKey =
   | 'club'
 
 export function AdminDashboard({ onBack }: AdminDashboardProps) {
+  const { shortName } = useOrganization()
   const [filtros, setFiltros] = useState<DashboardFiltros>({})
   const [data, setData] = useState<AdminDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -104,8 +106,8 @@ export function AdminDashboard({ onBack }: AdminDashboardProps) {
       <header className="bg-white border-b border-[#4a6fad]/10 sticky top-0 z-10 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src={logoPamir} alt="Pamir Andino Club" className="w-11 h-11 object-contain" />
-            <span className="font-bold text-slate-900 text-lg">Pamir</span>
+            <ClubLogo alt="" className="w-11 h-11 object-contain" />
+            <span className="font-bold text-slate-900 text-lg">{shortName}</span>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => void load(filtros)} disabled={loading}>
@@ -191,15 +193,22 @@ export function AdminDashboard({ onBack }: AdminDashboardProps) {
               ]}
             />
 
-            <Select
-              label="Club"
-              value={filtros.club ?? ''}
-              onChange={(e) => setFiltro('club', e.target.value)}
-              options={[
-                { value: '', label: 'Todos' },
-                ...Object.entries(CLUB_FILTER_LABELS).map(([value, label]) => ({ value, label })),
-              ]}
-            />
+            {/* data-cross-club-options: filtro por la membresía de un PARTICIPANTE
+                (a qué club dice pertenecer), no branding del club que consulta —
+                lista legítimamente cruzada entre clubes. El marcador deja que un
+                e2e de branding la excluda del barrido de "ningún texto de otro
+                club" sin tocar sus datos (ver e2e/branding.spec.ts). */}
+            <div data-cross-club-options="true">
+              <Select
+                label="Club"
+                value={filtros.club ?? ''}
+                onChange={(e) => setFiltro('club', e.target.value)}
+                options={[
+                  { value: '', label: 'Todos' },
+                  ...Object.entries(CLUB_FILTER_LABELS).map(([value, label]) => ({ value, label })),
+                ]}
+              />
+            </div>
 
             <Select
               label="Disciplina"

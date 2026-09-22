@@ -8,6 +8,7 @@ import {
   MOCK_USER,
   MOCK_ADMIN,
   MOCK_LIDER,
+  PAMIR_ORG,
 } from './helpers'
 
 function mockConsultarInvitacion(status: number, json: unknown) {
@@ -25,6 +26,7 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
         rol: 'SOCIO',
         rolLabel: 'Socio',
         invitadoPor: 'Admin Seguridad',
+        organization: PAMIR_ORG,
       }),
     )
     await page.route('**/api/auth/invitaciones/aceptar', (route) => {
@@ -43,6 +45,7 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
             name: 'Nuevo Socio',
             rol: 'SOCIO',
             gestorCategorias: [],
+            organization: PAMIR_ORG,
           },
           token: 'mock-jwt-nuevo',
         },
@@ -87,6 +90,7 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
         rol: 'SOCIO',
         rolLabel: 'Socio',
         invitadoPor: 'Admin Seguridad',
+        organization: PAMIR_ORG,
       }),
     )
     let aceptarLlamado = false

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from './hooks/useAuth'
+import { OrganizationProvider } from './contexts/OrganizationContext'
+import { documentTitle, esSocioDelClub } from './lib/club-brand'
 import { AuthPage } from './components/AuthPage'
 import { Dashboard } from './components/Dashboard'
 import { WizardLayout } from './components/wizard/WizardLayout'
@@ -35,8 +37,10 @@ const Spinner = () => (
   </div>
 )
 
-export default function App() {
-  const { user, token, isLoading, loginWithCredentials, logout } = useAuth()
+// Recibe la sesión ya resuelta por App() en vez de llamar useAuth() de nuevo
+// (crearía un segundo estado independiente): así App() puede envolver todo
+// este árbol en OrganizationProvider con el club de la MISMA sesión.
+function AppContent({ user, token, isLoading, loginWithCredentials, logout }: ReturnType<typeof useAuth>) {
   const [route, setRoute] = useState<Route>('dashboard')
   const [actionSalidaId, setActionSalidaId] = useState<string | null>(null)
   const [actionEventoId, setActionEventoId] = useState<string | null>(null)
@@ -66,9 +70,17 @@ export default function App() {
   const gestorCategoriaIds = user?.gestorCategorias?.map((g) => g.categoriaId) ?? []
   const puedeGestionarEventos = esAdminEventos || gestorCategoriaIds.length > 0
   const hasIntegrante = integrante !== null
-  const isSocioPamir = integrante?.membresiaClub === 'SOCIO_ANDINO_PAMIR'
+  // Socio del club QUE CONSULTA (no "es Pamir"): compara contra la
+  // membresiaPropia de la organización de la sesión — ver lib/club-brand.ts.
+  const esSocioClubActual = esSocioDelClub(integrante, user?.organization ?? null)
   // Sistema cerrado por invitación: solo ADMIN y LIDER pueden invitar.
   const puedeInvitarUsuario = puedeInvitar(user?.rol)
+
+  // document.title sigue al club de la sesión; sin sesión (o mientras /me no
+  // resolvió el club) queda en el título genérico — nunca el de otro club.
+  useEffect(() => {
+    document.title = documentTitle(user?.organization ?? null)
+  }, [user?.organization])
 
   // Reset al cambiar la sesión, ajustando estado durante el render
   // (evita el setState síncrono dentro del effect)
@@ -182,7 +194,7 @@ export default function App() {
     )
   }
 
-  if (route === 'documentos' && (isSocioPamir || isAdmin)) {
+  if (route === 'documentos' && (esSocioClubActual || isAdmin)) {
     return <DocumentosPage onBack={() => setRoute('dashboard')} />
   }
 
@@ -276,7 +288,7 @@ export default function App() {
       user={user!}
       locked={!hasIntegrante}
       isAdmin={isAdmin}
-      isSocioPamir={isSocioPamir}
+      esSocioDelClub={esSocioClubActual}
       onNewSalida={() => setRoute('nueva-salida')}
       onNewCierre={() => setRoute('nueva-cierre')}
       onNewIntegrante={() => setRoute('nuevo-integrante-standalone')}
@@ -290,5 +302,17 @@ export default function App() {
       puedeInvitar={puedeInvitarUsuario}
       onInvitar={() => setRoute('invitar')}
     />
+  )
+}
+
+export default function App() {
+  const auth = useAuth()
+  // El club de la sesión se conoce recién cuando /me responde; hasta entonces
+  // (o sin sesión) el árbol entero renderiza con branding neutral — nunca con
+  // el club de la sesión anterior en este mismo navegador.
+  return (
+    <OrganizationProvider organization={auth.user?.organization ?? null}>
+      <AppContent {...auth} />
+    </OrganizationProvider>
   )
 }

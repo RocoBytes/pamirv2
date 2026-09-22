@@ -11,12 +11,12 @@ import {
   Plus,
   Settings2,
 } from 'lucide-react'
-import logoPamir from '../assets/logo_PAMIR.png'
-
 import type { CategoriaEventoRecord, EventoListItem } from '../types/evento'
 import { puedeGestionarCategoria } from '../types/evento'
 import { fetchCategoriasEvento, fetchEventos } from '../lib/api'
+import { useOrganization } from '../hooks/useOrganization'
 import { Button } from './ui/Button'
+import { ClubLogo } from './ClubLogo'
 import { EventoCard } from './EventoCard'
 import { EventoCalendar } from './EventoCalendar'
 import { EventoDetailModal } from './EventoDetailModal'
@@ -62,6 +62,7 @@ export function EventosPage({
   onCrearEvento,
   onGestionarEvento,
 }: EventosPageProps) {
+  const { shortName } = useOrganization()
   const [categorias, setCategorias] = useState<CategoriaEventoRecord[]>([])
   const [eventos, setEventos] = useState<EventoListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -114,8 +115,8 @@ export function EventosPage({
       <header className="bg-white border-b border-[#4a6fad]/10 sticky top-0 z-10 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src={logoPamir} alt="Pamir Andino Club" className="w-11 h-11 object-contain" />
-            <span className="font-bold text-slate-900 text-lg">Pamir</span>
+            <ClubLogo alt="" className="w-11 h-11 object-contain" />
+            <span className="font-bold text-slate-900 text-lg">{shortName}</span>
           </div>
           <Button variant="ghost" size="sm" onClick={onBack}>
             <ArrowLeft size={16} />
@@ -129,7 +130,7 @@ export function EventosPage({
           <div>
             <div className="flex items-center gap-2 text-[#4a6fad] text-xs font-semibold uppercase tracking-widest mb-1">
               <CalendarDays size={14} />
-              Andino Club Pamir
+              {shortName}
             </div>
             <h1 className="text-xl font-bold text-slate-900">Eventos del club</h1>
             <p className="text-sm text-[#757874] mt-0.5">

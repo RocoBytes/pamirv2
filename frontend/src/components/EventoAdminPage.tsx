@@ -12,8 +12,6 @@ import {
   Send,
   Trash2,
 } from 'lucide-react'
-import logoPamir from '../assets/logo_PAMIR.png'
-
 import type { EventoDetail, EventoRecord } from '../types/evento'
 import { ESTADO_EVENTO_COLORS, ESTADO_EVENTO_LABELS } from '../types/evento'
 import {
@@ -25,7 +23,9 @@ import {
   updateEvento,
 } from '../lib/api'
 import type { EventoConCategoria } from '../lib/api'
+import { useOrganization } from '../hooks/useOrganization'
 import { Button } from './ui/Button'
+import { ClubLogo } from './ClubLogo'
 import { EventoForm } from './EventoForm'
 import { PostulantesTab } from './PostulantesTab'
 
@@ -215,6 +215,7 @@ export function EventoAdminPage({
   onDone,
   onCancel,
 }: EventoAdminPageProps) {
+  const { shortName } = useOrganization()
   const [evento, setEvento] = useState<EventoDetail | null>(null)
   const [loading, setLoading] = useState(eventoId !== null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -288,8 +289,8 @@ export function EventoAdminPage({
       <header className="bg-white border-b border-[#4a6fad]/10 sticky top-0 z-10 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src={logoPamir} alt="Pamir Andino Club" className="w-11 h-11 object-contain" />
-            <span className="font-bold text-slate-900 text-lg">Pamir</span>
+            <ClubLogo alt="" className="w-11 h-11 object-contain" />
+            <span className="font-bold text-slate-900 text-lg">{shortName}</span>
           </div>
           <Button variant="ghost" size="sm" onClick={onCancel}>
             <ArrowLeft size={16} />

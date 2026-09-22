@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../lib/authz.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
+import { toPublicOrganizationBrand } from '../lib/serializers/organization.js';
 
 const MAX_COMENTARIO_LENGTH = 2000;
 
@@ -19,7 +20,10 @@ export async function getEvaluacion(req: Request, res: Response): Promise<void> 
     const evalToken = await runAsPlatform(() =>
       prisma.evaluacionToken.findUnique({
         where: { token },
-        include: { salida: { select: { nombreActividad: true, fechaInicio: true } } },
+        include: {
+          salida: { select: { nombreActividad: true, fechaInicio: true } },
+          organization: { select: { slug: true, name: true, shortName: true } },
+        },
       }),
     );
 
@@ -32,6 +36,7 @@ export async function getEvaluacion(req: Request, res: Response): Promise<void> 
       nombreActividad: evalToken.salida.nombreActividad,
       fechaInicio: evalToken.salida.fechaInicio,
       used: evalToken.used,
+      organization: toPublicOrganizationBrand(evalToken.organization),
     });
   } catch (error) {
     console.error('[getEvaluacion]', error);

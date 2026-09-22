@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react'
 import { Users, Radio, Map, X, Check } from 'lucide-react'
-import logoPamir from '../../assets/logo_PAMIR.png'
 import type { SalidaFormData, User } from '../../types/salida'
 import { saveDraft, loadDraft, loadDraftStep, clearDraft, saveDraftStep } from '../../lib/storage'
 import { createSalida, uploadGpx, uploadPronostico } from '../../lib/api'
 import { Button } from '../ui/Button'
+import { ClubLogo } from '../ClubLogo'
 import { Step1General } from './Step1General'
 import { Step2Participants } from './Step2Participants'
 import { Step3HumanTeam } from './Step3Equipment'
@@ -212,7 +212,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
           </button>
 
           <div className="flex items-center gap-2">
-            <img src={logoPamir} alt="Pamir Andino Club" className="w-10 h-10 object-contain" />
+            <ClubLogo alt="" className="w-10 h-10 object-contain" />
             <span className="font-semibold text-slate-800 text-sm">
               Nueva Salida
             </span>

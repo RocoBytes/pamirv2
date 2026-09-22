@@ -448,6 +448,31 @@ describe('consultarInvitacion', () => {
       assert.equal(result.body.rol, 'LIDER');
       assert.equal(result.body.rolLabel, 'Líder');
       assert.equal(result.body.invitadoPor, 'Ada Admin');
+      assert.equal(result.body.organization, null);
+    }
+  });
+
+  it('incluye la marca del club cuando deps expone getOrganizationBrand', async () => {
+    const { deps } = createDeps({
+      getOrganizationBrand: async () => ({
+        slug: 'pamir',
+        name: 'Andino Club Pamir',
+        shortName: 'Pamir',
+      }),
+    });
+    const creada = await crearInvitacion(deps, ADMIN, { email: 'x@club.cl' });
+    assert.equal(creada.ok, true);
+    if (!creada.ok) return;
+    const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
+
+    const result = await consultarInvitacion(deps, token);
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.deepEqual(result.body.organization, {
+        slug: 'pamir',
+        name: 'Andino Club Pamir',
+        shortName: 'Pamir',
+      });
     }
   });
 

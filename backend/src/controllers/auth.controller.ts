@@ -11,6 +11,7 @@ import { emailField, passwordField, SALT_ROUNDS } from '../lib/auth-fields.js';
 import { FRONTEND_URL } from '../lib/config.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 import { isOrganizationSuspended, CLUB_SUSPENDIDO_MENSAJE } from '../lib/organization-status.js';
+import { toPublicOrganization } from '../lib/serializers/organization.js';
 
 const loginSchema = z.object({ email: emailField, password: z.string().min(1, 'Contraseña requerida') });
 const forgotSchema = z.object({ email: emailField });
@@ -62,7 +63,11 @@ export async function login(req: Request, res: Response): Promise<void> {
     const user = await runAsPlatform(() =>
       prisma.user.findUnique({
         where: { email: normalizedEmail },
-        include: { organization: { select: { status: true } } },
+        include: {
+          organization: {
+            select: { id: true, slug: true, name: true, shortName: true, status: true, membresiaPropia: true },
+          },
+        },
       }),
     );
 
@@ -102,6 +107,7 @@ export async function login(req: Request, res: Response): Promise<void> {
         picture: user.picture ?? undefined,
         rol: user.rol,
         gestorCategorias,
+        organization: toPublicOrganization(user.organization),
       },
     });
   } catch (error) {
@@ -126,9 +132,11 @@ async function gestorCategoriasDe(userId: string): Promise<{ categoriaId: number
 // de datos, por lo que rol siempre refleja el valor vigente.
 export async function getMe(req: Request, res: Response): Promise<void> {
   try {
-    const { id, organizationId, email, name, rol } = req.user!;
+    const { id, organizationId, email, name, rol, organization } = req.user!;
     const gestorCategorias = await gestorCategoriasDe(id);
-    res.json({ user: { id, organizationId, email, name, rol, gestorCategorias } });
+    res.json({
+      user: { id, organizationId, email, name, rol, gestorCategorias, organization: toPublicOrganization(organization) },
+    });
   } catch (error) {
     console.error('[getMe]', error);
     res.status(500).json({ error: 'Error al obtener el usuario' });

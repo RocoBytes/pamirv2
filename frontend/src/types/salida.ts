@@ -1,5 +1,25 @@
 // ─── Auth types ───────────────────────────────────────────────────────────────
 
+// Club (tenant) del usuario autenticado. shortName puede ser null (club sin
+// nombre corto configurado): los helpers de club-brand.ts hacen fallback a
+// name. membresiaPropia identifica qué valor de MembresiaClub corresponde a
+// "ser socio de ESTE club" (ver esSocioDelClub en lib/club-brand.ts).
+export interface Organization {
+  id: string
+  slug: string
+  name: string
+  shortName: string | null
+  membresiaPropia: MembresiaClub | string
+}
+
+// Versión mínima de Organization para pantallas SIN sesión (consultar una
+// invitación, evaluación express): alcanza para pintar logo + nombre.
+export interface OrganizationBrand {
+  slug: string
+  name: string
+  shortName: string | null
+}
+
 export interface User {
   id: string
   name: string
@@ -10,6 +30,9 @@ export interface User {
   rol?: 'SOCIO' | 'LIDER' | 'ADMIN'
   // Categorías de eventos que el usuario gestiona (gestores por categoría)
   gestorCategorias?: { categoriaId: number; slug: string }[]
+  // Opcional: un pamir_auth guardado por una sesión anterior a esta fase no
+  // lo trae hasta que useAuth refresca /me.
+  organization?: Organization
 }
 
 export interface AuthState {

@@ -7,6 +7,7 @@
 import type { RolUsuario } from '../generated/prisma/client.js';
 import { emailField, nameField, passwordField } from '../lib/auth-fields.js';
 import { canInvite, isAdmin } from '../lib/authz.js';
+import type { PublicOrganizationBrand } from '../lib/serializers/organization.js';
 import {
   INVITE_TTL_MS,
   generateInviteToken,
@@ -107,6 +108,13 @@ export interface InvitacionesDeps {
   hashPassword: (password: string) => Promise<string>;
   now: () => Date;
   frontendUrl: string;
+  // Resuelve la marca pública (slug/name/shortName) de un club por su id.
+  // Solo lo usa consultarInvitacion (endpoint público, sin sesión) para
+  // mostrar el club que invita antes de que la persona inicie sesión.
+  // Opcional: los flujos autenticados (crear/listar/revocar/reenviar) nunca
+  // lo necesitan, y los dobles de prueba que no consultan invitaciones no
+  // tienen por qué implementarlo.
+  getOrganizationBrand?: (organizationId: string) => Promise<PublicOrganizationBrand | null>;
 }
 
 // ─── Requester (subconjunto de AuthUser que necesita este módulo) ─────────────
@@ -452,6 +460,9 @@ export interface ConsultarInvitacionBody {
   rol: RolUsuario;
   rolLabel: string;
   invitadoPor: string;
+  // null cuando deps no expone getOrganizationBrand (dobles de prueba); el
+  // controlador real (buildPublicDeps) siempre lo resuelve.
+  organization: PublicOrganizationBrand | null;
 }
 
 export async function consultarInvitacion(
@@ -467,6 +478,8 @@ export async function consultarInvitacion(
   const vigencia = await verificarVigencia(deps, inv, now);
   if (!('vigente' in vigencia)) return vigencia;
 
+  const organization = deps.getOrganizationBrand ? await deps.getOrganizationBrand(inv.organizationId) : null;
+
   return {
     ok: true,
     status: 200,
@@ -475,6 +488,7 @@ export async function consultarInvitacion(
       rol: inv.rol,
       rolLabel: ROL_LABELS[inv.rol],
       invitadoPor: vigencia.inviter ? vigencia.inviter.name : PLATAFORMA_NOMBRE,
+      organization,
     },
   };
 }

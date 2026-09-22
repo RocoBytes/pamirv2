@@ -19,8 +19,8 @@ import {
   Trash2,
   UserCog,
 } from 'lucide-react'
-import logoPamir from '../assets/logo_PAMIR.png'
-
+import { useOrganization } from '../hooks/useOrganization'
+import { ClubLogo } from './ClubLogo'
 import {
   fetchSalidas,
   fetchAdminStats,
@@ -195,6 +195,7 @@ function SaludFlags({ salud }: { salud: NonNullable<ParticipanteSalud['salud']> 
 // ─── Documentación del Club: gestión admin ──────────────────────────────────
 
 function DocumentosAdminSection() {
+  const { memberBadge } = useOrganization()
   const [docs, setDocs] = useState<DocumentoRecord[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -288,7 +289,7 @@ function DocumentosAdminSection() {
       </div>
       <p className="text-xs text-[#757874] mb-3">
         Sube formularios, check-lists y material de apoyo. Los archivos quedan visibles para los
-        socios de Andino Club Pamir en su sección "Documentación del Club".
+        socios {memberBadge} en su sección "Documentación del Club".
       </p>
 
       {/* Formulario de subida */}
@@ -477,6 +478,7 @@ function DocumentosAdminSection() {
 // ─── AdminPanel component ─────────────────────────────────────────────────────
 
 export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelProps) {
+  const { displayName, shortName } = useOrganization()
   const [salidas, setSalidas] = useState<SalidaRecord[] | null>(null)
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
@@ -605,8 +607,8 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
       <header className="bg-white border-b border-[#4a6fad]/10 sticky top-0 z-10 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src={logoPamir} alt="Pamir Andino Club" className="w-11 h-11 object-contain" />
-            <span className="font-bold text-slate-900 text-lg">Pamir</span>
+            <ClubLogo alt="" className="w-11 h-11 object-contain" />
+            <span className="font-bold text-slate-900 text-lg">{shortName}</span>
           </div>
           <Button variant="ghost" size="sm" onClick={onBack}>
             <ArrowLeft size={16} />
@@ -766,7 +768,7 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
               <h2 className="text-base font-bold text-slate-900">Usuarios e invitaciones</h2>
             </div>
             <p className="text-xs text-[#757874] mb-3">
-              Andino Club Pamir es un sistema cerrado: las cuentas nuevas solo se crean por
+              {displayName} es un sistema cerrado: las cuentas nuevas solo se crean por
               invitación. Gestiona quién puede unirse y qué rol tiene cada integrante.
             </p>
 

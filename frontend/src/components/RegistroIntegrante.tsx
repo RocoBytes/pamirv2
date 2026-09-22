@@ -602,26 +602,33 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
               {...register('previsionSalud')}
             />
 
-            <Controller
-              control={control}
-              name="membresiaClub"
-              render={({ field }) => (
-                <SingleSelectChip
-                  label="Membresía en Club de Montaña"
-                  options={[
-                    { value: 'SOCIO_ANDINO_PAMIR', label: 'Socio Andino Club Pamir' },
-                    { value: 'SOCIO_EL_MONTANISTA', label: 'Socio Club El Montañista' },
-                    { value: 'SOCIO_OTRO_CLUB', label: 'Socio otro Club' },
-                    { value: 'POSTULANTE_CLUB', label: 'Postulante a un club' },
-                    { value: 'NO_PERTENECE', label: 'No pertenece a ningún club' },
-                  ]}
-                  value={field.value ?? ''}
-                  onChange={field.onChange}
-                  error={errors.membresiaClub?.message}
-                  required
-                />
-              )}
-            />
+            {/* data-cross-club-options: la membresía de la PERSONA que se
+                registra (a qué club dice pertenecer), no branding del club
+                actual — lista legítimamente cruzada entre clubes. El marcador
+                deja que un e2e de branding la excluya del barrido de "ningún
+                texto de otro club" sin tocar sus datos (ver e2e/branding.spec.ts). */}
+            <div data-cross-club-options="true">
+              <Controller
+                control={control}
+                name="membresiaClub"
+                render={({ field }) => (
+                  <SingleSelectChip
+                    label="Membresía en Club de Montaña"
+                    options={[
+                      { value: 'SOCIO_ANDINO_PAMIR', label: 'Socio Andino Club Pamir' },
+                      { value: 'SOCIO_EL_MONTANISTA', label: 'Socio Club El Montañista' },
+                      { value: 'SOCIO_OTRO_CLUB', label: 'Socio otro Club' },
+                      { value: 'POSTULANTE_CLUB', label: 'Postulante a un club' },
+                      { value: 'NO_PERTENECE', label: 'No pertenece a ningún club' },
+                    ]}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    error={errors.membresiaClub?.message}
+                    required
+                  />
+                )}
+              />
+            </div>
 
             {(membresiaClub === 'SOCIO_OTRO_CLUB' || membresiaClub === 'POSTULANTE_CLUB') && (
               <div className="flex flex-col gap-1">

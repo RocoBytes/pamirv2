@@ -3,6 +3,8 @@
 // backend/src/services/invitaciones.service.ts). Un LIDER es un SOCIO al que
 // además se le permite invitar SOCIOS; ADMIN puede invitar cualquier rol.
 
+import type { OrganizationBrand } from './salida'
+
 export type Rol = 'SOCIO' | 'LIDER' | 'ADMIN'
 
 export const ROL_LABELS: Record<Rol, string> = {
@@ -48,6 +50,9 @@ export interface ConsultarInvitacionResponse {
   rol: Rol
   rolLabel: string
   invitadoPor: string
+  // null si el backend no pudo resolver el club (no debería pasar en
+  // producción, pero la pantalla se mantiene neutral en ese caso).
+  organization: OrganizationBrand | null
 }
 
 export interface AceptarInvitacionResponse {

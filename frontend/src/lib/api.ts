@@ -1,4 +1,4 @@
-import type { SalidaFormData, SalidaRecord, GpxUploadResponse, PronosticoUploadResponse, User, IntegranteRecord, Participante } from '../types/salida'
+import type { SalidaFormData, SalidaRecord, GpxUploadResponse, PronosticoUploadResponse, User, IntegranteRecord, Participante, OrganizationBrand } from '../types/salida'
 import type {
   CategoriaEventoRecord,
   EventoRecord,
@@ -303,6 +303,9 @@ export interface EvaluacionInfo {
   nombreActividad: string
   fechaInicio: string
   used: boolean
+  // null si el backend no pudo resolver el club dueño del token (no debería
+  // pasar en producción; la pantalla se mantiene neutral en ese caso).
+  organization: OrganizationBrand | null
 }
 
 export interface SubmitEvaluacionPayload {

@@ -19,6 +19,8 @@ import { subjectInvitacion } from '../lib/email/subjects.js';
 import { SALT_ROUNDS } from '../lib/auth-fields.js';
 import { FRONTEND_URL } from '../lib/config.js';
 import { runAsPlatform } from '../lib/tenant-context.js';
+import { prisma } from '../lib/prisma.js';
+import { toPublicOrganizationBrand } from '../lib/serializers/organization.js';
 import type { OrganizationSummary } from '../types/index.js';
 
 // Cableado real: repositorio Prisma, bcrypt y reloj real. El envío de correo
@@ -54,6 +56,16 @@ function buildPublicDeps(): InvitacionesDeps {
     hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
+    // Se llama dentro del runAsPlatform que ya envuelve a consultarInvitacion
+    // (ver consultarInvitacion abajo), así que puede resolver el club de
+    // CUALQUIERA de los dos clubes, no solo el de una sesión activa.
+    getOrganizationBrand: async (organizationId) => {
+      const org = await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { slug: true, name: true, shortName: true },
+      });
+      return org ? toPublicOrganizationBrand(org) : null;
+    },
   };
 }
 

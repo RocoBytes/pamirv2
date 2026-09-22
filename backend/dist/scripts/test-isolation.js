@@ -614,6 +614,21 @@ async function runHttpChecks(baseUrl, seedA, seedB) {
         const res = await getJson(baseUrl, tokenA, `/api/salidas/${seedB.salidaId}`);
         assert.equal(res.status, 404);
     });
+    await check('GET /api/me — cada admin ve la organización pública de SU PROPIO club (5 campos, sin datos privados)', async () => {
+        const [resA, resB] = await Promise.all([getJson(baseUrl, tokenA, '/api/me'), getJson(baseUrl, tokenB, '/api/me')]);
+        assert.equal(resA.status, 200);
+        assert.equal(resB.status, 200);
+        const orgA = resA.body.user.organization;
+        const orgB = resB.body.user.organization;
+        assert.ok(orgA);
+        assert.ok(orgB);
+        assert.deepEqual(Object.keys(orgA).sort(), ['id', 'membresiaPropia', 'name', 'shortName', 'slug']);
+        assert.equal(orgA.slug, SLUG_A);
+        assert.equal(orgA.membresiaPropia, MEMBRESIA_A);
+        assert.equal(orgB.slug, SLUG_B);
+        assert.equal(orgB.membresiaPropia, MEMBRESIA_B);
+        assert.notEqual(orgA.id, orgB.id);
+    });
     await check('GET /api/admin/users — solo los usuarios del propio club', async () => {
         const res = await getJson(baseUrl, tokenA, '/api/admin/users');
         assert.equal(res.status, 200);
@@ -673,6 +688,31 @@ async function runHttpChecks(baseUrl, seedA, seedB) {
         assert.equal(res.status, 403);
         const body = res.body;
         assert.match(body.error, new RegExp(seedB.organizationName));
+    });
+    // ─── Marca pública en pantallas sin sesión (branding por club) ────────────────
+    await check('POST /api/auth/invitaciones/consultar expone la marca del club que invita (slug/name/shortName, nunca datos privados)', async () => {
+        const email = `consultar-brand-${RANDOM_SUFFIX}@iso-test.local`;
+        const creada = await postJsonAuth(baseUrl, tokenA, '/api/invitaciones', { email, rol: 'SOCIO' });
+        assert.equal(creada.status, 201);
+        const inviteUrl = creada.body.inviteUrl;
+        const token = inviteUrl.split('#invite=')[1] ?? '';
+        assert.ok(token.length > 0);
+        const consultada = await postJson(baseUrl, '/api/auth/invitaciones/consultar', { token });
+        assert.equal(consultada.status, 200);
+        const body = consultada.body;
+        assert.ok(body.organization);
+        assert.deepEqual(Object.keys(body.organization).sort(), ['name', 'shortName', 'slug']);
+        assert.equal(body.organization.slug, SLUG_A);
+        assert.equal(body.organization.name, seedA.organizationName);
+    });
+    await check('GET /api/evaluaciones/:token expone la marca del club dueño de la evaluación (slug/name/shortName)', async () => {
+        const token = `iso-test-eval-a-${RANDOM_SUFFIX}`;
+        const res = await fetch(`${baseUrl}/api/evaluaciones/${token}`);
+        const body = (await res.json().catch(() => undefined));
+        assert.equal(res.status, 200);
+        assert.ok(body?.organization);
+        assert.deepEqual(Object.keys(body.organization).sort(), ['name', 'shortName', 'slug']);
+        assert.equal(body.organization.slug, SLUG_A);
     });
     // ─── Invitaciones emitidas por la plataforma (bootstrap del primer ADMIN) ───
     // Repositorio real (Prisma) + email falso (nunca contacta Gmail): no hay
@@ -1109,6 +1149,15 @@ async function runTenantCliChecks(baseUrl, seedA, seedB) {
         const detalleBody = detalle.body;
         assert.equal(detalleBody.estado, 'PUBLICADO');
         assert.equal(detalleBody.declaracionVigente?.version, '2026-08');
+    });
+    await check('POST /api/auth/login devuelve la organización pública propia del club recién creado (5 campos, sin datos privados)', async () => {
+        const login = await postJson(baseUrl, '/api/auth/login', { email: cliAdminEmail, password: CLI_PASSWORD });
+        assert.equal(login.status, 200);
+        const org = login.body.user.organization;
+        assert.ok(org);
+        assert.deepEqual(Object.keys(org).sort(), ['id', 'membresiaPropia', 'name', 'shortName', 'slug']);
+        assert.equal(org.slug, cliSlug);
+        assert.equal(org.membresiaPropia, MEMBRESIA_A);
     });
     await check('invita a un SOCIO del club nuevo (invitación normal, no de plataforma)', async () => {
         const invitar = await postJsonAuth(baseUrl, cliAdminToken, '/api/invitaciones', {

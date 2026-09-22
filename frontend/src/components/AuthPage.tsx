@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Eye, EyeOff, Loader2, CheckCircle, AlertCircle, ArrowLeft, UserPlus } from 'lucide-react'
 import { Button } from './ui/Button'
+import { ClubLogo } from './ClubLogo'
+import { clubDisplayName } from '../lib/club-brand'
 import { forgotPassword, resetPassword, consultarInvitacion, aceptarInvitacion } from '../lib/api'
 import type { ConsultarInvitacionResponse } from '../types/invitacion'
-import logoPamir from '../assets/logo_PAMIR.png'
 
 type View = 'login' | 'forgot' | 'reset' | 'verify-success' | 'verify-error' | 'accept-invite'
 
@@ -156,6 +157,12 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
 
   const inputClass = 'w-full rounded-xl border border-[#4a6fad]/40 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#264c99] focus:border-[#264c99] transition-colors'
 
+  // El login (y cualquier otra vista sin invitación resuelta) es
+  // intencionalmente neutral: nunca antes de autenticar se sabe a qué club
+  // pertenece quien mira la pantalla. Solo "aceptar invitación", con la
+  // invitación ya consultada, muestra la marca de ESE club.
+  const inviteOrg = view === 'accept-invite' ? (inviteInfo?.organization ?? null) : null
+
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-4"
@@ -169,7 +176,7 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-10">
-          <img src={logoPamir} alt="Pamir Andino Club" className="w-36 h-36 object-contain drop-shadow-lg mb-2" />
+          <ClubLogo org={inviteOrg} alt="" className="w-36 h-36 object-contain drop-shadow-lg mb-2" />
           <p className="text-white/50 mt-1 text-center text-sm">Registro de salidas de montaña</p>
         </div>
 
@@ -256,8 +263,9 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                     <h2 className="text-xl font-bold text-slate-800">Crea tu cuenta</h2>
                   </div>
                   <p className="text-[#757874] text-sm mb-6">
-                    <span className="font-semibold text-slate-700">{inviteInfo.invitadoPor}</span> te invitó como{' '}
-                    <span className="font-semibold text-slate-700">{inviteInfo.rolLabel}</span>.
+                    <span className="font-semibold text-slate-700">{inviteInfo.invitadoPor}</span> te invitó a
+                    unirse a <span className="font-semibold text-slate-700">{clubDisplayName(inviteInfo.organization)}</span>{' '}
+                    como <span className="font-semibold text-slate-700">{inviteInfo.rolLabel}</span>.
                   </p>
 
                   <form onSubmit={(e) => void handleAcceptInvite(e)} className="flex flex-col gap-4">
@@ -407,7 +415,7 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
         </div>
 
         <p className="text-white/30 text-xs text-center mt-6">
-          Sistema de registro alpino &mdash; Pamir v1.0
+          Sistema de registro de salidas de montaña
         </p>
       </div>
     </div>

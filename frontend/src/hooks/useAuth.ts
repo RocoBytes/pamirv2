@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { User, AuthState } from '../types/salida'
-import { saveAuth, loadAuth, clearAuth } from '../lib/storage'
+import { establishSession, loadAuth, clearAuth } from '../lib/storage'
 import { setAuthToken } from '../lib/auth-token'
 import { loginWithCredentials, fetchMe } from '../lib/api'
 
@@ -32,12 +32,16 @@ export function useAuth(): UseAuthReturn {
   useEffect(() => {
     const saved = loadAuth()
     if (!saved?.token) return
+    const savedToken = saved.token
     fetchMe()
       .then(({ user }) => {
         setState((prev) => {
-          if (prev.token !== saved.token) return prev
-          saveAuth({ user, token: saved.token })
-          return { user, token: saved.token }
+          if (prev.token !== savedToken) return prev
+          // Establece la sesión (y decide si el borrador sigue siendo del
+          // mismo usuario) antes de reescribir pamir_auth con el rol/datos
+          // frescos del servidor.
+          establishSession({ user, token: savedToken })
+          return { user, token: savedToken }
         })
       })
       .catch(() => {
@@ -50,7 +54,7 @@ export function useAuth(): UseAuthReturn {
     try {
       const { user, token } = await loginWithCredentials(email, password)
       setAuthToken(token)
-      saveAuth({ user, token })
+      establishSession({ user, token })
       setState({ user, token })
     } finally {
       setIsLoading(false)

@@ -22,8 +22,6 @@ import {
   History,
   Siren,
 } from 'lucide-react'
-import logoPamir from '../assets/logo_PAMIR.png'
-
 import type { SalidaRecord, User } from '../types/salida'
 import {
   STATUS_LABELS,
@@ -31,7 +29,9 @@ import {
   DISCIPLINA_LABELS,
 } from '../types/salida'
 import { fetchSalidas, fetchHistoricos } from '../lib/api'
+import { useOrganization } from '../hooks/useOrganization'
 import { Button } from './ui/Button'
+import { ClubLogo } from './ClubLogo'
 import { SalidaDetailModal } from './SalidaDetailModal'
 import { EvaluacionResultadosModal } from './EvaluacionResultadosModal'
 
@@ -47,7 +47,9 @@ interface DashboardProps {
   user: User
   locked?: boolean
   isAdmin?: boolean
-  isSocioPamir?: boolean
+  // Socio del club QUE CONSULTA (ver esSocioDelClub en lib/club-brand.ts),
+  // no "es socio de Pamir": gatea la tarjeta de Documentación del Club.
+  esSocioDelClub?: boolean
   onNewSalida: () => void
   onNewCierre: () => void
   onNewIntegrante: () => void
@@ -130,7 +132,8 @@ function SalidaCard({ salida, currentUserId, onClick }: { salida: SalidaRecord, 
   )
 }
 
-export function Dashboard({ user, locked = false, isAdmin = false, isSocioPamir = false, onNewSalida, onNewCierre, onNewIntegrante, onDocumentos, onContactos, onEventos, onAdminPanel, onEditSalida, onCloseSalida, onLogout, puedeInvitar, onInvitar }: DashboardProps) {
+export function Dashboard({ user, locked = false, isAdmin = false, esSocioDelClub = false, onNewSalida, onNewCierre, onNewIntegrante, onDocumentos, onContactos, onEventos, onAdminPanel, onEditSalida, onCloseSalida, onLogout, puedeInvitar, onInvitar }: DashboardProps) {
+  const { shortName, memberBadge } = useOrganization()
   const [salidas, setSalidas] = useState<SalidaRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -194,8 +197,8 @@ export function Dashboard({ user, locked = false, isAdmin = false, isSocioPamir 
       <header className="bg-white border-b border-[#4a6fad]/10 sticky top-0 z-10 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src={logoPamir} alt="Pamir Andino Club" className="w-11 h-11 object-contain" />
-            <span className="font-bold text-slate-900 text-lg">Pamir</span>
+            <ClubLogo alt="" className="w-11 h-11 object-contain" />
+            <span className="font-bold text-slate-900 text-lg">{shortName}</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -250,7 +253,7 @@ export function Dashboard({ user, locked = false, isAdmin = false, isSocioPamir 
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-widest text-white/50 mb-1">
-                    Andino Club Pamir
+                    {shortName}
                   </p>
                   <h2 className="text-xl font-bold leading-tight text-white/80">
                     Formulario de Salida
@@ -279,7 +282,7 @@ export function Dashboard({ user, locked = false, isAdmin = false, isSocioPamir 
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-white/70 mb-1">
-                  Andino Club Pamir
+                  {shortName}
                 </p>
                 <h2 className="text-xl font-bold leading-tight drop-shadow">
                   Formulario de Salida
@@ -395,8 +398,8 @@ export function Dashboard({ user, locked = false, isAdmin = false, isSocioPamir 
           <ChevronRight size={16} className="text-[#757874]" />
         </button>
 
-        {/* Documentación del club — exclusivo socios Andino Club Pamir (y admin) */}
-        {(isSocioPamir || isAdmin) && (
+        {/* Documentación del club — exclusivo socios del club actual (y admin) */}
+        {(esSocioDelClub || isAdmin) && (
           <button
             onClick={onDocumentos}
             className="w-full flex items-center gap-4 bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm hover:shadow-md transition-shadow duration-200 p-4 mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] focus-visible:ring-offset-2"
@@ -409,7 +412,7 @@ export function Dashboard({ user, locked = false, isAdmin = false, isSocioPamir 
               <div className="flex items-center gap-2">
                 <p className="font-semibold text-slate-900 text-sm">Documentación del Club</p>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#264c99] bg-[#e8eef7] px-2 py-0.5 rounded-md">
-                  Socios ACP
+                  Socios {memberBadge}
                 </span>
               </div>
               <p className="text-xs text-[#757874]">

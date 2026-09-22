@@ -1,38 +1,72 @@
 import type { Page, Route } from '@playwright/test'
 
-export const MOCK_USER = {
+// ─── Clubes (fixtures multi-tenant) ──────────────────────────────────────────
+// Dos clubes para poder probar branding/aislamiento sin copiar-pegar: Pamir es
+// el club "de siempre" (mantiene sus asserts históricos, p.ej. "Socios ACP"),
+// El Montañista es el segundo club usado por branding.spec.ts para probar que
+// nada de Pamir se filtra a la sesión de otro club.
+
+export const PAMIR_ORG = {
+  id: 'org-pamir',
+  slug: 'pamir',
+  name: 'Andino Club Pamir',
+  shortName: 'Pamir',
+  membresiaPropia: 'SOCIO_ANDINO_PAMIR',
+}
+
+export const EL_MONTANISTA_ORG = {
+  id: 'org-el-montanista',
+  slug: 'el-montanista',
+  name: 'Club Andino El Montañista',
+  shortName: 'El Montañista',
+  membresiaPropia: 'SOCIO_EL_MONTANISTA',
+}
+
+interface MockUser {
+  id: string
+  email: string
+  name: string
+  rol: 'SOCIO' | 'LIDER' | 'ADMIN'
+  gestorCategorias: { categoriaId: number; slug: string }[]
+  organization: typeof PAMIR_ORG | typeof EL_MONTANISTA_ORG
+}
+
+function mockUser(org: MockUser['organization'], overrides: Omit<MockUser, 'organization' | 'gestorCategorias'> & { gestorCategorias?: MockUser['gestorCategorias'] }): MockUser {
+  return { gestorCategorias: [], ...overrides, organization: org }
+}
+
+// ─── Usuarios de Pamir ────────────────────────────────────────────────────────
+
+export const MOCK_USER = mockUser(PAMIR_ORG, {
   id: 'user-test-001',
   email: 'test@example.com',
   name: 'Test Alpinista',
   rol: 'SOCIO',
-  gestorCategorias: [],
-}
+})
 
-export const MOCK_ADMIN = {
+export const MOCK_ADMIN = mockUser(PAMIR_ORG, {
   id: 'user-admin-001',
   email: 'seguridad.acp.cl@gmail.com',
   name: 'Admin Seguridad',
   rol: 'ADMIN',
-  gestorCategorias: [],
-}
+})
 
 /** Líder: socio al que además se le permite invitar a otros socios */
-export const MOCK_LIDER = {
+export const MOCK_LIDER = mockUser(PAMIR_ORG, {
   id: 'user-lider-001',
   email: 'lider@example.com',
   name: 'Lider Cordada',
   rol: 'LIDER',
-  gestorCategorias: [],
-}
+})
 
 /** Gestor de eventos: socio con una categoría asignada (montanismo-n1) */
-export const MOCK_GESTOR = {
+export const MOCK_GESTOR = mockUser(PAMIR_ORG, {
   id: 'user-gestor-001',
   email: 'gestor@example.com',
   name: 'Gestora Montaña',
   rol: 'SOCIO',
   gestorCategorias: [{ categoriaId: 1, slug: 'montanismo-n1' }],
-}
+})
 
 export const MOCK_INTEGRANTE = {
   id: 'integrante-001',
@@ -56,6 +90,32 @@ export const MOCK_SALIDA = {
   participantes: [
     { rut: '12.345.678-9', nombre: 'Test Alpinista', membresiaClub: 'SOCIO_ANDINO_PAMIR' },
   ],
+}
+
+// ─── Usuarios de El Montañista (segundo club) ────────────────────────────────
+
+export const MOCK_ADMIN_MONTANISTA = mockUser(EL_MONTANISTA_ORG, {
+  id: 'user-admin-montanista-001',
+  email: 'admin@elmontanista.example.com',
+  name: 'Admin Montañista',
+  rol: 'ADMIN',
+})
+
+export const MOCK_USER_MONTANISTA = mockUser(EL_MONTANISTA_ORG, {
+  id: 'user-socio-montanista-001',
+  email: 'socio@elmontanista.example.com',
+  name: 'Socio Montañista',
+  rol: 'SOCIO',
+})
+
+export const MOCK_INTEGRANTE_MONTANISTA = {
+  id: 'integrante-montanista-001',
+  nombreCompleto: 'Socio Montañista',
+  rut: '9.876.543-2',
+  email: 'socio@elmontanista.example.com',
+  membresiaClub: 'SOCIO_EL_MONTANISTA',
+  nombreClub: null,
+  createdAt: new Date().toISOString(),
 }
 
 /** Injects a valid auth session into localStorage before page load */
@@ -83,9 +143,9 @@ export async function mockNoIntegrante(page: Page) {
 }
 
 /** Mocks GET /api/integrantes/me — returns an existing integrante */
-export async function mockHasIntegrante(page: Page) {
+export async function mockHasIntegrante(page: Page, integrante: unknown = MOCK_INTEGRANTE) {
   await page.route('**/api/integrantes/me', (route: Route) => {
-    void route.fulfill({ status: 200, json: MOCK_INTEGRANTE })
+    void route.fulfill({ status: 200, json: integrante })
   })
 }
 

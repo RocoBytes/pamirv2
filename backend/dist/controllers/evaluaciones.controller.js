@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { isAdmin } from '../lib/authz.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
+import { toPublicOrganizationBrand } from '../lib/serializers/organization.js';
 const MAX_COMENTARIO_LENGTH = 2000;
 function isNota(v) {
     return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5;
@@ -13,7 +14,10 @@ export async function getEvaluacion(req, res) {
         // contexto de plataforma.
         const evalToken = await runAsPlatform(() => prisma.evaluacionToken.findUnique({
             where: { token },
-            include: { salida: { select: { nombreActividad: true, fechaInicio: true } } },
+            include: {
+                salida: { select: { nombreActividad: true, fechaInicio: true } },
+                organization: { select: { slug: true, name: true, shortName: true } },
+            },
         }));
         if (!evalToken) {
             res.status(404).json({ error: 'Evaluación no encontrada' });
@@ -23,6 +27,7 @@ export async function getEvaluacion(req, res) {
             nombreActividad: evalToken.salida.nombreActividad,
             fechaInicio: evalToken.salida.fechaInicio,
             used: evalToken.used,
+            organization: toPublicOrganizationBrand(evalToken.organization),
         });
     }
     catch (error) {

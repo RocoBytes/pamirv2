@@ -222,6 +222,7 @@ export async function consultarInvitacion(deps, token) {
     const vigencia = await verificarVigencia(deps, inv, now);
     if (!('vigente' in vigencia))
         return vigencia;
+    const organization = deps.getOrganizationBrand ? await deps.getOrganizationBrand(inv.organizationId) : null;
     return {
         ok: true,
         status: 200,
@@ -230,6 +231,7 @@ export async function consultarInvitacion(deps, token) {
             rol: inv.rol,
             rolLabel: ROL_LABELS[inv.rol],
             invitadoPor: vigencia.inviter ? vigencia.inviter.name : PLATAFORMA_NOMBRE,
+            organization,
         },
     };
 }

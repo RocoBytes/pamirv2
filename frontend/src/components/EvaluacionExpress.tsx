@@ -9,11 +9,13 @@ import {
   ShieldCheck,
   Mountain,
 } from 'lucide-react'
-import logoPamir from '../assets/logo_PAMIR.png'
 
 import { fetchEvaluacion, submitEvaluacion } from '../lib/api'
 import type { EvaluacionInfo } from '../lib/api'
+import type { OrganizationBrand } from '../types/salida'
+import { clubShortName } from '../lib/club-brand'
 import { Button } from './ui/Button'
+import { ClubLogo } from './ClubLogo'
 
 const evaluacionSchema = z.object({
   notaObjetivos: z
@@ -83,13 +85,16 @@ function NotaField({ legend, labelMin, labelMax, value, error, onChange }: NotaF
   )
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+// Página pública sin sesión: la marca es la del club dueño del token de
+// evaluación (nunca la de una sesión — no hay ninguna). org es undefined
+// mientras carga o si la consulta falló: se muestra neutral en ese caso.
+function Shell({ children, org }: { children: React.ReactNode; org?: OrganizationBrand | null }) {
   return (
     <div className="min-h-screen bg-[#f0f4fb]">
       <header className="bg-white border-b border-[#4a6fad]/10 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-2.5">
-          <img src={logoPamir} alt="Pamir Andino Club" className="w-11 h-11 object-contain" />
-          <span className="font-bold text-slate-900 text-lg">Pamir</span>
+          <ClubLogo org={org ?? null} alt="" className="w-11 h-11 object-contain" />
+          <span className="font-bold text-slate-900 text-lg">{clubShortName(org ?? null)}</span>
         </div>
       </header>
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6">{children}</main>
@@ -182,7 +187,7 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
 
   if (submitted) {
     return (
-      <Shell>
+      <Shell org={info.organization}>
         <CenteredMessage
           icon={<CheckCircle2 size={36} className="text-emerald-600" />}
           title="¡Gracias por tu evaluación!"
@@ -194,7 +199,7 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
 
   if (info.used) {
     return (
-      <Shell>
+      <Shell org={info.organization}>
         <CenteredMessage
           icon={<CheckCircle2 size={36} className="text-emerald-600" />}
           title="Esta evaluación ya fue respondida"
@@ -205,7 +210,7 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
   }
 
   return (
-    <Shell>
+    <Shell org={info.organization}>
       <div className="mb-5">
         <div className="flex items-center gap-2 text-[#4a6fad] text-xs font-semibold uppercase tracking-widest mb-1">
           <Mountain size={14} />
