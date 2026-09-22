@@ -3,6 +3,7 @@ import {
   saveAuth,
   loadAuth,
   clearAuth,
+  isAuthRemembered,
   saveDraft,
   loadDraft,
   saveDraftStep,
@@ -14,6 +15,7 @@ import {
   decideDraftOwnership,
   establishSession,
 } from './storage'
+import { clubRecordado } from './club-preferido'
 import type { User } from '../types/salida'
 
 // ─── Doble de prueba de Storage (sin jsdom) ──────────────────────────────────
@@ -47,6 +49,18 @@ function createThrowingStorage(): Storage {
 const USER_A: User = { id: 'user-a', name: 'Alpinista A', email: 'a@example.com' }
 const USER_B: User = { id: 'user-b', name: 'Alpinista B', email: 'b@example.com' }
 
+// establishSession ahora decide entre dos storages (local vs session): sin
+// jsdom no hay window.localStorage/sessionStorage reales, así que todo
+// establishSession de este archivo inyecta ambos explícitamente. `local` es
+// siempre el storage bajo prueba salvo que el test diga lo contrario.
+function establish(
+  next: { user: User; token: string },
+  local: Storage,
+  overrides?: { remember?: boolean; session?: Storage },
+) {
+  establishSession(next, { local, session: overrides?.session ?? createFakeStorage(), remember: overrides?.remember })
+}
+
 // ─── saveAuth / loadAuth / clearAuth ──────────────────────────────────────────
 
 describe('saveAuth / loadAuth / clearAuth', () => {
@@ -78,6 +92,67 @@ describe('saveAuth / loadAuth / clearAuth', () => {
     expect(() => loadAuth(storage)).not.toThrow()
     expect(() => clearAuth(storage)).not.toThrow()
     expect(loadAuth(storage)).toBeNull()
+  })
+})
+
+// ─── loadAuth / clearAuth con el par {session, local} ────────────────────────
+// Sin argumento, ambas operan sobre sessionStorage + localStorage reales; acá
+// se prueba ese camino con un par inyectado (ver isStoragePair en storage.ts).
+
+describe('loadAuth / clearAuth (par session + local)', () => {
+  it('loadAuth prefiere sessionStorage sobre localStorage cuando ambos tienen un registro', () => {
+    const session = createFakeStorage()
+    const local = createFakeStorage()
+    saveAuth({ user: USER_A, token: 'tok-session' }, session)
+    saveAuth({ user: USER_B, token: 'tok-local' }, local)
+
+    expect(loadAuth({ session, local })).toEqual({ user: USER_A, token: 'tok-session' })
+  })
+
+  it('loadAuth cae a localStorage cuando sessionStorage no tiene registro', () => {
+    const session = createFakeStorage()
+    const local = createFakeStorage()
+    saveAuth({ user: USER_B, token: 'tok-local' }, local)
+
+    expect(loadAuth({ session, local })).toEqual({ user: USER_B, token: 'tok-local' })
+  })
+
+  it('loadAuth devuelve null si ninguno de los dos tiene registro', () => {
+    expect(loadAuth({ session: createFakeStorage(), local: createFakeStorage() })).toBeNull()
+  })
+
+  it('clearAuth con el par limpia AMBOS storages', () => {
+    const session = createFakeStorage()
+    const local = createFakeStorage()
+    saveAuth({ user: USER_A, token: 'tok-session' }, session)
+    saveAuth({ user: USER_B, token: 'tok-local' }, local)
+
+    clearAuth({ session, local })
+
+    expect(loadAuth(session)).toBeNull()
+    expect(loadAuth(local)).toBeNull()
+  })
+})
+
+// ─── isAuthRemembered ─────────────────────────────────────────────────────────
+
+describe('isAuthRemembered', () => {
+  it('true cuando el registro está en local (no en session)', () => {
+    const session = createFakeStorage()
+    const local = createFakeStorage()
+    saveAuth({ user: USER_A, token: 'tok-1' }, local)
+    expect(isAuthRemembered({ session, local })).toBe(true)
+  })
+
+  it('false cuando el registro está en session', () => {
+    const session = createFakeStorage()
+    const local = createFakeStorage()
+    saveAuth({ user: USER_A, token: 'tok-1' }, session)
+    expect(isAuthRemembered({ session, local })).toBe(false)
+  })
+
+  it('true por defecto cuando no hay ningún registro todavía', () => {
+    expect(isAuthRemembered({ session: createFakeStorage(), local: createFakeStorage() })).toBe(true)
   })
 })
 
@@ -199,18 +274,18 @@ describe('decideDraftOwnership', () => {
 describe('establishSession', () => {
   it('primer login en un navegador nuevo: no rompe aunque no haya nada que purgar', () => {
     const storage = createFakeStorage()
-    establishSession({ user: USER_A, token: 'tok-a' }, storage)
+    establish({ user: USER_A, token: 'tok-a' }, storage)
     expect(loadAuth(storage)).toEqual({ user: USER_A, token: 'tok-a' })
     expect(storage.getItem('pamir_owner')).toBe('user-a')
   })
 
   it('mismo usuario vuelve a autenticarse: conserva el borrador y la caché de integrantes', () => {
     const storage = createFakeStorage()
-    establishSession({ user: USER_A, token: 'tok-1' }, storage)
+    establish({ user: USER_A, token: 'tok-1' }, storage)
     saveDraft({ nombreActividad: 'Cerro Plomo' }, storage)
     saveIntegrante({ id: 'int-1', nombreCompleto: 'X', rut: '1-9', email: 'x@x.cl', createdAt: '' }, storage)
 
-    establishSession({ user: USER_A, token: 'tok-2' }, storage)
+    establish({ user: USER_A, token: 'tok-2' }, storage)
 
     expect(loadDraft(storage)).toEqual({ nombreActividad: 'Cerro Plomo' })
     expect(loadIntegrantes(storage)).toHaveLength(1)
@@ -219,11 +294,11 @@ describe('establishSession', () => {
 
   it('un usuario distinto se autentica en el mismo navegador: purga borrador y caché de integrantes', () => {
     const storage = createFakeStorage()
-    establishSession({ user: USER_A, token: 'tok-1' }, storage)
+    establish({ user: USER_A, token: 'tok-1' }, storage)
     saveDraft({ nombreActividad: 'Cerro Plomo' }, storage)
     saveIntegrante({ id: 'int-1', nombreCompleto: 'X', rut: '1-9', email: 'x@x.cl', createdAt: '' }, storage)
 
-    establishSession({ user: USER_B, token: 'tok-2' }, storage)
+    establish({ user: USER_B, token: 'tok-2' }, storage)
 
     expect(loadDraft(storage)).toBeNull()
     expect(loadIntegrantes(storage)).toEqual([])
@@ -233,14 +308,14 @@ describe('establishSession', () => {
 
   it('logout no purga nada, y el mismo usuario recuperando sesión después conserva el borrador', () => {
     const storage = createFakeStorage()
-    establishSession({ user: USER_A, token: 'tok-1' }, storage)
+    establish({ user: USER_A, token: 'tok-1' }, storage)
     saveDraft({ nombreActividad: 'Cerro Plomo' }, storage)
 
     // Logout real de la app: solo borra pamir_auth (ver useAuth.logout), la
     // marca de dueño se conserva a propósito.
     clearAuth(storage)
 
-    establishSession({ user: USER_A, token: 'tok-2' }, storage)
+    establish({ user: USER_A, token: 'tok-2' }, storage)
     expect(loadDraft(storage)).toEqual({ nombreActividad: 'Cerro Plomo' })
   })
 
@@ -249,7 +324,7 @@ describe('establishSession', () => {
     saveAuth({ user: USER_A, token: 'tok-viejo' }, storage) // pamir_auth sin pamir_owner
     saveDraft({ nombreActividad: 'Cerro Plomo' }, storage)
 
-    establishSession({ user: USER_A, token: 'tok-nuevo' }, storage)
+    establish({ user: USER_A, token: 'tok-nuevo' }, storage)
 
     expect(loadDraft(storage)).toEqual({ nombreActividad: 'Cerro Plomo' })
     expect(storage.getItem('pamir_owner')).toBe('user-a')
@@ -260,7 +335,7 @@ describe('establishSession', () => {
     saveAuth({ user: USER_A, token: 'tok-viejo' }, storage)
     saveDraft({ nombreActividad: 'Cerro Plomo' }, storage)
 
-    establishSession({ user: USER_B, token: 'tok-nuevo' }, storage)
+    establish({ user: USER_B, token: 'tok-nuevo' }, storage)
 
     expect(loadDraft(storage)).toBeNull()
   })
@@ -269,12 +344,115 @@ describe('establishSession', () => {
     const storage = createFakeStorage({ pamir_auth: '{not-json' })
     saveDraft({ nombreActividad: 'Cerro Plomo' }, storage)
 
-    expect(() => establishSession({ user: USER_A, token: 'tok-nuevo' }, storage)).not.toThrow()
+    expect(() => establish({ user: USER_A, token: 'tok-nuevo' }, storage)).not.toThrow()
     expect(loadDraft(storage)).toBeNull()
   })
 
   it('un storage que lanza (modo privado) nunca rompe el login', () => {
     const storage = createThrowingStorage()
-    expect(() => establishSession({ user: USER_A, token: 'tok-1' }, storage)).not.toThrow()
+    expect(() => establish({ user: USER_A, token: 'tok-1' }, storage)).not.toThrow()
+  })
+
+  // ── Club recordado (ver club-preferido.ts) ──────────────────────────────
+  it('recuerda el club de la sesión establecida, para pintar la marca del login la próxima vez', () => {
+    const storage = createFakeStorage()
+    const userConOrg: User = {
+      ...USER_A,
+      organization: {
+        id: 'org-pamir',
+        slug: 'pamir',
+        name: 'Andino Club Pamir',
+        shortName: 'Pamir',
+        membresiaPropia: 'SOCIO_ANDINO_PAMIR',
+        hasLogo: false,
+        logoVersion: null,
+      },
+    }
+    establish({ user: userConOrg, token: 'tok-1' }, storage)
+    expect(clubRecordado(storage)).toBe('pamir')
+  })
+
+  it('sesión sin organization resuelto aún (pamir_auth de una sesión anterior a esta fase): no toca el club recordado', () => {
+    const storage = createFakeStorage()
+    establish({ user: USER_A, token: 'tok-1' }, storage)
+    expect(clubRecordado(storage)).toBeNull()
+  })
+})
+
+// ─── establishSession: "recordar este equipo" (auth en local vs session) ─────
+
+describe('establishSession — recordar este equipo', () => {
+  it('con recordar (por defecto): el registro de auth va a localStorage, no a sessionStorage', () => {
+    const local = createFakeStorage()
+    const session = createFakeStorage()
+    establishSession({ user: USER_A, token: 'tok-1' }, { local, session, remember: true })
+
+    expect(loadAuth(local)).toEqual({ user: USER_A, token: 'tok-1' })
+    expect(loadAuth(session)).toBeNull()
+  })
+
+  it('sin recordar: el registro de auth va a sessionStorage, no a localStorage', () => {
+    const local = createFakeStorage()
+    const session = createFakeStorage()
+    establishSession({ user: USER_A, token: 'tok-1' }, { local, session, remember: false })
+
+    expect(loadAuth(session)).toEqual({ user: USER_A, token: 'tok-1' })
+    expect(loadAuth(local)).toBeNull()
+  })
+
+  it('el borrador y el club recordado nunca se mueven a sessionStorage, con o sin recordar', () => {
+    const local = createFakeStorage()
+    const session = createFakeStorage()
+    const userConOrg: User = {
+      ...USER_A,
+      organization: {
+        id: 'org-pamir',
+        slug: 'pamir',
+        name: 'Andino Club Pamir',
+        shortName: 'Pamir',
+        membresiaPropia: 'SOCIO_ANDINO_PAMIR',
+        hasLogo: false,
+        logoVersion: null,
+      },
+    }
+    // Establece la titularidad primero (marca pamir_owner = user-a), como
+    // haría un login real; recién entonces guarda el borrador de ESE dueño.
+    establishSession({ user: userConOrg, token: 'tok-0' }, { local, session, remember: false })
+    saveDraft({ nombreActividad: 'Cerro Plomo' }, local)
+
+    establishSession({ user: userConOrg, token: 'tok-1' }, { local, session, remember: false })
+
+    // El borrador del mismo dueño se conserva, y solo en local.
+    expect(loadDraft(local)).toEqual({ nombreActividad: 'Cerro Plomo' })
+    expect(loadDraft(session)).toBeNull()
+    // pamir_owner y el club recordado también quedan solo en local.
+    expect(local.getItem('pamir_owner')).toBe('user-a')
+    expect(session.getItem('pamir_owner')).toBeNull()
+    expect(clubRecordado(local)).toBe('pamir')
+    expect(clubRecordado(session)).toBeNull()
+  })
+
+  it('cambiar de "no recordar" a "recordar" no deja un registro huérfano en sessionStorage', () => {
+    const local = createFakeStorage()
+    const session = createFakeStorage()
+    establishSession({ user: USER_A, token: 'tok-1' }, { local, session, remember: false })
+    expect(loadAuth(session)).not.toBeNull()
+
+    establishSession({ user: USER_A, token: 'tok-2' }, { local, session, remember: true })
+
+    expect(loadAuth(local)).toEqual({ user: USER_A, token: 'tok-2' })
+    expect(loadAuth(session)).toBeNull()
+  })
+
+  it('cambiar de "recordar" a "no recordar" no deja un registro huérfano en localStorage', () => {
+    const local = createFakeStorage()
+    const session = createFakeStorage()
+    establishSession({ user: USER_A, token: 'tok-1' }, { local, session, remember: true })
+    expect(loadAuth(local)).not.toBeNull()
+
+    establishSession({ user: USER_A, token: 'tok-2' }, { local, session, remember: false })
+
+    expect(loadAuth(session)).toEqual({ user: USER_A, token: 'tok-2' })
+    expect(loadAuth(local)).toBeNull()
   })
 })

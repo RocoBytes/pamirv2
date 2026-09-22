@@ -284,7 +284,7 @@ test.describe('Branding por club — pantallas sin sesión', () => {
   test('login: sin nombre ni logo de ningún club, título genérico', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
-    await expect(page.getByText('Sistema de registro de salidas de montaña')).toBeVisible()
+    await expect(page.getByText('© 2026 RIALA · Seguridad en Montaña')).toBeVisible()
     await expect(page.title()).resolves.toBe('Registro de Salidas de Montaña')
     await expectNoPamirLeak(page)
   })
@@ -385,5 +385,42 @@ test.describe('Ownership del borrador — un mismo navegador, más de un usuario
     await expect(page.getByText('Mis Salidas')).toBeVisible()
 
     expect(await page.evaluate(() => localStorage.getItem('pamir_draft'))).not.toBeNull()
+  })
+})
+
+// ─── Club preferido en el login (?club=<slug>) y logo propio subido ─────────
+// Fixture local (no PAMIR_ORG/EL_MONTANISTA_ORG de helpers.ts a propósito):
+// esos dos no traen hasLogo, así que el resto de este archivo sigue probando
+// el comportamiento de hoy sin tocarlos (ver el comentario del backend en
+// este mismo cambio: "los fixtures no tienen hasLogo").
+test.describe('Branding por club — club preferido pre-login y logo propio subido', () => {
+  test('login con ?club=<slug>: pinta el logo propio subido de ESE club, sin sesión', async ({ page }) => {
+    await page.route('**/api/clubes/el-montanista/marca', (route: Route) => {
+      void route.fulfill({
+        status: 200,
+        json: {
+          slug: 'el-montanista',
+          name: 'Club Andino El Montañista',
+          shortName: 'El Montañista',
+          hasLogo: true,
+          logoVersion: 'v1test',
+        },
+      })
+    })
+    await page.goto('/?club=el-montanista')
+    await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
+    const logo = page.locator('img').first()
+    await expect(logo).toHaveAttribute('src', '/api/clubes/el-montanista/logo?v=v1test')
+  })
+
+  test('login sin ?club= y sin club recordado: logo neutral (comportamiento de hoy, sin llamar a /api/clubes)', async ({ page }) => {
+    let marcaCalled = false
+    await page.route('**/api/clubes/**/marca', (route: Route) => {
+      marcaCalled = true
+      void route.fulfill({ status: 404, json: { error: 'not found' } })
+    })
+    await page.goto('/')
+    await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
+    expect(marcaCalled).toBe(false)
   })
 })

@@ -1,4 +1,5 @@
 import type { SalidaFormData, AuthState, IntegranteRecord, User } from '../types/salida'
+import { recordarClub } from './club-preferido'
 
 // Nombres de clave preservados a propósito, aunque ya no describan bien todo
 // lo que guardan (p.ej. no son "de Pamir" en un sistema multi-club): renombrar
@@ -28,6 +29,36 @@ function resolve(storage: Storage | undefined): Storage {
 }
 
 // ─── Auth persistence ─────────────────────────────────────────────────────────
+// El registro de auth (KEYS.AUTH) es la única clave de este archivo que vive
+// en DOS storages posibles: localStorage cuando el usuario marca "recordar
+// este equipo" (sobrevive a cerrar el navegador) y sessionStorage cuando no
+// (muere con la pestaña). Todo lo demás — borrador, integrantes, pamir_owner,
+// club recordado — sigue SIEMPRE en localStorage; ver establishSession más
+// abajo, que es el único punto que decide en cuál de los dos escribir.
+//
+// saveAuth/loadAuth/clearAuth conservan el patrón de un único Storage
+// inyectado para cuando de verdad se quiere operar sobre uno exacto (p.ej.
+// "el que se eligió"). Sin argumento, loadAuth/clearAuth operan sobre el PAR
+// real del navegador (sessionStorage primero, localStorage como respaldo) en
+// vez de uno solo — y para poder probar ese camino sin jsdom, también
+// aceptan el par inyectado en vez de un Storage suelto.
+
+export interface AuthStoragePair {
+  session: Storage
+  local: Storage
+}
+
+// Storage real (con o sin jsdom) siempre expone getItem; el par {session,
+// local} nunca lo tiene en ese nivel. Discrimina en runtime, no solo en el
+// tipo, porque lib.dom tipa Storage con un índice `[name: string]: any` que
+// haría a `'session' in valor` ambiguo como guarda de tipos.
+function isStoragePair(value: Storage | AuthStoragePair): value is AuthStoragePair {
+  return typeof (value as Storage).getItem !== 'function'
+}
+
+function windowAuthPair(): AuthStoragePair {
+  return { session: window.sessionStorage, local: window.localStorage }
+}
 
 export function saveAuth(state: Pick<AuthState, 'user' | 'token'>, storage?: Storage): void {
   try {
@@ -37,9 +68,17 @@ export function saveAuth(state: Pick<AuthState, 'user' | 'token'>, storage?: Sto
   }
 }
 
-export function loadAuth(storage?: Storage): Pick<AuthState, 'user' | 'token'> | null {
+export function loadAuth(storage?: Storage | AuthStoragePair): Pick<AuthState, 'user' | 'token'> | null {
   try {
-    const raw = resolve(storage).getItem(KEYS.AUTH)
+    const target = storage === undefined ? windowAuthPair() : storage
+    if (isStoragePair(target)) {
+      const fromSession = target.session.getItem(KEYS.AUTH)
+      if (fromSession) return JSON.parse(fromSession) as Pick<AuthState, 'user' | 'token'>
+      const fromLocal = target.local.getItem(KEYS.AUTH)
+      if (!fromLocal) return null
+      return JSON.parse(fromLocal) as Pick<AuthState, 'user' | 'token'>
+    }
+    const raw = target.getItem(KEYS.AUTH)
     if (!raw) return null
     return JSON.parse(raw) as Pick<AuthState, 'user' | 'token'>
   } catch {
@@ -47,11 +86,32 @@ export function loadAuth(storage?: Storage): Pick<AuthState, 'user' | 'token'> |
   }
 }
 
-export function clearAuth(storage?: Storage): void {
+export function clearAuth(storage?: Storage | AuthStoragePair): void {
   try {
-    resolve(storage).removeItem(KEYS.AUTH)
+    const target = storage === undefined ? windowAuthPair() : storage
+    if (isStoragePair(target)) {
+      target.session.removeItem(KEYS.AUTH)
+      target.local.removeItem(KEYS.AUTH)
+      return
+    }
+    target.removeItem(KEYS.AUTH)
   } catch {
     // ignore
+  }
+}
+
+// true si el registro de auth vigente vive en localStorage (o si no hay
+// ninguno todavía — "recordado" es el valor por defecto), false si vive en
+// sessionStorage. Deja que un refresco de sesión (fetchMe al montar,
+// refreshSession) reescriba pamir_auth sin cambiarlo de storage a espaldas
+// de la marca "recordar este equipo" que el usuario ya eligió al iniciar
+// sesión — ver useAuth.ts.
+export function isAuthRemembered(pair?: AuthStoragePair): boolean {
+  try {
+    const { session } = pair ?? windowAuthPair()
+    return !session.getItem(KEYS.AUTH)
+  } catch {
+    return true
   }
 }
 
@@ -187,24 +247,50 @@ function saveOwnerId(userId: string, storage: Storage): void {
   }
 }
 
-export function establishSession(next: { user: User; token: string }, storage?: Storage): void {
+export interface EstablishSessionOptions {
+  /**
+   * true (por defecto) = localStorage ("recordar este equipo"), false =
+   * sessionStorage (muere al cerrar el navegador). Solo mueve el registro de
+   * auth — borrador, integrantes, pamir_owner y club recordado siguen
+   * SIEMPRE en `local`, sin importar este flag.
+   */
+  remember?: boolean
+  local?: Storage
+  session?: Storage
+}
+
+export function establishSession(next: { user: User; token: string }, options?: EstablishSessionOptions): void {
   try {
-    const s = resolve(storage)
-    const previous = loadAuth(s)
+    const remember = options?.remember ?? true
+    const local = options?.local ?? window.localStorage
+    const session = options?.session ?? window.sessionStorage
+    const chosen = remember ? local : session
+    const other = remember ? session : local
+
+    const previous = loadAuth({ session, local })
     const decision = decideDraftOwnership({
-      storedOwnerId: loadOwnerId(s),
+      storedOwnerId: loadOwnerId(local),
       previousAuthUserId: previous?.user?.id,
       nextUserId: next.user.id,
     })
     if (decision === 'purge') {
-      clearDraft(s)
-      clearIntegrantesCache(s)
+      clearDraft(local)
+      clearIntegrantesCache(local)
     }
-    saveOwnerId(next.user.id, s)
-    saveAuth(next, s)
+    saveOwnerId(next.user.id, local)
+    saveAuth(next, chosen)
+    // El registro puede haber quedado en el OTRO storage por una sesión
+    // anterior (p.ej. "no recordar" seguido de "recordar" en el mismo
+    // navegador): se borra para que nunca convivan dos registros de auth.
+    clearAuth(other)
+    // Gobierna solo la marca del login (ver club-preferido.ts) — nunca el
+    // acceso a datos. Sesiones viejas sin organization aún no resuelto por
+    // /me simplemente no tocan el club recordado.
+    if (next.user.organization?.slug) {
+      recordarClub(next.user.organization.slug, local)
+    }
   } catch {
     // Storage bloqueado (modo privado) o sin window: el login no debe romper
-    // por esto — saveAuth/clearDraft ya son a prueba de fallos por su cuenta,
-    // esto solo cubre resolve(storage) si window tampoco existiera.
+    // por esto.
   }
 }
