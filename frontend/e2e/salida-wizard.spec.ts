@@ -139,3 +139,81 @@ test.describe('Wizard de Salida – clima obligatorio, archivo opcional', () => 
     expect(capturedBody!.pronosticoMeteorologico).toBe(clima)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Salvavidas de la onda de confirmación
+//
+// La onda tapa la pantalla entera, así que cualquier estado del que no salga
+// sola deja la app inusable. El botón de escape es la red para eso, y solo
+// sirve si cumple las dos mitades: aparecer cuando hace falta, y no asomarse
+// nunca cuando no.
+// ─────────────────────────────────────────────────────────────────────────────
+test.describe('Wizard de Salida – salvavidas de la confirmación', () => {
+  const volver = (page: Page) => page.getByRole('button', { name: 'Volver al inicio' })
+
+  test.beforeEach(async ({ page }) => {
+    await setAuth(page)
+    await mockHasIntegrante(page)
+    await mockSalidas(page, [])
+  })
+
+  test('en el camino feliz no se asoma ni un cuadro', async ({ page }) => {
+    await page.route('**/api/salidas', (route) => {
+      if (route.request().method() === 'POST') {
+        void route.fulfill({ status: 201, json: { id: 'salida-new', numeroSalida: 42 } })
+      } else {
+        void route.fulfill({ status: 200, json: [] })
+      }
+    })
+    await seedDraft(page, DRAFT_BASE, 5)
+    await openWizardAtDraft(page)
+    await page.getByLabel(/Pronóstico Meteorológico/).fill('Despejado')
+
+    // Un MutationObserver y no un sondeo: si el botón parpadeara un instante
+    // entre dos muestras, un sondeo no lo vería y el test mentiría.
+    await page.evaluate(() => {
+      const w = window as unknown as { __escapeVisto: boolean }
+      w.__escapeVisto = false
+      const hayBoton = () =>
+        [...document.querySelectorAll('button')].some((b) =>
+          b.textContent?.includes('Volver al inicio'),
+        )
+      new MutationObserver(() => {
+        if (hayBoton()) w.__escapeVisto = true
+      }).observe(document.body, { childList: true, subtree: true, characterData: true })
+    })
+
+    await page.getByRole('button', { name: 'Guardar salida' }).click()
+    await expect(page.getByText('Salida N° 42 registrada')).toBeVisible()
+    // Más allá del retardo del salvavidas: para entonces ya se fue solo.
+    await page.waitForTimeout(3000)
+
+    const visto = await page.evaluate(
+      () => (window as unknown as { __escapeVisto: boolean }).__escapeVisto,
+    )
+    expect(visto).toBe(false)
+  })
+
+  test('con la petición colgada aparece y devuelve al inicio', async ({ page }) => {
+    await page.route('**/api/salidas', (route) => {
+      // El POST nunca se responde: la onda se queda esperando para siempre,
+      // que es exactamente el encierro que este botón tiene que romper.
+      if (route.request().method() !== 'POST') {
+        void route.fulfill({ status: 200, json: [] })
+      }
+    })
+    await seedDraft(page, DRAFT_BASE, 5)
+    await openWizardAtDraft(page)
+    await page.getByLabel(/Pronóstico Meteorológico/).fill('Despejado')
+    await page.getByRole('button', { name: 'Guardar salida' }).click()
+
+    await expect(page.getByText('Guardando salida…')).toBeVisible()
+    await expect(volver(page)).toBeVisible({ timeout: 4000 })
+
+    await volver(page).click()
+
+    // Vuelve al inicio y la onda se fue: la app queda usable otra vez.
+    await expect(page.getByText('Guardando salida…')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /Crear Nueva Salida/i })).toBeVisible()
+  })
+})

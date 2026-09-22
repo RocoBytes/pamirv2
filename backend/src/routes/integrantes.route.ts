@@ -4,15 +4,16 @@ import { createIntegrante, getIntegranteByRut, getMyIntegrante } from '../contro
 
 const router = Router();
 
-router.use(authMiddleware);
+// Sistema cerrado: ninguna ruta de integrantes admite acceso anónimo.
+router.use(authMiddleware, requireAuth);
 
 // Verificar si el usuario logueado tiene ficha de integrante (por email)
-router.get('/me', requireAuth, getMyIntegrante);
+router.get('/me', getMyIntegrante);
 
 // Buscar por RUT exacto (para el picker del wizard)
 router.get('/by-rut/:rut', getIntegranteByRut);
 
-// Crear integrante (formulario de registro) — requiere autenticación
-router.post('/', requireAuth, createIntegrante);
+// Crear integrante (formulario de registro)
+router.post('/', createIntegrante);
 
 export default router;

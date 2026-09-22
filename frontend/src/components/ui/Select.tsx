@@ -25,10 +25,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       {label && (
         <label
           htmlFor={selectId}
-          className="text-sm font-semibold text-[#264c99]"
+          className="text-sm font-semibold text-primary"
         >
           {label}
-          {props.required && <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>}
+          {props.required && <span className="text-error ml-1" aria-hidden="true">*</span>}
         </label>
       )}
       <div className="relative">
@@ -38,11 +38,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           className={[
             'w-full appearance-none rounded-xl border bg-white px-3 py-2 pr-9 text-sm text-slate-900',
             'transition-colors duration-150',
-            'focus:outline-none focus:ring-2 focus:ring-[#264c99] focus:border-[#264c99]',
-            'disabled:bg-[#f0f4fb] disabled:text-[#757874]/60 disabled:cursor-not-allowed',
+            'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
+            'disabled:bg-surface-container-low disabled:text-on-surface-variant/60 disabled:cursor-not-allowed',
             error
-              ? 'border-[#A4636E] focus:ring-[#A4636E] focus:border-[#A4636E]'
-              : 'border-[#4a6fad]/40',
+              ? 'border-error focus:ring-error focus:border-error'
+              : 'border-secondary/40',
             className,
           ]
             .filter(Boolean)
@@ -65,17 +65,17 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           ))}
         </select>
         <ChevronDown
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#4a6fad]/60 pointer-events-none"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary/60 pointer-events-none"
           size={16}
         />
       </div>
       {hint && !error && (
-        <p id={`${selectId}-hint`} className="text-xs text-[#757874]">
+        <p id={`${selectId}-hint`} className="text-xs text-on-surface-variant">
           {hint}
         </p>
       )}
       {error && (
-        <p id={`${selectId}-error`} className="text-xs text-[#A4636E]" role="alert">
+        <p id={`${selectId}-error`} className="text-xs text-error" role="alert">
           {error}
         </p>
       )}

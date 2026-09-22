@@ -1,7 +1,7 @@
 import { type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'inverted'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'inverted' | 'rescue'
 type Size = 'sm' | 'md' | 'lg'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -14,15 +14,21 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    'bg-[#264c99] text-white hover:bg-[#1e3c7a] focus-visible:ring-[#264c99] disabled:bg-[#264c99]/40',
+    'bg-primary text-on-primary hover:bg-primary-hover focus-visible:ring-primary disabled:bg-primary/40',
   secondary:
-    'bg-[#edf2fb] text-[#4a6fad] hover:bg-[#dde6f7] focus-visible:ring-[#4a6fad] border border-[#4a6fad]/20 disabled:bg-[#edf2fb]/60 disabled:text-[#4a6fad]/50',
+    'bg-surface-container-low text-primary hover:bg-surface-container focus-visible:ring-secondary border border-outline-variant/50 disabled:bg-surface-container-low/60 disabled:text-primary/50',
   ghost:
-    'bg-transparent text-[#757874] hover:bg-[#f0f4fb] focus-visible:ring-[#757874] disabled:text-[#757874]/40',
+    'bg-transparent text-on-surface-variant hover:bg-surface-container-low focus-visible:ring-outline disabled:text-on-surface-variant/40',
   danger:
-    'bg-[#A4636E] text-white hover:bg-[#8b3a44] focus-visible:ring-[#A4636E] disabled:bg-[#A4636E]/40',
+    'bg-error text-on-error hover:bg-on-error-container focus-visible:ring-error disabled:bg-error/40',
   inverted:
-    'bg-[#0f1f3d] text-white hover:bg-[#1a3060] focus-visible:ring-[#0f1f3d] disabled:bg-[#0f1f3d]/50',
+    'bg-alpine-dark text-white hover:bg-alpine-edge focus-visible:ring-alpine-dark disabled:bg-alpine-dark/50',
+  // Naranja de rescate a `rescue-strong` (5.06:1 sobre blanco): en este
+  // componente las etiquetas nunca llegan al umbral de texto grande, así que el
+  // `rescue` brillante no puede ser el fondo. Ver el contrato de contraste en
+  // index.css; el CTA grande del hero lo aplica aparte, con su propio tamaño.
+  rescue:
+    'bg-rescue-strong text-white hover:bg-rescue focus-visible:ring-rescue-strong disabled:bg-rescue-strong/40',
 }
 
 const sizeClasses: Record<Size, string> = {

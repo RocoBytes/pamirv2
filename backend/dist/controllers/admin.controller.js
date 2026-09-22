@@ -1,8 +1,11 @@
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { sendEmail } from '../lib/google-gmail.js';
-import { buildSaludSalidaEmail } from '../lib/email-templates.js';
-import { getEstadoCredencial, guardarRefreshToken, probarRefreshToken, } from '../lib/google-credentials.js';
+import { sendClubEmail } from '../lib/email/club-email.js';
+import { buildSaludSalidaEmail, brandingFor } from '../lib/email-templates.js';
+import { subjectSaludSalida } from '../lib/email/subjects.js';
+import { puedeCambiarRol } from '../lib/invitaciones.js';
+import { requireOrganizationId } from '../lib/tenant-context.js';
+import { MEMBRESIA_CLUBS } from '../lib/membresias.js';
 // GET /api/admin/stats
 export async function getStats(_req, res) {
     try {
@@ -16,10 +19,13 @@ export async function getStats(_req, res) {
             // Timezone contract: fecha_inicio is stored as midnight UTC of the
             // user's intended calendar date, so UTC DATE_TRUNC yields the intended
             // month directly — converting with AT TIME ZONE would shift it wrong.
+            // El SQL crudo es invisible para la extensión de aislamiento de
+            // lib/prisma.ts (no pasa por $allOperations), así que el filtro por
+            // club se agrega acá a mano, parametrizado.
             prisma.$queryRaw `
         SELECT DATE_TRUNC('month', fecha_inicio) AS mes, COUNT(*) AS total
         FROM "salidas"
-        WHERE fecha_inicio >= NOW() - INTERVAL '12 months'
+        WHERE fecha_inicio >= NOW() - INTERVAL '12 months' AND organization_id = ${requireOrganizationId()}
         GROUP BY mes
         ORDER BY mes DESC
       `,
@@ -77,15 +83,6 @@ const SALIDA_STATUSES = [
 const PENDING_CLOSE_STATUSES = new Set(['CONFIRMADA', 'EN_CURSO', 'INCIDENTE', 'COMPLETADA']);
 // Average of the three 1-5 notas below this counts as a low-rated salida.
 const LOW_RATING_THRESHOLD = 3;
-// Allowed club membership values (mirrors the MembresiaClub enum on the
-// frontend). The dashboard club filter validates against this whitelist.
-const MEMBRESIA_CLUBS = [
-    'SOCIO_ANDINO_PAMIR',
-    'SOCIO_EL_MONTANISTA',
-    'SOCIO_OTRO_CLUB',
-    'POSTULANTE_CLUB',
-    'NO_PERTENECE',
-];
 function pickString(v) {
     if (typeof v === 'string' && v.trim() !== '')
         return v.trim();
@@ -593,10 +590,10 @@ export async function enviarSaludSalida(req, res) {
             res.status(422).json({ error: 'La salida no tiene un correo de responsable' });
             return;
         }
-        const subject = `Resumen de fichas de salud — ${result.salida.nombreActividad}`;
-        const htmlBody = buildSaludSalidaEmail(result.salida.nombreActividad, result.salida.liderCordada, result.participantes);
+        const subject = subjectSaludSalida(result.salida.nombreActividad);
+        const htmlBody = buildSaludSalidaEmail(result.salida.nombreActividad, result.salida.liderCordada, result.participantes, brandingFor(req.user.organization));
         try {
-            await sendEmail(targetEmail, subject, htmlBody);
+            await sendClubEmail(req.user.organization, { to: targetEmail, subject, html: htmlBody, kind: 'notificacion' });
         }
         catch (sendError) {
             console.error('[enviarSaludSalida] sendEmail failed', sendError);
@@ -615,47 +612,6 @@ export async function enviarSaludSalida(req, res) {
     catch (error) {
         console.error('[enviarSaludSalida]', error);
         res.status(500).json({ error: 'Error al procesar la solicitud' });
-    }
-}
-// ─── Credencial de Google (refresh token rotable desde el panel) ────────────────
-// Un refresh token de Google empieza por "1//" y ronda los 100 caracteres. El
-// tope alto sólo evita que un pegado accidental enorme llegue a la validación.
-const guardarCredencialSchema = z.object({
-    refreshToken: z.string().trim().min(20).max(2048),
-});
-// GET /api/admin/google-credencial
-export async function getGoogleCredencial(_req, res) {
-    try {
-        res.json(await getEstadoCredencial());
-    }
-    catch (error) {
-        console.error('[getGoogleCredencial]', error);
-        res.status(500).json({ error: 'No se pudo obtener el estado de la credencial' });
-    }
-}
-// PUT /api/admin/google-credencial
-export async function saveGoogleCredencial(req, res) {
-    try {
-        const parsed = guardarCredencialSchema.safeParse(req.body);
-        if (!parsed.success) {
-            res.status(400).json({ error: 'El refresh token no tiene un formato válido' });
-            return;
-        }
-        const refreshToken = parsed.data.refreshToken;
-        // Se prueba contra Google ANTES de guardar: una errata al pegar dejaría la
-        // integración rota en silencio, que es justo el fallo que esto viene a cerrar.
-        const prueba = await probarRefreshToken(refreshToken);
-        if (!prueba.ok) {
-            res.status(422).json({ error: `Google rechazó el token: ${prueba.motivo}` });
-            return;
-        }
-        await guardarRefreshToken(refreshToken, req.user.email);
-        res.json(await getEstadoCredencial());
-    }
-    catch (error) {
-        // Nunca `error` a secas: si viniera de gaxios arrastraría el token pegado.
-        console.error('[saveGoogleCredencial]', error instanceof Error ? error.message : 'error desconocido');
-        res.status(500).json({ error: 'No se pudo guardar la credencial' });
     }
 }
 // ─── Dashboard layout (per-admin customizable grid) ─────────────────────────────
@@ -745,6 +701,7 @@ export async function saveDashboardLayout(req, res) {
         const saved = await prisma.dashboardLayout.upsert({
             where: { userId_dashboardKey: { userId, dashboardKey: ADMIN_DASHBOARD_KEY } },
             create: {
+                organizationId: req.user.organizationId,
                 userId,
                 dashboardKey: ADMIN_DASHBOARD_KEY,
                 layout: sanitized,
@@ -770,5 +727,53 @@ export async function deleteDashboardLayout(req, res) {
     catch (error) {
         console.error('[deleteDashboardLayout]', error);
         res.status(500).json({ error: 'No se pudo restaurar la configuración del dashboard' });
+    }
+}
+// ─── Gestión de usuarios (sistema cerrado por invitación) ──────────────────────
+// GET /api/admin/users
+export async function listUsers(_req, res) {
+    try {
+        const users = await prisma.user.findMany({
+            select: { id: true, email: true, name: true, rol: true, emailVerified: true, createdAt: true },
+            orderBy: { name: 'asc' },
+        });
+        res.json(users);
+    }
+    catch (error) {
+        console.error('[listUsers]', error);
+        res.status(500).json({ error: 'No se pudieron obtener los usuarios' });
+    }
+}
+const rolSchema = z.object({ rol: z.enum(['SOCIO', 'LIDER', 'ADMIN']) });
+// PATCH /api/admin/users/:id/rol
+export async function updateUserRol(req, res) {
+    try {
+        const parsed = rolSchema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: 'El rol debe ser SOCIO, LIDER o ADMIN' });
+            return;
+        }
+        const id = req.params['id'];
+        // Nadie cambia su propio rol: garantiza que el sistema siempre conserve
+        // al menos un ADMIN (el propio requester).
+        if (!puedeCambiarRol(req.user.id, id)) {
+            res.status(409).json({ error: 'No puedes cambiar tu propio rol' });
+            return;
+        }
+        const existing = await prisma.user.findUnique({ where: { id } });
+        if (!existing) {
+            res.status(404).json({ error: 'Usuario no encontrado' });
+            return;
+        }
+        const updated = await prisma.user.update({
+            where: { id },
+            data: { rol: parsed.data.rol },
+            select: { id: true, email: true, name: true, rol: true, emailVerified: true, createdAt: true },
+        });
+        res.json(updated);
+    }
+    catch (error) {
+        console.error('[updateUserRol]', error);
+        res.status(500).json({ error: 'No se pudo actualizar el rol' });
     }
 }

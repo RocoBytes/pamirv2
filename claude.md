@@ -4,10 +4,11 @@ Eres el Tech Lead de un proyecto web Full-Stack (PERN: PostgreSQL, Express/NestJ
 Dispones de un set de subagentes especializados (awesome-claude-code-subagents, Base Everything, 0xfurai para código/técnica, cc-them para estrategia). Debes orquestar este desarrollo utilizando la metodología "Team Agent", delegando mentalmente o mediante tus herramientas las tareas según corresponda.
 
 # RESTRICCIONES CRÍTICAS (APLICAR ESTRICTAMENTE)
-1. INFRAESTRUCTURA AUTOALOJADA: El despliegue es Docker Compose en un VPS Contabo detrás de Cloudflare (dominio `andinoclubpamir.app`, proxy naranja, TLS Full (strict) con certificado de origen). La base de datos vive en Neon.tech (NUNCA se dockeriza ni se migra) y el storage es Google Drive API.
+1. INFRAESTRUCTURA AUTOALOJADA: El despliegue es Docker Compose en un VPS Contabo detrás de Cloudflare (dominio `andinoclubpamir.app`, proxy naranja, TLS Full (strict) con certificado de origen). La base de datos vive en Neon.tech (NUNCA se dockeriza ni se migra) y el storage es un bucket PRIVADO de Google Cloud Storage (puerto `FileStorage` en `backend/src/lib/storage/`, claves `orgs/{organizationId}/...`, descargas solo por URL firmada de 10 minutos tras el permiso de cada recurso; nunca se guarda ni se devuelve una URL). Google Drive quedó RETIRADO.
+   - **Excepción anotada — logo del club**: el logo (`orgs/{organizationId}/logo/{uuid}.{png|jpg}`) es marca pública, no un documento privado, y tiene que renderizarse en un `<img>` en pantallas SIN sesión (login previo a autenticar), donde una URL firmada de 10 minutos no sirve. Se sirve por bytes desde el backend (`GET /api/clubes/:slug/logo`, proxy same-origin, con `ETag`/`Cache-Control`) en vez de con una URL firmada. La mitad importante de la regla se mantiene intacta: en la base **nunca** se guarda ni se devuelve una URL, solo la clave del objeto. No crear una regla de Cloudflare que cachee todo `/api/` — de las rutas del backend, solo esta declara `Cache-Control: public`.
 2. DOCKER ES LA VÍA DE DESPLIEGUE: `backend/Dockerfile`, `frontend/Dockerfile` y `deploy/docker-compose.yml` son canónicos. El nginx del contenedor frontend sirve el SPA y proxea `/api` al backend (same-origin). El CI/CD es GitHub Actions → GHCR → deploy por SSH al VPS (`.github/workflows/deploy.yml`). El desarrollo local sigue siendo Node nativo (`npm run dev` en cada carpeta).
 3. CRON: el ping anti-cold-start de 14 minutos quedó OBSOLETO (el VPS no duerme). `GET /api/cron/check-alertas` corre desde el crontab del VPS (`/opt/pamir/bin/check-alertas.sh` bajo flock), nunca desde un proveedor externo a la vez que el crontab.
-4. GESTIÓN DE MEMORIA: Para subir archivos .gpx (hasta 15MB) a Google Drive se usa un flujo de Streams (Resumable Upload) en Node.js, nunca cargando el buffer completo en memoria RAM. nginx debe mantener `proxy_request_buffering off` en `/api/` para preservarlo.
+4. GESTIÓN DE MEMORIA: Para subir archivos (.gpx de hasta 15MB, pronósticos, documentos, itinerarios) a Google Cloud Storage se usa un flujo de Streams (busboy → `SizeGuard` → write stream reanudable de GCS) en Node.js, nunca cargando el buffer completo en memoria RAM ni tocando disco (el contenedor es `read_only`). nginx debe mantener `proxy_request_buffering off` en `/api/` para preservarlo.
 5. UNA SOLA RÉPLICA DE BACKEND: el rate limiting es en memoria; jamás escalar el servicio backend a más de un contenedor.
 
 # PLAN DE EJECUCIÓN POR FASES (ESPERA CONFIRMACIÓN ENTRE FASES)
@@ -26,7 +27,7 @@ Al finalizar cada fase, detente, hazme un resumen de lo implementado, confirma q
 - Backend: Node.js (Express o NestJS, a tu criterio para mejor mantenibilidad).
 - Base de datos: PostgreSQL (alojada en Neon.tech; externa al VPS, nunca dockerizada).
 - Infraestructura: Docker Compose en VPS Contabo (nginx + backend) detrás de Cloudflare; dominio `andinoclubpamir.app`.
-- Almacenamiento: API de Google Drive.
+- Almacenamiento: Google Cloud Storage (bucket privado por ambiente, `@google-cloud/storage`). Google Drive quedó retirado.
 - Despliegue: imágenes en GHCR construidas por GitHub Actions; `deploy/docker-compose.yml` corre en `/opt/pamir` del VPS. Rollback por tag de SHA.
 - Estructura: monorepo simple basado en carpetas (`/frontend` y `/backend` en la raíz) sin herramientas complejas como Turborepo, manteniendo los `package.json` independientes.
 

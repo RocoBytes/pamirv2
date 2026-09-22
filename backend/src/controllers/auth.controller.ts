@@ -4,71 +4,18 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { signToken } from '../lib/jwt.js';
-import { sendEmail } from '../lib/google-gmail.js';
-import { buildVerificationEmail, buildPasswordResetEmail } from '../lib/email-templates.js';
+import { sendClubEmail } from '../lib/email/club-email.js';
+import { buildPasswordResetEmail, brandingFor } from '../lib/email-templates.js';
+import { subjectPasswordReset } from '../lib/email/subjects.js';
+import { emailField, passwordField, SALT_ROUNDS } from '../lib/auth-fields.js';
+import { FRONTEND_URL } from '../lib/config.js';
+import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
+import { isOrganizationSuspended, CLUB_SUSPENDIDO_MENSAJE } from '../lib/organization-status.js';
+import { toPublicOrganization } from '../lib/serializers/organization.js';
 
-const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
-const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:3001';
-const SALT_ROUNDS = 12;
-
-const emailField = z.string().trim().email('Formato de email inválido').max(254);
-const passwordField = z.string()
-  .min(8, 'Mínimo 8 caracteres')
-  .refine((s) => Buffer.byteLength(s, 'utf8') <= 72, 'La contraseña es demasiado larga');
-const nameField = z.string().trim().min(1, 'El nombre es requerido').max(100, 'Máximo 100 caracteres');
-
-const registerSchema = z.object({ name: nameField, email: emailField, password: passwordField });
 const loginSchema = z.object({ email: emailField, password: z.string().min(1, 'Contraseña requerida') });
 const forgotSchema = z.object({ email: emailField });
 const resetSchema = z.object({ token: z.string().uuid('Token inválido'), password: passwordField });
-
-// ─── Register ─────────────────────────────────────────────────────────────────
-
-export async function register(req: Request, res: Response): Promise<void> {
-  const parsed = registerSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' });
-    return;
-  }
-  const { name, email, password } = parsed.data;
-  const normalizedEmail = email.toLowerCase();
-
-  try {
-    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-    const verificationToken = randomUUID();
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-
-    const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 horas
-
-    if (existing) {
-      if (existing.passwordHash) {
-        res.status(409).json({ error: 'Ya existe una cuenta con ese email. Inicia sesión.' });
-        return;
-      }
-      // Usuario Clerk migrando: asignar contraseña + re-verificar
-      await prisma.user.update({
-        where: { email: normalizedEmail },
-        data: { name: name.trim(), passwordHash, emailVerified: false, verificationToken, verificationTokenExpiry },
-      });
-    } else {
-      await prisma.user.create({
-        data: { email: normalizedEmail, name: name.trim(), passwordHash, emailVerified: false, verificationToken, verificationTokenExpiry },
-      });
-    }
-
-    const verificationUrl = `${BACKEND_URL}/api/auth/verify/${verificationToken}`;
-    sendEmail(
-      normalizedEmail,
-      'Confirma tu cuenta — Pamir',
-      buildVerificationEmail(name.trim(), verificationUrl),
-    ).catch((err) => console.error('[register] email error:', err));
-
-    res.status(201).json({ message: 'Cuenta creada. Revisa tu correo para verificarla.' });
-  } catch (error) {
-    console.error('[register]', error);
-    res.status(500).json({ error: 'No se pudo crear la cuenta' });
-  }
-}
 
 // ─── Verify email ─────────────────────────────────────────────────────────────
 
@@ -76,19 +23,23 @@ export async function verifyEmail(req: Request, res: Response): Promise<void> {
   const token = req.params['token'] as string;
 
   try {
-    const user = await prisma.user.findUnique({ where: { verificationToken: token } });
+    // El token de verificación identifica la cuenta por sí solo (todavía no se
+    // sabe a qué club pertenece), así que este flujo corre en contexto de plataforma.
+    await runAsPlatform(async () => {
+      const user = await prisma.user.findUnique({ where: { verificationToken: token } });
 
-    if (!user || !user.verificationTokenExpiry || user.verificationTokenExpiry < new Date()) {
-      res.redirect(`${FRONTEND_URL}?verified=error`);
-      return;
-    }
+      if (!user || !user.verificationTokenExpiry || user.verificationTokenExpiry < new Date()) {
+        res.redirect(`${FRONTEND_URL}?verified=error`);
+        return;
+      }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { emailVerified: true, verificationToken: null, verificationTokenExpiry: null },
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true, verificationToken: null, verificationTokenExpiry: null },
+      });
+
+      res.redirect(`${FRONTEND_URL}?verified=1`);
     });
-
-    res.redirect(`${FRONTEND_URL}?verified=1`);
   } catch (error) {
     console.error('[verifyEmail]', error);
     res.redirect(`${FRONTEND_URL}?verified=error`);
@@ -107,7 +58,26 @@ export async function login(req: Request, res: Response): Promise<void> {
   const normalizedEmail = email.toLowerCase();
 
   try {
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    // El email es único en toda la plataforma (todavía no se sabe a qué club
+    // pertenece la cuenta), así que la búsqueda corre en contexto de plataforma.
+    const user = await runAsPlatform(() =>
+      prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        include: {
+          organization: {
+            select: {
+              id: true,
+              slug: true,
+              name: true,
+              shortName: true,
+              status: true,
+              membresiaPropia: true,
+              logoObjectKey: true,
+            },
+          },
+        },
+      }),
+    );
 
     if (!user || !user.passwordHash) {
       res.status(401).json({ error: 'Email o contraseña incorrectos' });
@@ -125,12 +95,28 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    if (isOrganizationSuspended(user.organization.status)) {
+      res.status(403).json({ error: CLUB_SUSPENDIDO_MENSAJE });
+      return;
+    }
+
     const token = signToken({ userId: user.id, email: user.email });
-    const gestorCategorias = await gestorCategoriasDe(user.id);
+    // gestorCategoriasDe consulta un modelo de tenant (GestorCategoria): corre
+    // ya dentro del contexto del club del usuario autenticado.
+    const gestorCategorias = await runWithOrganization(user.organizationId, () => gestorCategoriasDe(user.id));
 
     res.json({
       token,
-      user: { id: user.id, email: user.email, name: user.name, picture: user.picture ?? undefined, rol: user.rol, gestorCategorias },
+      user: {
+        id: user.id,
+        organizationId: user.organizationId,
+        email: user.email,
+        name: user.name,
+        picture: user.picture ?? undefined,
+        rol: user.rol,
+        gestorCategorias,
+        organization: toPublicOrganization(user.organization),
+      },
     });
   } catch (error) {
     console.error('[login]', error);
@@ -154,9 +140,11 @@ async function gestorCategoriasDe(userId: string): Promise<{ categoriaId: number
 // de datos, por lo que rol siempre refleja el valor vigente.
 export async function getMe(req: Request, res: Response): Promise<void> {
   try {
-    const { id, email, name, rol } = req.user!;
+    const { id, organizationId, email, name, rol, organization } = req.user!;
     const gestorCategorias = await gestorCategoriasDe(id);
-    res.json({ user: { id, email, name, rol, gestorCategorias } });
+    res.json({
+      user: { id, organizationId, email, name, rol, gestorCategorias, organization: toPublicOrganization(organization) },
+    });
   } catch (error) {
     console.error('[getMe]', error);
     res.status(500).json({ error: 'Error al obtener el usuario' });
@@ -175,24 +163,48 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
   const normalizedEmail = email.toLowerCase();
 
   try {
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    // El email es único en toda la plataforma, así que este flujo corre en
+    // contexto de plataforma. El correo se envía "como" el club del usuario
+    // encontrado (se carga en la misma búsqueda) usando el proveedor
+    // transaccional — ya no depende de ningún contexto de tenant ambiente.
+    await runAsPlatform(async () => {
+      const found = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        include: {
+          organization: {
+            select: {
+              id: true,
+              slug: true,
+              name: true,
+              shortName: true,
+              membresiaPropia: true,
+              alertEmail: true,
+              contactName: true,
+              contactEmail: true,
+              logoObjectKey: true,
+            },
+          },
+        },
+      });
+      if (!found) return;
 
-    if (user && user.passwordHash) {
       const resetToken = randomUUID();
       const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
 
       await prisma.user.update({
-        where: { id: user.id },
+        where: { id: found.id },
         data: { resetToken, resetTokenExpiry },
       });
 
       const resetUrl = `${FRONTEND_URL}?reset=${resetToken}`;
-      sendEmail(
-        normalizedEmail,
-        'Restablece tu contraseña — Pamir',
-        buildPasswordResetEmail(user.name, resetUrl),
-      ).catch((err) => console.error('[forgotPassword] email error:', err));
-    }
+      const branding = brandingFor(found.organization);
+      sendClubEmail(found.organization, {
+        to: normalizedEmail,
+        subject: subjectPasswordReset(branding),
+        html: buildPasswordResetEmail(found.name, resetUrl, branding),
+        kind: 'notificacion',
+      }).catch((err) => console.error('[forgotPassword] email error:', err));
+    });
 
     // Siempre responder 200 para no revelar si el email existe
     res.json({ message: 'Si el email está registrado, recibirás un enlace para restablecer tu contraseña.' });
@@ -213,19 +225,38 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
   const { token, password } = parsed.data;
 
   try {
-    const user = await prisma.user.findUnique({ where: { resetToken: token } });
+    // El token de restablecimiento identifica la cuenta por sí solo, así que
+    // este flujo corre en contexto de plataforma.
+    const ok = await runAsPlatform(async () => {
+      const user = await prisma.user.findUnique({ where: { resetToken: token } });
 
-    if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
+      if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
+        return false;
+      }
+
+      const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+      // El enlace de restablecimiento se envió a esa casilla de correo, lo que
+      // prueba su titularidad: se aprovecha para verificar el email también.
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash,
+          resetToken: null,
+          resetTokenExpiry: null,
+          emailVerified: true,
+          verificationToken: null,
+          verificationTokenExpiry: null,
+        },
+      });
+
+      return true;
+    });
+
+    if (!ok) {
       res.status(400).json({ error: 'El enlace de restablecimiento es inválido o ha expirado' });
       return;
     }
-
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash, resetToken: null, resetTokenExpiry: null },
-    });
 
     res.json({ message: 'Contraseña actualizada correctamente. Ahora puedes iniciar sesión.' });
   } catch (error) {

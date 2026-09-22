@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import type { Route } from '@playwright/test'
 import {
   setAuth,
   mockNoIntegrante,
@@ -8,6 +9,53 @@ import {
   MOCK_ADMIN,
   MOCK_SALIDA,
 } from './helpers'
+
+// La hoja "Ver más" solo existe por debajo del corte de 1024px: arriba de ese
+// ancho los mismos accesos son tarjetas sueltas y no hay hoja que abrir.
+test.describe('Dashboard mobile – hoja "Ver más"', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 })
+    await setAuth(page, MOCK_ADMIN)
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+    await page.route('**/api/eventos*', (route: Route) => {
+      void route.fulfill({ status: 200, json: [] })
+    })
+  })
+
+  test('se abre y ofrece los accesos que no entran en el mosaico', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Ver más' }).click()
+    const hoja = page.getByRole('dialog')
+    await expect(hoja).toBeVisible()
+    await expect(hoja.getByLabel('Abrir panel de administración')).toBeVisible()
+  })
+
+  test('arrastrar la hoja hacia abajo la cierra', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Ver más' }).click()
+    const hoja = page.getByRole('dialog')
+    await expect(hoja).toBeVisible()
+
+    const caja = await hoja.boundingBox()
+    if (!caja) throw new Error('la hoja no tiene caja')
+    // Gesto desde el asa hacia abajo, más largo que el umbral de cierre.
+    await page.mouse.move(caja.x + caja.width / 2, caja.y + 12)
+    await page.mouse.down()
+    await page.mouse.move(caja.x + caja.width / 2, caja.y + 220, { steps: 12 })
+    await page.mouse.up()
+
+    await expect(hoja).toHaveCount(0)
+  })
+
+  test('el arrastre es un atajo, no la única salida: Escape también cierra', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Ver más' }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+  })
+})
 
 test.describe('Dashboard – estado bloqueado (sin integrante)', () => {
   test.beforeEach(async ({ page }) => {
@@ -42,13 +90,15 @@ test.describe('Dashboard – estado bloqueado (sin integrante)', () => {
   test('el botón Completar de la alerta navega al formulario de integrante', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Completar', exact: true }).click()
-    await expect(page.getByText('Información Personal y de Contacto')).toBeVisible()
+    // El título del paso 1 aparece SOLO en su encabezado — el indicador de
+    // progreso de arriba solo dice "Paso 1 de 4" (ver RegistroIntegrante.tsx).
+    await expect(page.getByRole('heading', { name: 'Información Personal y de Contacto' })).toBeVisible()
   })
 
   test('el botón Completar mi Ficha navega al formulario de integrante', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: /Completar mi Ficha/i }).click()
-    await expect(page.getByText('Información Personal y de Contacto')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Información Personal y de Contacto' })).toBeVisible()
   })
 })
 
@@ -78,7 +128,7 @@ test.describe('Dashboard – estado desbloqueado (tiene integrante)', () => {
 
   test('muestra sección Mis Salidas vacía', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByText('Sin salidas aun')).toBeVisible()
+    await expect(page.getByText('Sin salidas activas en curso')).toBeVisible()
   })
 
   test('muestra lista de salidas cuando existen', async ({ page }) => {
@@ -119,5 +169,87 @@ test.describe('Dashboard – sesión no autenticada', () => {
     await mockSalidas(page)
     await page.goto('/')
     await expect(page.getByText(MOCK_USER.name)).toBeVisible()
+  })
+})
+
+test.describe('Detalle de salida – descarga de GPX y pronóstico', () => {
+  const MOCK_SALIDA_DETALLE = {
+    ...MOCK_SALIDA,
+    tipoSalida: 'OFICIAL_CLUB',
+    temporada: 'estival',
+    fechaInicio: MOCK_SALIDA.fechaInicio,
+    fechaRetornoEstimada: MOCK_SALIDA.fechaInicio,
+    horaAlerta: '20:00',
+    avisosExternos: [],
+    liderCordada: 'Test Alpinista',
+    coordinacionGrupal: true,
+    matrizRiesgos: true,
+    mediosComunicacion: ['CELULAR'],
+    equipoColectivo: [],
+    riesgosIdentificados: [],
+    planEvacuacion: 'Descenso por la misma ruta',
+    gpxFileId: 'gcs-gpx-001',
+    gpxFileName: 'ruta.gpx',
+    pronosticoFileId: 'gcs-pronostico-001',
+    pronosticoFileName: 'pronostico.pdf',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    userId: MOCK_USER.id,
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await setAuth(page, MOCK_USER)
+    await mockHasIntegrante(page)
+    await mockSalidas(page, [MOCK_SALIDA])
+    await page.route('**/api/salidas/salida-001', (route: Route) => {
+      void route.fulfill({ status: 200, json: MOCK_SALIDA_DETALLE })
+    })
+    await page.route('https://storage.googleapis.com/**', (route: Route) => {
+      const url = route.request().url()
+      const filename = url.includes('gpx') ? 'ruta.gpx' : 'pronostico.pdf'
+      void route.fulfill({
+        status: 200,
+        headers: { 'Content-Disposition': `attachment; filename="${filename}"` },
+        body: 'contenido-fake',
+      })
+    })
+  })
+
+  test('descarga el GPX vía URL firmada de GCS', async ({ page }) => {
+    await page.route('**/api/salidas/salida-001/archivos/gpx/url', (route: Route) => {
+      void route.fulfill({
+        status: 200,
+        json: {
+          url: 'https://storage.googleapis.com/pamirv2-files-dev/orgs/x/gpx/gcs-gpx-001.gpx?sig=abc',
+          expiresInSeconds: 600,
+        },
+      })
+    })
+    await page.goto('/')
+    await page.getByText('Ascenso al Plomo').click()
+
+    const boton = page.getByRole('button', { name: /Descargar GPX/ })
+    await expect(boton).toBeVisible()
+    const [descarga] = await Promise.all([page.waitForEvent('download'), boton.click()])
+    expect(descarga.suggestedFilename()).toBe('ruta.gpx')
+  })
+
+  test('descarga el pronóstico vía URL firmada de GCS', async ({ page }) => {
+    await page.route('**/api/salidas/salida-001/archivos/pronostico/url', (route: Route) => {
+      void route.fulfill({
+        status: 200,
+        json: {
+          url: 'https://storage.googleapis.com/pamirv2-files-dev/orgs/x/pronostico/gcs-pronostico-001.pdf?sig=abc',
+          expiresInSeconds: 600,
+        },
+      })
+    })
+    await page.goto('/')
+    await page.getByText('Ascenso al Plomo').click()
+
+    const boton = page.getByRole('button', { name: /Ver archivo subido/ })
+    await expect(boton).toBeVisible()
+    const [descarga] = await Promise.all([page.waitForEvent('download'), boton.click()])
+    expect(descarga.suggestedFilename()).toBe('pronostico.pdf')
   })
 })

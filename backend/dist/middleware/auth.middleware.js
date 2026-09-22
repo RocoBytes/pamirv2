@@ -1,22 +1,77 @@
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/jwt.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
-export async function authMiddleware(req, _res, next) {
+import { isAdmin, canInvite } from '../lib/authz.js';
+import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
+import { isOrganizationSuspended, CLUB_SUSPENDIDO_MENSAJE } from '../lib/organization-status.js';
+export async function authMiddleware(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
         req.user = null;
-        return next();
+        next();
+        return;
     }
     const token = authHeader.slice(7);
     try {
         const { userId } = verifyToken(token);
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        req.user = user ? { id: user.id, email: user.email, name: user.name, rol: user.rol } : null;
+        // La cuenta se busca por id en todo el sistema (no se sabe todavía a qué
+        // club pertenece), así que este findUnique corre en contexto de plataforma.
+        const user = await runAsPlatform(() => prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                organization: {
+                    select: {
+                        id: true,
+                        slug: true,
+                        name: true,
+                        shortName: true,
+                        status: true,
+                        membresiaPropia: true,
+                        alertEmail: true,
+                        contactName: true,
+                        contactEmail: true,
+                        logoObjectKey: true,
+                    },
+                },
+            },
+        }));
+        if (!user) {
+            req.user = null;
+            next();
+            return;
+        }
+        if (isOrganizationSuspended(user.organization.status)) {
+            res.status(403).json({ error: CLUB_SUSPENDIDO_MENSAJE });
+            return;
+        }
+        req.user = {
+            id: user.id,
+            organizationId: user.organizationId,
+            email: user.email,
+            name: user.name,
+            rol: user.rol,
+            // Resumen cargado una sola vez acá: los controladores lo leen de
+            // req.user.organization en vez de volver a consultar Organization.
+            organization: {
+                id: user.organization.id,
+                slug: user.organization.slug,
+                name: user.organization.name,
+                shortName: user.organization.shortName,
+                membresiaPropia: user.organization.membresiaPropia,
+                alertEmail: user.organization.alertEmail,
+                contactName: user.organization.contactName,
+                contactEmail: user.organization.contactEmail,
+                logoObjectKey: user.organization.logoObjectKey,
+            },
+        };
+        // Todo lo que siga en la cadena de middlewares/handler corre dentro del
+        // contexto del club del usuario: es lo que hace que prisma.ts filtre
+        // automáticamente cada consulta de este request por su organizationId.
+        runWithOrganization(user.organizationId, () => next());
     }
     catch {
         req.user = null;
+        next();
     }
-    next();
 }
 export function requireAuth(req, res, next) {
     if (!req.user) {
@@ -25,18 +80,21 @@ export function requireAuth(req, res, next) {
     }
     next();
 }
+// Autorización por columna rol: promover o degradar a un administrador es un
+// UPDATE en la base de datos (o `npm run db:create-user -- ... --rol ADMIN
+// --force`), sin redeploy.
 export function requireAdmin(req, res, next) {
-    if (!req.user || req.user.email !== ADMIN_EMAIL) {
+    if (!isAdmin(req.user)) {
         res.status(403).json({ error: 'Acceso restringido al administrador' });
         return;
     }
     next();
 }
-// Autorización por columna rol (módulo de eventos): promover a un nuevo
-// administrador es un UPDATE en la base de datos, sin redeploy.
-export function requireRolAdmin(req, res, next) {
-    if (req.user?.rol !== 'ADMIN') {
-        res.status(403).json({ error: 'Acceso restringido al administrador' });
+// Sistema cerrado: solo ADMIN y LIDER pueden invitar cuentas nuevas (un LIDER
+// solo puede invitar SOCIOS — ver lib/invitaciones.ts).
+export function requireCanInvite(req, res, next) {
+    if (!canInvite(req.user)) {
+        res.status(403).json({ error: 'No tienes permiso para invitar' });
         return;
     }
     next();
@@ -49,7 +107,7 @@ export async function requireGestorEventos(req, res, next) {
         res.status(403).json({ error: 'Acceso restringido a gestores de eventos' });
         return;
     }
-    if (req.user.rol === 'ADMIN') {
+    if (isAdmin(req.user)) {
         req.gestorCategoriaIds = null;
         return next();
     }

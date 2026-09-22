@@ -62,8 +62,8 @@ export function EditarIntegrantesModal({
       aria-modal="true"
       aria-labelledby="editar-integrantes-title"
     >
-      <div className="bg-[#f0f4fb] sm:rounded-3xl w-full h-full sm:h-auto sm:max-h-[85vh] max-w-lg flex flex-col overflow-hidden shadow-2xl">
-        <header className="bg-white border-b border-[#4a6fad]/15 px-4 sm:px-6 h-14 flex items-center justify-between shrink-0">
+      <div className="bg-surface-container-low sm:rounded-3xl w-full h-full sm:h-auto sm:max-h-[85vh] max-w-lg flex flex-col overflow-hidden shadow-2xl">
+        <header className="bg-white border-b border-secondary/15 px-4 sm:px-6 h-14 flex items-center justify-between shrink-0">
           <span id="editar-integrantes-title" className="font-semibold text-slate-900">
             Editar integrantes
           </span>
@@ -77,18 +77,18 @@ export function EditarIntegrantesModal({
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-4">
-          <p className="text-xs text-[#757874]">
+          <p className="text-xs text-on-surface-variant">
             Agrega, quita o registra participantes express. Los cambios quedan registrados con tu
             usuario y la fecha.
           </p>
 
           {/* Selected participant chips */}
           {participantes.length > 0 && (
-            <div className="flex flex-wrap gap-2 p-3 rounded-xl border border-[#4a6fad]/20 bg-[#f0f4fb]/60">
+            <div className="flex flex-wrap gap-2 p-3 rounded-xl border border-secondary/20 bg-surface-container-low/60">
               {participantes.map((p) => (
                 <span
                   key={p.rut}
-                  className="inline-flex items-center gap-1.5 bg-[#e8eef7] text-[#1e3c7a] text-sm font-medium px-3 py-1 rounded-full border border-[#264c99]/20"
+                  className="inline-flex items-center gap-1.5 bg-primary-fixed text-primary-hover text-sm font-medium px-3 py-1 rounded-full border border-primary/20"
                 >
                   {p.esExpress ? (
                     <span className="text-[10px] font-bold uppercase tracking-wide bg-[#fef2f2] border border-[#fca5a5] text-[#991b1b] px-1.5 py-0.5 rounded-md">
@@ -96,7 +96,7 @@ export function EditarIntegrantesModal({
                     </span>
                   ) : (
                     p.membresiaClub && (
-                      <span className="text-[10px] font-bold uppercase tracking-wide bg-[#264c99]/10 text-[#264c99] px-1.5 py-0.5 rounded-md">
+                      <span className="text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-1.5 py-0.5 rounded-md">
                         {CLUB_BADGE_LABELS[p.membresiaClub]}
                       </span>
                     )
@@ -106,7 +106,7 @@ export function EditarIntegrantesModal({
                     type="button"
                     onClick={() => removeParticipante(p.rut)}
                     aria-label={`Quitar ${p.nombre}`}
-                    className="text-[#264c99] hover:text-[#A4636E] transition-colors leading-none"
+                    className="text-primary hover:text-error transition-colors leading-none"
                   >
                     <X size={13} />
                   </button>
@@ -131,14 +131,14 @@ export function EditarIntegrantesModal({
           />
 
           {error && (
-            <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-sm text-[#8b3a44]">
+            <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container">
               <AlertCircle size={16} className="shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
         </div>
 
-        <div className="bg-white border-t border-[#4a6fad]/15 p-4 sm:p-6 shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+        <div className="bg-white border-t border-secondary/15 p-4 sm:p-6 shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <Button variant="ghost" onClick={onClose} className="w-full sm:w-auto">
             Cancelar
           </Button>

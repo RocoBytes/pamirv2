@@ -41,9 +41,8 @@ const MOCK_EVENTO = {
   fechaCorte: corteIso,
   objetivo: 'Cumbre del Cerro Provincia',
   itinerario: 'Salida 07:30 desde el club',
-  itinerarioFileId: 'drive-itin-001',
+  itinerarioFileId: 'gcs-itin-001',
   itinerarioFileName: 'itinerario.pdf',
-  itinerarioFileUrl: 'https://drive.google.com/file/d/drive-itin-001/view',
   incluye: null,
   noIncluye: null,
   recomendaciones: null,
@@ -139,8 +138,8 @@ test.describe('Eventos del club – socio', () => {
     await page.goto('/')
     const card = page.getByRole('button', { name: 'Abrir eventos del club' })
     await expect(card).toBeVisible()
-    await expect(card).toContainText('Eventos del club')
-    await expect(card).toContainText('Calendario de actividades e inscripciones')
+    await expect(card).toContainText('Eventos & Salidas Club')
+    await expect(card).toContainText('Calendario y cupos abiertos')
   })
 
   test('abre Eventos y ve la tarjeta publicada con badge de categoría e inscripciones abiertas', async ({ page }) => {
@@ -235,13 +234,30 @@ test.describe('Eventos del club – inscripción (socio)', () => {
     await expect(modal.getByText(/DECLARACIÓN JURADA DEL PARTICIPANTE/)).toBeVisible()
   })
 
-  test('el detalle enlaza al adjunto del itinerario en una pestaña nueva', async ({ page }) => {
+  test('el detalle permite descargar el itinerario adjunto vía URL firmada de GCS', async ({ page }) => {
     await mockDetalleConInscripcion(page, 'ninguna')
+    await page.route('**/api/eventos/evento-001/itinerario/url', (route: Route) => {
+      void route.fulfill({
+        status: 200,
+        json: {
+          url: 'https://storage.googleapis.com/pamirv2-files-dev/orgs/x/itinerario/gcs-itin-001.pdf?sig=abc',
+          expiresInSeconds: 600,
+        },
+      })
+    })
+    await page.route('https://storage.googleapis.com/**', (route: Route) => {
+      void route.fulfill({
+        status: 200,
+        headers: { 'Content-Disposition': 'attachment; filename="itinerario.pdf"' },
+        body: 'contenido-fake',
+      })
+    })
     await abrirDetalle(page)
 
-    const link = page.getByRole('link', { name: /Ver itinerario adjunto/ })
-    await expect(link).toHaveAttribute('href', 'https://drive.google.com/file/d/drive-itin-001/view')
-    await expect(link).toHaveAttribute('target', '_blank')
+    const boton = page.getByRole('button', { name: /Ver itinerario adjunto/ })
+    await expect(boton).toBeVisible()
+    const [descarga] = await Promise.all([page.waitForEvent('download'), boton.click()])
+    expect(descarga.suggestedFilename()).toBe('itinerario.pdf')
   })
 
   test('postulado: puede retirar la postulación con confirmación inline', async ({ page }) => {

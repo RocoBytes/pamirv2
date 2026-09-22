@@ -1,4 +1,4 @@
-import type { SalidaFormData, SalidaRecord, GpxUploadResponse, PronosticoUploadResponse, User, IntegranteRecord, Participante } from '../types/salida'
+import type { SalidaFormData, SalidaRecord, GpxUploadResponse, PronosticoUploadResponse, User, IntegranteRecord, Participante, OrganizationBrand } from '../types/salida'
 import type {
   CategoriaEventoRecord,
   EventoRecord,
@@ -10,6 +10,15 @@ import type {
   PostulantesResponse,
 } from '../types/evento'
 import { getAuthToken } from './auth-token'
+import type {
+  Rol,
+  Invitacion,
+  UsuarioAdmin,
+  ConsultarInvitacionResponse,
+  AceptarInvitacionResponse,
+  CrearInvitacionResponse,
+  ListarInvitacionesResponse,
+} from '../types/invitacion'
 
 // En desarrollo el proxy de Vite redirige /api → localhost:3000.
 // En producción (Vercel) no hay proxy: se usa VITE_API_URL apuntando a Render.com.
@@ -22,6 +31,19 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+// Conserva el status HTTP junto al mensaje: los controles de descarga de
+// archivos (ver fetchSalidaArchivoUrl y hermanas) lo necesitan para distinguir
+// 403 (sin permiso, el backend nombra el club) de 404 (ya no existe) sin
+// parsear el texto del mensaje.
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let message = `HTTP ${res.status}`
@@ -31,7 +53,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
     } catch {
       // ignore parse errors
     }
-    throw new Error(message)
+    throw new ApiError(message, res.status)
   }
   return res.json() as Promise<T>
 }
@@ -48,19 +70,6 @@ export async function loginWithCredentials(
     body: JSON.stringify({ email, password }),
   })
   return handleResponse<{ user: User; token: string }>(res)
-}
-
-export async function registerUser(
-  name: string,
-  email: string,
-  password: string,
-): Promise<{ message: string }> {
-  const res = await fetch(`${API_BASE}/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, email, password }),
-  })
-  return handleResponse<{ message: string }>(res)
 }
 
 export async function forgotPassword(email: string): Promise<{ message: string }> {
@@ -116,12 +125,10 @@ export async function getSalida(id: string): Promise<SalidaRecord> {
   return handleResponse<SalidaRecord>(res)
 }
 
+// Los metadatos del GPX nunca viajan en este payload: el archivo se sube
+// después, a través de uploadGpx(), una vez creada la salida.
 export async function createSalida(
-  data: Omit<SalidaFormData, 'gpxFile'> & {
-    gpxFileId?: string
-    gpxFileName?: string
-    gpxFileUrl?: string
-  },
+  data: Omit<SalidaFormData, 'gpxFile'>,
 ): Promise<SalidaRecord> {
   const res = await fetch(`${API_BASE}/salidas`, {
     method: 'POST',
@@ -153,14 +160,6 @@ export async function updateSalidaIntegrantes(
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(data),
-  })
-  return handleResponse<SalidaRecord>(res)
-}
-
-export async function claimSalida(id: string): Promise<SalidaRecord> {
-  const res = await fetch(`${API_BASE}/salidas/${id}/claim`, {
-    method: 'PATCH',
-    headers: authHeaders(),
   })
   return handleResponse<SalidaRecord>(res)
 }
@@ -203,6 +202,10 @@ export async function uploadPronostico(salidaId: string, file: File): Promise<Pr
 
 // ─── Integrantes ─────────────────────────────────────────────────────────────
 
+// membresiaClub/nombreClub NO van en este payload: el servidor asigna
+// siempre la membresía propia del club donde se crea la ficha (ver
+// membresiaParaNuevaFicha en backend/src/lib/integrante-membresia.ts) — el
+// formulario de registro ya no pregunta a qué club pertenece la persona.
 export interface CreateIntegrantePayload {
   nombreCompleto: string
   rut: string
@@ -229,8 +232,6 @@ export interface CreateIntegrantePayload {
   cirugiasLesionesDetalle?: string
   fuma: boolean
   usaLentes: boolean
-  membresiaClub: string
-  nombreClub?: string
   declaracionSalud: boolean
   aceptacionRiesgo: boolean
   consentimientoDatos: boolean
@@ -304,6 +305,9 @@ export interface EvaluacionInfo {
   nombreActividad: string
   fechaInicio: string
   used: boolean
+  // null si el backend no pudo resolver el club dueño del token (no debería
+  // pasar en producción; la pantalla se mantiene neutral en ese caso).
+  organization: OrganizationBrand | null
 }
 
 export interface SubmitEvaluacionPayload {
@@ -355,7 +359,9 @@ export interface DocumentoRecord {
   categoria: string
   nombre: string
   descripcion?: string | null
-  driveFileUrl?: string | null
+  // No null = tiene archivo subido; la URL de descarga se pide aparte y bajo
+  // demanda (ver fetchDocumentoUrl), nunca viaja en este payload.
+  driveFileId?: string | null
   // Solo presentes en la vista admin (GET /api/documentos/admin):
   visible?: boolean
   orden?: number
@@ -432,32 +438,39 @@ export async function fetchAdminStats(): Promise<AdminStats> {
   return handleResponse<AdminStats>(res)
 }
 
-// ─── Credencial de Google (refresh token rotable desde el panel) ─────────────
+// ─── Descarga de archivos (Google Cloud Storage) ─────────────────────────────
 
-export interface GoogleCredencial {
-  configurado: boolean
-  /** 'db' = pegado desde el panel; 'env' = el del servidor, como respaldo. */
-  origen: 'db' | 'env'
-  actualizadoAt: string | null
-  actualizadoPor: string | null
-  diasDesdeActualizacion: number | null
-  estado: { ok: boolean; motivo: string | null }
+// Las tres rutas de "url" nunca deben cachearse: la respuesta trae
+// Cache-Control: no-store y, cuando es una URL firmada, expira a los 10
+// minutos — cada click debe pedir una fresca (ver lib/file-download.ts).
+export interface DownloadUrlResponse {
+  url: string
+  expiresInSeconds: number | null
 }
 
-export async function fetchGoogleCredencial(): Promise<GoogleCredencial> {
-  const res = await fetch(`${API_BASE}/admin/google-credencial`, {
+export async function fetchSalidaArchivoUrl(
+  salidaId: string,
+  tipo: 'gpx' | 'pronostico',
+): Promise<DownloadUrlResponse> {
+  const res = await fetch(
+    `${API_BASE}/salidas/${encodeURIComponent(salidaId)}/archivos/${tipo}/url`,
+    { headers: authHeaders() },
+  )
+  return handleResponse<DownloadUrlResponse>(res)
+}
+
+export async function fetchDocumentoUrl(id: string): Promise<DownloadUrlResponse> {
+  const res = await fetch(`${API_BASE}/documentos/${encodeURIComponent(id)}/url`, {
     headers: authHeaders(),
   })
-  return handleResponse<GoogleCredencial>(res)
+  return handleResponse<DownloadUrlResponse>(res)
 }
 
-export async function saveGoogleCredencial(refreshToken: string): Promise<GoogleCredencial> {
-  const res = await fetch(`${API_BASE}/admin/google-credencial`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ refreshToken }),
+export async function fetchEventoItinerarioUrl(id: string): Promise<DownloadUrlResponse> {
+  const res = await fetch(`${API_BASE}/eventos/${encodeURIComponent(id)}/itinerario/url`, {
+    headers: authHeaders(),
   })
-  return handleResponse<GoogleCredencial>(res)
+  return handleResponse<DownloadUrlResponse>(res)
 }
 
 // ─── Admin analytics dashboard ──────────────────────────────────────────────────
@@ -776,9 +789,161 @@ export async function cancelarEvento(id: string, motivo?: string): Promise<Event
   return handleResponse<EventoRecord>(res)
 }
 
+// ─── Invitaciones (sistema cerrado) ──────────────────────────────────────────
+
+// Públicos: no llevan Authorization. El token siempre va en el body, nunca en
+// la URL, para que no quede en los logs de acceso.
+
+export async function consultarInvitacion(token: string): Promise<ConsultarInvitacionResponse> {
+  const res = await fetch(`${API_BASE}/auth/invitaciones/consultar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  })
+  return handleResponse<ConsultarInvitacionResponse>(res)
+}
+
+export async function aceptarInvitacion(
+  token: string,
+  name: string,
+  password: string,
+): Promise<AceptarInvitacionResponse> {
+  const res = await fetch(`${API_BASE}/auth/invitaciones/aceptar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, name, password }),
+  })
+  return handleResponse<AceptarInvitacionResponse>(res)
+}
+
+// Autenticados (ADMIN o LIDER): ADMIN ve todas, LIDER solo las que él envió.
+
+export async function listarInvitaciones(): Promise<ListarInvitacionesResponse> {
+  const res = await fetch(`${API_BASE}/invitaciones`, {
+    headers: authHeaders(),
+  })
+  return handleResponse<ListarInvitacionesResponse>(res)
+}
+
+export async function crearInvitacion(email: string, rol?: Rol): Promise<CrearInvitacionResponse> {
+  const res = await fetch(`${API_BASE}/invitaciones`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(rol ? { email, rol } : { email }),
+  })
+  return handleResponse<CrearInvitacionResponse>(res)
+}
+
+export async function revocarInvitacion(id: string): Promise<{ invitacion: Invitacion }> {
+  const res = await fetch(`${API_BASE}/invitaciones/${encodeURIComponent(id)}/revocar`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  return handleResponse<{ invitacion: Invitacion }>(res)
+}
+
+export async function reenviarInvitacion(id: string): Promise<CrearInvitacionResponse> {
+  const res = await fetch(`${API_BASE}/invitaciones/${encodeURIComponent(id)}/reenviar`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  return handleResponse<CrearInvitacionResponse>(res)
+}
+
+// ─── Usuarios (solo administrador) ────────────────────────────────────────────
+
+export async function listarUsuarios(): Promise<UsuarioAdmin[]> {
+  const res = await fetch(`${API_BASE}/admin/users`, {
+    headers: authHeaders(),
+  })
+  return handleResponse<UsuarioAdmin[]>(res)
+}
+
+export async function cambiarRolUsuario(id: string, rol: Rol): Promise<UsuarioAdmin> {
+  const res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(id)}/rol`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ rol }),
+  })
+  return handleResponse<UsuarioAdmin>(res)
+}
+
 // ─── Health ───────────────────────────────────────────────────────────────────
 
 export async function healthCheck(): Promise<{ status: string }> {
   const res = await fetch(`${API_BASE}/health`)
   return handleResponse<{ status: string }>(res)
+}
+
+// ─── Preferencias de navegación (por socio) ──────────────────────────────────
+
+export interface NavPreferences {
+  /** Pestañas de la barra inferior, en orden. */
+  tabs: string[]
+  /** Accesos rápidos visibles, en orden. */
+  quick: string[]
+}
+
+// null = el usuario nunca personalizó, así que manda el orden por defecto del
+// frontend. Es distinto de unas preferencias guardadas que casualmente
+// coinciden con el default: esas sobreviven a un cambio del default.
+export async function fetchNavPreferences(): Promise<NavPreferences | null> {
+  const res = await fetch(`${API_BASE}/me/nav-preferences`, { headers: authHeaders() })
+  const data = await handleResponse<{ preferences: NavPreferences | null }>(res)
+  return data.preferences
+}
+
+export async function saveNavPreferences(prefs: NavPreferences): Promise<NavPreferences> {
+  const res = await fetch(`${API_BASE}/me/nav-preferences`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(prefs),
+  })
+  const data = await handleResponse<{ preferences: NavPreferences }>(res)
+  return data.preferences
+}
+
+export async function resetNavPreferences(): Promise<void> {
+  const res = await fetch(`${API_BASE}/me/nav-preferences`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  await handleResponse<{ preferences: null }>(res)
+}
+
+// ─── Clubes: marca pública y logo propio (branding) ──────────────────────────
+
+// Público, sin sesión a propósito: lo consume AuthPage antes de autenticar
+// (ver club-preferido.ts) para pintar el logo y el nombre del club preferido.
+export async function fetchMarcaClub(slug: string): Promise<OrganizationBrand> {
+  const res = await fetch(`${API_BASE}/clubes/${encodeURIComponent(slug)}/marca`)
+  return handleResponse<OrganizationBrand>(res)
+}
+
+export interface OrganizacionLogoResponse {
+  hasLogo: boolean
+  logoVersion: string | null
+}
+
+// Solo ADMIN. El campo del FormData se llama "file" — busboy no valida su
+// nombre (ver uploadOrganizacionLogo en el backend), pero se mantiene el
+// mismo nombre que el resto de los uploads (uploadGpx, uploadDocumento).
+export async function uploadOrganizacionLogo(file: File): Promise<OrganizacionLogoResponse> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const res = await fetch(`${API_BASE}/organizacion/logo`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData,
+  })
+  return handleResponse<OrganizacionLogoResponse>(res)
+}
+
+export async function deleteOrganizacionLogo(): Promise<{ hasLogo: false }> {
+  const res = await fetch(`${API_BASE}/organizacion/logo`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  return handleResponse<{ hasLogo: false }>(res)
 }

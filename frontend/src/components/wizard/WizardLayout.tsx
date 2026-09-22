@@ -1,10 +1,15 @@
-import { useState, useCallback } from 'react'
-import { Users, Radio, Map, X, Check } from 'lucide-react'
-import logoPamir from '../../assets/logo_PAMIR.png'
+import { useState, useCallback, useEffect } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { Users, Radio, Map, X } from 'lucide-react'
 import type { SalidaFormData, User } from '../../types/salida'
 import { saveDraft, loadDraft, loadDraftStep, clearDraft, saveDraftStep } from '../../lib/storage'
 import { createSalida, uploadGpx, uploadPronostico } from '../../lib/api'
+import type { RevealOrigin } from '../../lib/reveal-geometry'
+import { useStepDirection } from '../../hooks/useStepDirection'
 import { Button } from '../ui/Button'
+import { stepVariants } from '../ui/motion'
+import { SuccessReveal, type RevealStatus } from '../ui/SuccessReveal'
+import { ClubLogo } from '../ClubLogo'
 import { Step1General } from './Step1General'
 import { Step2Participants } from './Step2Participants'
 import { Step3HumanTeam } from './Step3Equipment'
@@ -86,6 +91,16 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [numeroSalida, setNumeroSalida] = useState<number | null>(null)
+  /** Mientras no sea null hay una onda de confirmación en curso sobre el formulario. */
+  const [revealOrigin, setRevealOrigin] = useState<RevealOrigin | null>(null)
+
+  const direction = useStepDirection(currentStep)
+
+  // El paso nuevo entra deslizándose desde arriba: si el usuario venía
+  // desplazado al final de un paso largo, lo vería entrar por la mitad.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [currentStep])
 
   const restoreDraft = useCallback(() => {
     const draft = loadDraft()
@@ -140,7 +155,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
   }, [currentStep])
 
   const handleFinalSubmit = useCallback(
-    async (step5Data: Step5Data) => {
+    async (step5Data: Step5Data, origin: RevealOrigin) => {
       const finalData: Omit<SalidaFormData, 'gpxFile'> = {
         ...formData,
         pronosticoMeteorologico: step5Data.pronosticoMeteorologico,
@@ -148,6 +163,9 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
         riesgosOtro: step5Data.riesgosOtro ?? '',
         planEvacuacion: step5Data.planEvacuacion ?? '',
       }
+      // La onda arranca ya, en el mismo cuadro del toque; lo que espera la
+      // confirmación del servidor es el check, no la expansión.
+      setRevealOrigin(origin)
       setIsSubmitting(true)
       setSubmitError(null)
 
@@ -165,7 +183,9 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
 
         clearDraft()
         setSubmitSuccess(true)
-        setTimeout(onDone, 1500)
+        // El `setTimeout(onDone, 1500)` que había acá se fue: ahora navega
+        // SuccessReveal cuando la confirmación terminó de leerse, en vez de un
+        // reloj a ciegas compitiendo contra la animación.
       } catch (err) {
         setSubmitError(
           err instanceof Error ? err.message : 'Error al guardar la salida',
@@ -173,38 +193,28 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
         setIsSubmitting(false)
       }
     },
-    [formData, gpxFile, pronosticoFile, onDone],
+    [formData, gpxFile, pronosticoFile],
   )
 
-  // Success screen
-  if (submitSuccess) {
-    return (
-      <div className="min-h-screen bg-[#f0f4fb] flex items-center justify-center px-4">
-        <div className="text-center">
-          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-[#e8eef7] mx-auto mb-4">
-            <Check size={32} className="text-[#264c99]" />
-          </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">
-            {numeroSalida !== null
-              ? `Salida N° ${numeroSalida} registrada`
-              : 'Salida registrada'}
-          </h2>
-          <p className="text-[#757874] text-sm">Redirigiendo...</p>
-        </div>
-      </div>
-    )
-  }
+  // La pantalla de éxito ya no reemplaza el wizard con un `return` temprano: la
+  // onda se superpone y el formulario queda debajo, que es lo que hace que la
+  // confirmación parezca nacer de algo en vez de aparecer de la nada.
+  const revealStatus: RevealStatus = submitError
+    ? 'error'
+    : submitSuccess
+      ? 'success'
+      : 'saving'
 
   const currentStepMeta = STEPS[currentStep - 1]
 
   return (
-    <div className="min-h-screen bg-[#f0f4fb] flex flex-col">
+    <div className="min-h-screen bg-alpine-canvas flex flex-col">
       {/* Top bar */}
-      <header className="bg-white border-b border-[#4a6fad]/15 sticky top-0 z-10">
+      <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-outline-variant/40 shadow-sm pt-safe">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <button
             onClick={onCancel}
-            className="flex items-center gap-1.5 text-sm text-[#757874] hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] rounded transition-colors"
+            className="flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded transition-colors"
             aria-label="Cancelar y volver"
           >
             <X size={18} />
@@ -212,20 +222,20 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
           </button>
 
           <div className="flex items-center gap-2">
-            <img src={logoPamir} alt="Pamir Andino Club" className="w-10 h-10 object-contain" />
+            <ClubLogo alt="" className="w-10 h-10 object-contain" />
             <span className="font-semibold text-slate-800 text-sm">
               Nueva Salida
             </span>
           </div>
 
-          <span className="text-xs text-[#757874] font-medium">
+          <span className="text-xs text-on-surface-variant font-medium">
             {currentStep} / {STEPS.length}
           </span>
         </div>
       </header>
 
       {/* Bar stepper */}
-      <div className="bg-white border-b border-[#4a6fad]/10">
+      <div className="bg-white border-b border-secondary/10">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-3 pb-2">
           {/* Progress bars */}
           <div className="flex gap-1.5 mb-2" role="list" aria-label="Progreso del formulario">
@@ -240,17 +250,17 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
                   className={[
                     'flex-1 h-1 rounded-full transition-colors duration-300',
                     isCompleted || (isActive && completedSteps.has(step.id))
-                      ? 'bg-[#264c99]'
+                      ? 'bg-primary'
                       : isActive
-                      ? 'bg-[#264c99]/60'
-                      : 'bg-[#dde6f7]',
+                      ? 'bg-primary/60'
+                      : 'bg-surface-container',
                   ].join(' ')}
                 />
               )
             })}
           </div>
           {/* Current step label */}
-          <p className="text-xs font-semibold text-[#264c99] uppercase tracking-wider">
+          <p className="text-xs font-semibold text-primary uppercase tracking-wider">
             Paso {currentStep} &mdash; {STEPS[currentStep - 1].label}
           </p>
         </div>
@@ -258,7 +268,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
 
       {/* Draft banner */}
       {showDraftBanner && (
-        <div className="bg-[#fef9f0] border-b border-[#A4636E]/30">
+        <div className="bg-[#fef9f0] border-b border-error/30">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-3 text-sm">
             <p className="text-[#8b5a3a] flex-1">
               Tienes un borrador guardado. ¿Deseas continuar donde lo dejaste?
@@ -278,7 +288,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
       {/* Step content */}
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-6">
         <div className="mb-6">
-          <div className="flex items-center gap-2 text-[#264c99] mb-1">
+          <div className="flex items-center gap-2 text-primary mb-1">
             {currentStepMeta.icon}
             <span className="text-xs font-semibold uppercase tracking-wider">
               Paso {currentStep} de {STEPS.length}
@@ -290,11 +300,30 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
         </div>
 
         {submitError && (
-          <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 mb-5 text-sm text-[#8b3a44]">
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 mb-5 text-sm text-on-error-container"
+          >
             <span>{submitError}</span>
           </div>
         )}
 
+        {/* `mode="wait"` y no `sync`/`popLayout`: los pasos tienen alturas muy
+            distintas y dos formularios largos superpuestos durante el cruce se
+            leen como un borrón. `initial={false}` para que el primer pintado no
+            entre deslizándose. */}
+        {/* `custom` acá es lo que hace que el paso que SALE conozca la
+            dirección actual: sin esto se va siempre para el mismo lado, porque
+            AnimatePresence lo dibuja desde la copia que guardó al entrar. */}
+        <AnimatePresence mode="wait" initial={false} custom={direction}>
+          <motion.div
+            key={currentStep}
+            custom={direction}
+            variants={stepVariants(direction)}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
         {currentStep === 1 && (
           <Step1General
             defaultValues={{
@@ -369,8 +398,33 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
             onBack={goBack}
           />
         )}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
+      {revealOrigin && (
+        <SuccessReveal
+          origin={revealOrigin}
+          status={revealStatus}
+          title="¡Listo!"
+          detail={
+            numeroSalida !== null
+              ? `Salida N° ${numeroSalida} registrada`
+              : 'Salida registrada'
+          }
+          savingLabel="Guardando salida…"
+          onFinished={onDone}
+          onRetracted={() => {
+            setRevealOrigin(null)
+            // El banner de error vive arriba del formulario y el botón que lo
+            // provocó está abajo del todo: sin esto, el usuario ve la onda
+            // retraerse y el formulario volver sin ninguna explicación a la
+            // vista. Un lector de pantalla se entera por el role="alert"; los
+            // demás necesitan que los llevemos hasta el mensaje.
+            window.scrollTo(0, 0)
+          }}
+        />
+      )}
     </div>
   )
 }

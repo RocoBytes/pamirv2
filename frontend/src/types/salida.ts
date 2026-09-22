@@ -1,5 +1,33 @@
 // ─── Auth types ───────────────────────────────────────────────────────────────
 
+// Club (tenant) del usuario autenticado. shortName puede ser null (club sin
+// nombre corto configurado): los helpers de club-brand.ts hacen fallback a
+// name. membresiaPropia identifica qué valor de MembresiaClub corresponde a
+// "ser socio de ESTE club" (ver esSocioDelClub en lib/club-brand.ts).
+// hasLogo/logoVersion nunca traen la clave del objeto en el bucket — solo si
+// hay un logo propio subido y una versión para cachear su URL (ver
+// clubLogoSrc en lib/club-brand.ts).
+export interface Organization {
+  id: string
+  slug: string
+  name: string
+  shortName: string | null
+  membresiaPropia: MembresiaClub | string
+  hasLogo: boolean
+  logoVersion: string | null
+}
+
+// Versión mínima de Organization para pantallas SIN sesión (consultar una
+// invitación, evaluación express, login previo a autenticar): alcanza para
+// pintar logo + nombre.
+export interface OrganizationBrand {
+  slug: string
+  name: string
+  shortName: string | null
+  hasLogo: boolean
+  logoVersion: string | null
+}
+
 export interface User {
   id: string
   name: string
@@ -7,9 +35,12 @@ export interface User {
   avatar?: string
   picture?: string
   // Opcional: sesiones guardadas antes del módulo de eventos no lo traen
-  rol?: 'SOCIO' | 'ADMIN'
+  rol?: 'SOCIO' | 'LIDER' | 'ADMIN'
   // Categorías de eventos que el usuario gestiona (gestores por categoría)
   gestorCategorias?: { categoriaId: number; slug: string }[]
+  // Opcional: un pamir_auth guardado por una sesión anterior a esta fase no
+  // lo trae hasta que useAuth refresca /me.
+  organization?: Organization
 }
 
 export interface AuthState {
@@ -76,6 +107,7 @@ export type SalidaStatus =
 export type MembresiaClub =
   | 'SOCIO_ANDINO_PAMIR'
   | 'SOCIO_EL_MONTANISTA'
+  | 'SOCIO_ANDINO_TESTING'
   | 'SOCIO_OTRO_CLUB'
   | 'POSTULANTE_CLUB'
   | 'NO_PERTENECE'
@@ -166,7 +198,6 @@ export interface SalidaRecord {
   matrizRiesgos: boolean
   gpxFileId?: string
   gpxFileName?: string
-  gpxFileUrl?: string
   mediosComunicacion: MedioComunicacion[]
   idDispositivoFrecuencia?: string
   equipoColectivo: EquipoColectivoSeguridad[]
@@ -174,7 +205,6 @@ export interface SalidaRecord {
   pronosticoMeteorologico?: string
   pronosticoFileId?: string
   pronosticoFileName?: string
-  pronosticoFileUrl?: string
   riesgosIdentificados?: RiesgoIdentificado[]
   riesgosOtro?: string
   planEvacuacion?: string
@@ -196,14 +226,12 @@ export interface GpxUploadResponse {
   message: string
   gpxFileId: string
   gpxFileName: string
-  gpxFileUrl: string
 }
 
 export interface PronosticoUploadResponse {
   message: string
   pronosticoFileId: string
   pronosticoFileName: string
-  pronosticoFileUrl: string
 }
 
 // ─── Integrante (registered club member) ─────────────────────────────────────
@@ -221,6 +249,7 @@ export interface IntegranteRecord {
 export const CLUB_BADGE_LABELS: Record<MembresiaClub, string> = {
   SOCIO_ANDINO_PAMIR: 'ACP',
   SOCIO_EL_MONTANISTA: 'CAEM',
+  SOCIO_ANDINO_TESTING: 'CAT',
   SOCIO_OTRO_CLUB: 'SOC',
   POSTULANTE_CLUB: 'POST',
   NO_PERTENECE: 'NA',
@@ -232,6 +261,7 @@ export const CLUB_BADGE_LABELS: Record<MembresiaClub, string> = {
 export const CLUB_FILTER_LABELS: Record<MembresiaClub, string> = {
   SOCIO_ANDINO_PAMIR: 'Socio Andino Club Pamir',
   SOCIO_EL_MONTANISTA: 'Socio Club El Montañista',
+  SOCIO_ANDINO_TESTING: 'Socio Club Andino Testing',
   SOCIO_OTRO_CLUB: 'Socio otro club',
   POSTULANTE_CLUB: 'Postulante a un club',
   NO_PERTENECE: 'No pertenece',

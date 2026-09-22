@@ -11,6 +11,9 @@ import documentosRouter from './documentos.route.js';
 import eventosRouter from './eventos.route.js';
 import cronRouter from './cron.route.js';
 import adminRouter from './admin.route.js';
+import invitacionesRouter from './invitaciones.route.js';
+import organizacionRouter from './organizacion.route.js';
+import clubesRouter from './clubes.route.js';
 
 const router = Router();
 
@@ -26,5 +29,10 @@ router.use('/documentos', documentosRouter);
 router.use('/eventos', eventosRouter);
 router.use('/cron', cronRouter);
 router.use('/admin', adminRouter);
+router.use('/invitaciones', invitacionesRouter);
+router.use('/organizacion', organizacionRouter);
+// Público (sin authMiddleware): marca y logo por slug, para pantallas SIN
+// sesión — ver routes/clubes.route.ts.
+router.use('/clubes', clubesRouter);
 
 export default router;

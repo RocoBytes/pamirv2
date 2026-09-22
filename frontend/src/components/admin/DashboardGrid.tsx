@@ -135,7 +135,7 @@ export function DashboardGrid({ data }: { data: AdminDashboard | null }) {
     <div>
       {/* Edit toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <p className="text-xs text-[#757874]">
+        <p className="text-xs text-on-surface-variant">
           {editMode
             ? 'Arrastrá y redimensioná los bloques. Guardá para conservar la distribución.'
             : 'Personalizá el orden y tamaño de los bloques desde "Editar dashboard".'}
@@ -164,7 +164,7 @@ export function DashboardGrid({ data }: { data: AdminDashboard | null }) {
       </div>
 
       {layoutError && (
-        <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-sm text-[#8b3a44] mb-4">
+        <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container mb-4">
           <AlertCircle size={18} className="shrink-0 mt-0.5" />
           <p>{layoutError}</p>
         </div>
@@ -191,7 +191,7 @@ export function DashboardGrid({ data }: { data: AdminDashboard | null }) {
                 key={item.widgetId}
                 className={
                   editMode
-                    ? 'cursor-move rounded-2xl ring-2 ring-[#264c99]/30 ring-offset-1'
+                    ? 'cursor-move rounded-2xl ring-2 ring-primary/30 ring-offset-1'
                     : undefined
                 }
               >

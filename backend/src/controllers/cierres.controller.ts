@@ -2,15 +2,16 @@ import { Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { Prisma, Cierre } from '../generated/prisma/client.js';
-import { sendEmail } from '../lib/google-gmail.js';
-import { buildCierreNotificationEmail } from '../lib/email-templates.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
-
-const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+import { sendClubEmail } from '../lib/email/club-email.js';
+import { buildCierreNotificationEmail, brandingFor } from '../lib/email-templates.js';
+import { subjectCierre } from '../lib/email/subjects.js';
+import { isAdmin, puedeGestionarSalida } from '../lib/authz.js';
+import { FRONTEND_URL } from '../lib/config.js';
+import type { OrganizationSummary } from '../types/index.js';
 
 const asJson = (v: unknown): Prisma.InputJsonValue => v as Prisma.InputJsonValue;
 
-async function sendCierreParticipantEmails(salidaId: string, cierre: Cierre): Promise<void> {
+async function sendCierreParticipantEmails(salidaId: string, cierre: Cierre, organization: OrganizationSummary): Promise<void> {
   const salida = await prisma.salida.findUnique({ where: { id: salidaId } });
   if (!salida) return;
 
@@ -24,22 +25,24 @@ async function sendCierreParticipantEmails(salidaId: string, cierre: Cierre): Pr
     select: { email: true, nombreCompleto: true },
   });
 
+  const branding = brandingFor(organization);
   for (const i of integrantes) {
     let evaluacionUrl: string | undefined;
     try {
       const evalToken = await prisma.evaluacionToken.create({
-        data: { token: randomUUID(), salidaId, email: i.email },
+        data: { organizationId: salida.organizationId, token: randomUUID(), salidaId, email: i.email },
       });
       evaluacionUrl = `${FRONTEND_URL}?evaluacion=${evalToken.token}`;
     } catch (err) {
       console.error(`[cierre-email] No se pudo crear token de evaluación para ${i.email}:`, err);
     }
 
-    await sendEmail(
-      i.email,
-      `Cierre de la salida "${salida.nombreActividad}" — Pamir`,
-      buildCierreNotificationEmail(i.nombreCompleto, salida, cierre, evaluacionUrl),
-    ).catch((err) => console.error(`[cierre-email] Fallo al enviar a ${i.email}:`, err));
+    await sendClubEmail(organization, {
+      to: i.email,
+      subject: subjectCierre(branding, salida.nombreActividad),
+      html: buildCierreNotificationEmail(i.nombreCompleto, salida, cierre, branding, evaluacionUrl),
+      kind: 'notificacion',
+    }).catch((err) => console.error(`[cierre-email] Fallo al enviar a ${i.email}:`, err));
     await new Promise((r) => setTimeout(r, 350));
   }
 }
@@ -72,15 +75,15 @@ export async function createCierre(req: Request, res: Response): Promise<void> {
   try {
     const data = req.body as CreateCierreBody;
     const userId = req.user!.id;
-    const isAdmin = req.user!.email === ADMIN_EMAIL;
 
     const salida = await prisma.salida.findUnique({ where: { id: data.salidaId } });
     if (!salida) {
       res.status(404).json({ error: 'Salida no encontrada' });
       return;
     }
-    // El dueño o el administrador pueden cerrar; nadie más.
-    if (!isAdmin && salida.userId !== null && salida.userId !== userId) {
+    // El dueño o el administrador pueden cerrar; nadie más. Una salida sin
+    // dueño (userId null) queda reservada al admin.
+    if (!puedeGestionarSalida(req.user, salida)) {
       res.status(403).json({ error: 'No tienes permiso para cerrar esta salida' });
       return;
     }
@@ -101,6 +104,7 @@ export async function createCierre(req: Request, res: Response): Promise<void> {
     const [cierre] = await prisma.$transaction([
       prisma.cierre.create({
         data: {
+          organizationId: salida.organizationId,
           salidaId: data.salidaId,
           userId,
           fechaFinalizacionReal: new Date(data.fechaFinalizacionReal),
@@ -137,10 +141,10 @@ export async function createCierre(req: Request, res: Response): Promise<void> {
     // registro histórico, o su retorno estimado fue hace más de 5 días.
     const retornoStr = salida.fechaRetornoEstimada.toISOString().slice(0, 10);
     const cutoffStr = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const silenciarCierre = isAdmin && (salida.esRegistroHistorico || retornoStr < cutoffStr);
+    const silenciarCierre = isAdmin(req.user) && (salida.esRegistroHistorico || retornoStr < cutoffStr);
 
     if (!silenciarCierre) {
-      sendCierreParticipantEmails(data.salidaId, cierre)
+      sendCierreParticipantEmails(data.salidaId, cierre, req.user!.organization)
         .catch((err) => console.error('[cierre-email]', err));
     }
   } catch (error) {
@@ -151,13 +155,7 @@ export async function createCierre(req: Request, res: Response): Promise<void> {
 
 export async function getCierres(req: Request, res: Response): Promise<void> {
   try {
-    const userId = req.user?.id;
-
-    // Sin autenticación no hay cierres que mostrar — evita exponer datos de toda la plataforma
-    if (!userId) {
-      res.json({ data: [], total: 0, page: 1, limit: 50 });
-      return;
-    }
+    const userId = req.user!.id;
 
     const page = Math.max(1, parseInt(req.query['page'] as string) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query['limit'] as string) || 50));

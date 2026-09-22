@@ -39,9 +39,10 @@ export const JsonNull = runtime.JsonNull;
  */
 export const AnyNull = runtime.AnyNull;
 export const ModelName = {
+    Organization: 'Organization',
     User: 'User',
     DashboardLayout: 'DashboardLayout',
-    AppSecret: 'AppSecret',
+    Invitacion: 'Invitacion',
     Salida: 'Salida',
     EvaluacionToken: 'EvaluacionToken',
     EvaluacionRespuesta: 'EvaluacionRespuesta',
@@ -64,8 +65,24 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
     RepeatableRead: 'RepeatableRead',
     Serializable: 'Serializable'
 });
+export const OrganizationScalarFieldEnum = {
+    id: 'id',
+    slug: 'slug',
+    name: 'name',
+    shortName: 'shortName',
+    status: 'status',
+    membresiaPropia: 'membresiaPropia',
+    alertEmail: 'alertEmail',
+    contactName: 'contactName',
+    contactEmail: 'contactEmail',
+    ultimoNumeroSalida: 'ultimoNumeroSalida',
+    logoObjectKey: 'logoObjectKey',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+};
 export const UserScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     email: 'email',
     name: 'name',
     picture: 'picture',
@@ -81,22 +98,30 @@ export const UserScalarFieldEnum = {
 };
 export const DashboardLayoutScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     userId: 'userId',
     dashboardKey: 'dashboardKey',
     layout: 'layout',
     updatedAt: 'updatedAt',
     createdAt: 'createdAt'
 };
-export const AppSecretScalarFieldEnum = {
+export const InvitacionScalarFieldEnum = {
     id: 'id',
-    key: 'key',
-    value: 'value',
-    updatedBy: 'updatedBy',
-    updatedAt: 'updatedAt',
+    organizationId: 'organizationId',
+    email: 'email',
+    rol: 'rol',
+    tokenHash: 'tokenHash',
+    expiresAt: 'expiresAt',
+    invitadoPorId: 'invitadoPorId',
+    emitidaPorPlataforma: 'emitidaPorPlataforma',
+    aceptadaAt: 'aceptadaAt',
+    usuarioId: 'usuarioId',
+    revocadaAt: 'revocadaAt',
     createdAt: 'createdAt'
 };
 export const SalidaScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     numeroSalida: 'numeroSalida',
     userId: 'userId',
     creatorEmail: 'creatorEmail',
@@ -143,6 +168,7 @@ export const SalidaScalarFieldEnum = {
 };
 export const EvaluacionTokenScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     token: 'token',
     salidaId: 'salidaId',
     email: 'email',
@@ -151,6 +177,7 @@ export const EvaluacionTokenScalarFieldEnum = {
 };
 export const EvaluacionRespuestaScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     salidaId: 'salidaId',
     notaObjetivos: 'notaObjetivos',
     notaItinerario: 'notaItinerario',
@@ -160,6 +187,7 @@ export const EvaluacionRespuestaScalarFieldEnum = {
 };
 export const CierreScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     salidaId: 'salidaId',
     userId: 'userId',
     fechaFinalizacionReal: 'fechaFinalizacionReal',
@@ -192,6 +220,7 @@ export const CierreScalarFieldEnum = {
 };
 export const DocumentoScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     categoria: 'categoria',
     nombre: 'nombre',
     descripcion: 'descripcion',
@@ -204,6 +233,7 @@ export const DocumentoScalarFieldEnum = {
 };
 export const IntegranteScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     nombreCompleto: 'nombreCompleto',
     rut: 'rut',
     nacionalidad: 'nacionalidad',
@@ -240,6 +270,7 @@ export const IntegranteScalarFieldEnum = {
 };
 export const CategoriaEventoScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     slug: 'slug',
     nombre: 'nombre',
     color: 'color',
@@ -248,12 +279,14 @@ export const CategoriaEventoScalarFieldEnum = {
 };
 export const GestorCategoriaScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     usuarioId: 'usuarioId',
     categoriaId: 'categoriaId',
     creadoAt: 'creadoAt'
 };
 export const DeclaracionJuradaVersionScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     version: 'version',
     titulo: 'titulo',
     items: 'items',
@@ -263,6 +296,7 @@ export const DeclaracionJuradaVersionScalarFieldEnum = {
 };
 export const EventoScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     titulo: 'titulo',
     categoriaId: 'categoriaId',
     estado: 'estado',
@@ -297,6 +331,7 @@ export const EventoScalarFieldEnum = {
 };
 export const InscripcionScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     eventoId: 'eventoId',
     usuarioId: 'usuarioId',
     estado: 'estado',
@@ -312,6 +347,7 @@ export const InscripcionScalarFieldEnum = {
 };
 export const NotificacionScalarFieldEnum = {
     id: 'id',
+    organizationId: 'organizationId',
     inscripcionId: 'inscripcionId',
     tipo: 'tipo',
     estado: 'estado',

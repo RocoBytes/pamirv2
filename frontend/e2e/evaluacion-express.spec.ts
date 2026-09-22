@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import type { Page, Route } from '@playwright/test'
-import { setAuth, mockHasIntegrante, mockSalidas, MOCK_ADMIN, MOCK_SALIDA } from './helpers'
+import { setAuth, mockHasIntegrante, mockSalidas, MOCK_ADMIN, MOCK_SALIDA, PAMIR_ORG } from './helpers'
 
 const TOKEN = 'token-eval-001'
 
@@ -8,6 +8,7 @@ const MOCK_EVALUACION_INFO = {
   nombreActividad: 'Ascenso al Plomo',
   fechaInicio: new Date().toISOString(),
   used: false,
+  organization: PAMIR_ORG,
 }
 
 function mockGetEvaluacion(page: Page, info: unknown = MOCK_EVALUACION_INFO, status = 200) {

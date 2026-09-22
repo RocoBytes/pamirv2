@@ -1,28 +1,137 @@
 import { test, expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import {
   setAuth,
   mockNoIntegrante,
   mockSalidas,
   mockCreateIntegrante,
+  MOCK_INTEGRANTE,
 } from './helpers'
 
-async function goToRegistroIntegrante(page: import('@playwright/test').Page) {
+async function goToRegistroIntegrante(page: Page) {
   await setAuth(page)
   await mockNoIntegrante(page)
   await mockSalidas(page)
   await mockCreateIntegrante(page)
   await page.goto('/')
   await page.getByRole('button', { name: /Completar mi Ficha/i }).click()
-  await expect(page.getByText('Información Personal y de Contacto')).toBeVisible()
+  // El título del paso vive SOLO en su encabezado (getByRole('heading', ...)),
+  // nunca duplicado en el indicador de progreso — así esta aserción no se
+  // rompe si ese indicador cambia de texto en el futuro.
+  await expect(page.getByRole('heading', { name: 'Información Personal y de Contacto' })).toBeVisible()
 }
 
-test.describe('RegistroIntegrante – navegación', () => {
-  test('muestra formulario con todas las secciones', async ({ page }) => {
+// ─── Helpers de llenado por paso ─────────────────────────────────────────────
+// Cada paso renderiza solo sus propios campos (los del resto ni están en el
+// DOM), así que estos helpers avanzan un paso a la vez.
+
+async function fillStep1(page: Page, overrides: { nombreCompleto?: string } = {}) {
+  await page.getByPlaceholder('Ej: Juan Andrés Pérez González').fill(overrides.nombreCompleto ?? 'María Paz López')
+  await page.getByPlaceholder('12.345.678-K').fill('12345678K')
+  await page.getByPlaceholder('Ej: Chilena').fill('Chilena')
+  await page.getByRole('button', { name: 'Femenino' }).click()
+  await page.locator('input[type="date"]').first().fill('1990-05-15')
+  await page.getByPlaceholder('Calle, número, depto...').fill('Av. Las Condes 1234')
+  await page.getByPlaceholder('Ej: Las Condes').fill('Las Condes')
+  await page.getByLabel('Región').selectOption('Metropolitana de Santiago')
+  await page.getByPlaceholder('+56 9 1234 5678').fill('+56912345678')
+  await page.getByLabel('Previsión de Salud').selectOption('Fonasa')
+}
+
+async function fillStep2(page: Page) {
+  await page.getByPlaceholder('Nombre completo').fill('Juan López')
+  await page.getByPlaceholder('Ej: Madre, Cónyuge, Hermano...').fill('Hermano')
+  await page.getByPlaceholder('+56 9 1234 5678').fill('+56987654321')
+}
+
+async function fillStep3(page: Page, { alergiasSi = false }: { alergiasSi?: boolean } = {}) {
+  await page.getByRole('button', { name: 'O+' }).click()
+  const alergiasSection = page.getByText('Alergias Conocidas').locator('..')
+  await alergiasSection.getByRole('button', { name: alergiasSi ? 'Sí' : 'No' }).click()
+  const enfermedadesSection = page.getByText('Enfermedades Crónicas').locator('..')
+  await enfermedadesSection.getByRole('button', { name: 'No' }).click()
+  const medicamentosSection = page.getByText('¿Toma medicamentos de forma regular?').locator('..')
+  await medicamentosSection.getByRole('button', { name: 'No' }).click()
+  const cirugiasSection = page.getByText('Cirugías o Lesiones').locator('..')
+  await cirugiasSection.getByRole('button', { name: 'No' }).click()
+  const fumaSection = page.getByText('¿Fuma?').locator('..')
+  await fumaSection.getByRole('button', { name: 'No' }).click()
+  const lentesSection = page.getByText('¿Usa lentes ópticos?').locator('..')
+  await lentesSection.getByRole('button', { name: 'No' }).click()
+}
+
+async function checkAllClauses(page: Page) {
+  const checkboxes = page.getByRole('checkbox')
+  // `.count()` NO espera a nada: devuelve lo que haya en el DOM en ese
+  // instante. Llamándolo apenas se toca "Siguiente", el paso 4 todavía no se
+  // montó (el anterior se está yendo) y devuelve 0 — el bucle no marca nada,
+  // el submit queda bloqueado por validación y el test falla mucho después,
+  // con un mensaje que no tiene nada que ver. Esperar a que exista la primera
+  // casilla ancla el conteo al momento en que el paso ya está en pantalla.
+  await expect(checkboxes.first()).toBeVisible()
+  const count = await checkboxes.count()
+  for (let i = 0; i < count; i++) {
+    await checkboxes.nth(i).check()
+  }
+}
+
+async function siguiente(page: Page) {
+  await page.getByRole('button', { name: 'Siguiente' }).click()
+}
+
+// El rótulo "Paso N de 4" vive en el indicador de progreso, FUERA del
+// contenedor que anima el cambio de paso, así que cambia en cuanto se toca
+// "Siguiente" — mientras el paso anterior todavía se está yendo y el nuevo ni
+// siquiera se montó. Esperar solo ese rótulo dejaba seguir con el formulario
+// vacío: medido, `getByRole('checkbox').count()` devolvía 0 en ese instante y
+// 4 unos 400ms después, así que `checkAllClauses` no marcaba nada y el submit
+// quedaba bloqueado por validación sin que el test se enterara.
+//
+// Por eso cada llegada espera además el ENCABEZADO del paso, que sí vive
+// dentro del contenido: es la señal de que el paso está montado y se puede
+// interactuar con él. La aserción del rótulo se conserva porque sigue siendo
+// verdad y vale la pena; lo que se agrega es la garantía que faltaba.
+const STEP_HEADINGS = [
+  'Información Personal y de Contacto',
+  'Contacto de Emergencia',
+  'Perfil Médico y Antecedentes',
+  'Cláusulas Legales y Consentimiento Informado',
+] as const
+
+async function expectAtStep(page: Page, step: 1 | 2 | 3 | 4) {
+  await expect(page.getByText(`Paso ${step} de 4`)).toBeVisible()
+  await expect(page.getByRole('heading', { name: STEP_HEADINGS[step - 1] })).toBeVisible()
+}
+
+async function arriveAtStep2(page: Page) {
+  await fillStep1(page)
+  await siguiente(page)
+  await expectAtStep(page, 2)
+}
+
+async function arriveAtStep3(page: Page) {
+  await arriveAtStep2(page)
+  await fillStep2(page)
+  await siguiente(page)
+  await expectAtStep(page, 3)
+}
+
+async function arriveAtStep4(page: Page) {
+  await arriveAtStep3(page)
+  await fillStep3(page)
+  await siguiente(page)
+  await expectAtStep(page, 4)
+}
+
+test.describe('RegistroIntegrante – navegación del wizard', () => {
+  test('abre en el paso 1 con "Paso 1 de 4" y solo los campos de la Sección I', async ({ page }) => {
     await goToRegistroIntegrante(page)
-    await expect(page.getByText('Información Personal y de Contacto')).toBeVisible()
-    await expect(page.getByText('Contacto de Emergencia')).toBeVisible()
-    await expect(page.getByText('Perfil Médico y Antecedentes')).toBeVisible()
-    await expect(page.getByText('Cláusulas Legales y Consentimiento Informado')).toBeVisible()
+    await expect(page.getByText('Paso 1 de 4')).toBeVisible()
+    await expect(page.getByPlaceholder('Ej: Juan Andrés Pérez González')).toBeVisible()
+    // Campos de los pasos 2-4: ni siquiera están montados todavía.
+    await expect(page.getByPlaceholder('Nombre completo')).toHaveCount(0)
+    await expect(page.getByText('Grupo Sanguíneo y Factor RH')).toHaveCount(0)
+    await expect(page.getByText('Cláusulas Legales y Consentimiento Informado')).toHaveCount(0)
   })
 
   test('el botón Volver regresa al dashboard', async ({ page }) => {
@@ -30,20 +139,63 @@ test.describe('RegistroIntegrante – navegación', () => {
     await page.getByRole('button', { name: /Volver/i }).click()
     await expect(page.getByText('Mis Salidas')).toBeVisible()
   })
+
+  test('avanzar y luego Atrás conserva los datos escritos', async ({ page }) => {
+    await goToRegistroIntegrante(page)
+    await fillStep1(page, { nombreCompleto: 'Dato Que No Se Pierde' })
+    await siguiente(page)
+    await expect(page.getByText('Paso 2 de 4')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Atrás' }).click()
+    await expect(page.getByText('Paso 1 de 4')).toBeVisible()
+    await expect(page.getByPlaceholder('Ej: Juan Andrés Pérez González')).toHaveValue('Dato Que No Se Pierde')
+  })
+
+  test('aria-current="step" se mueve al indicador del paso activo al avanzar', async ({ page }) => {
+    await goToRegistroIntegrante(page)
+    const active = page.locator('[aria-current="step"]')
+    await expect(active).toHaveAttribute('aria-label', /Paso 1/)
+    await fillStep1(page)
+    await siguiente(page)
+    await expect(active).toHaveAttribute('aria-label', /Paso 2/)
+  })
 })
 
-test.describe('RegistroIntegrante – validaciones de formulario', () => {
-  test('muestra errores al enviar formulario vacío', async ({ page }) => {
+test.describe('RegistroIntegrante – sin pregunta de membresía', () => {
+  test('la pregunta de membresía y "Nombre del Club" no existen en ningún paso', async ({ page }) => {
     await goToRegistroIntegrante(page)
-    await page.getByRole('button', { name: /Registrar Integrante/i }).click()
+    await expect(page.getByText('Membresía en Club de Montaña')).toHaveCount(0)
+    await expect(page.getByPlaceholder('Ej: Club Andino de Chile')).toHaveCount(0)
+
+    await arriveAtStep2(page)
+    await expect(page.getByText('Membresía en Club de Montaña')).toHaveCount(0)
+
+    await fillStep2(page)
+    await siguiente(page)
+    await expect(page.getByText('Paso 3 de 4')).toBeVisible()
+    await expect(page.getByText('Membresía en Club de Montaña')).toHaveCount(0)
+
+    await fillStep3(page)
+    await siguiente(page)
+    await expect(page.getByText('Paso 4 de 4')).toBeVisible()
+    await expect(page.getByText('Membresía en Club de Montaña')).toHaveCount(0)
+    await expect(page.getByPlaceholder('Ej: Club Andino de Chile')).toHaveCount(0)
+  })
+})
+
+test.describe('RegistroIntegrante – paso 1: validaciones', () => {
+  test('"Siguiente" en el paso 1 vacío muestra errores y no avanza', async ({ page }) => {
+    await goToRegistroIntegrante(page)
+    await siguiente(page)
     await expect(page.getByText('Campo requerido').first()).toBeVisible()
+    await expect(page.getByText('Paso 1 de 4')).toBeVisible()
   })
 
   test('valida formato de RUT', async ({ page }) => {
     await goToRegistroIntegrante(page)
     // Short input "12K" formats to "12-K" which fails the regex
     await page.getByPlaceholder('12.345.678-K').fill('12K')
-    await page.getByRole('button', { name: /Registrar Integrante/i }).click()
+    await siguiente(page)
     await expect(page.getByText('Formato inválido. Ej: 12.345.678-K')).toBeVisible()
   })
 
@@ -51,13 +203,14 @@ test.describe('RegistroIntegrante – validaciones de formulario', () => {
     await goToRegistroIntegrante(page)
     const rutInput = page.getByPlaceholder('12.345.678-K')
     await rutInput.fill('12345678K')
-    // After auto-format, should show formatted value
     await expect(rutInput).toHaveValue('12.345.678-K')
   })
+})
 
+test.describe('RegistroIntegrante – paso 3: perfil médico y antecedentes', () => {
   test('muestra campo de detalle cuando alergias es Sí', async ({ page }) => {
     await goToRegistroIntegrante(page)
-    // Find the alergias section and click Sí
+    await arriveAtStep3(page)
     const alergiasSection = page.getByText('Alergias Conocidas').locator('..')
     await alergiasSection.getByRole('button', { name: 'Sí' }).click()
     await expect(page.getByPlaceholder(/Penicilina/i)).toBeVisible()
@@ -65,155 +218,125 @@ test.describe('RegistroIntegrante – validaciones de formulario', () => {
 
   test('oculta campo de detalle cuando alergias es No', async ({ page }) => {
     await goToRegistroIntegrante(page)
+    await arriveAtStep3(page)
     const alergiasSection = page.getByText('Alergias Conocidas').locator('..')
     await alergiasSection.getByRole('button', { name: 'Sí' }).click()
     await alergiasSection.getByRole('button', { name: 'No' }).click()
     await expect(page.getByPlaceholder(/Penicilina/i)).not.toBeVisible()
   })
 
-  test('muestra campo de nombre de club cuando es Socio otro Club', async ({ page }) => {
+  test('alergias con Sí exige detalle antes de avanzar al paso 4', async ({ page }) => {
     await goToRegistroIntegrante(page)
-    await page.getByRole('button', { name: 'Socio otro Club' }).click()
-    await expect(page.getByPlaceholder('Ej: Club Andino de Chile')).toBeVisible()
-  })
-
-  test('muestra campo de nombre de club cuando es Postulante', async ({ page }) => {
-    await goToRegistroIntegrante(page)
-    await page.getByRole('button', { name: 'Postulante a un club' }).click()
-    await expect(page.getByPlaceholder('Ej: Club Andino de Chile')).toBeVisible()
-  })
-
-  test('oculta campo de nombre de club para socios Andino Pamir', async ({ page }) => {
-    await goToRegistroIntegrante(page)
-    await page.getByRole('button', { name: 'Socio Andino Club Pamir' }).click()
-    await expect(page.getByPlaceholder('Ej: Club Andino de Chile')).not.toBeVisible()
-  })
-
-  test('oculta campo de nombre de club para socios El Montañista', async ({ page }) => {
-    await goToRegistroIntegrante(page)
-    await page.getByRole('button', { name: 'Socio Club El Montañista' }).click()
-    await expect(page.getByPlaceholder('Ej: Club Andino de Chile')).not.toBeVisible()
-  })
-
-  test('valida que alergias con Sí requiere detalle', async ({ page }) => {
-    await goToRegistroIntegrante(page)
-
-    // Fill all required fields so superRefine can run for alergias
-    await page.getByPlaceholder('Ej: Juan Andrés Pérez González').fill('Test User')
-    await page.getByPlaceholder('12.345.678-K').fill('12345678K')
-    await page.getByPlaceholder('Ej: Chilena').fill('Chilena')
-    await page.getByRole('button', { name: 'Femenino' }).click()
-    await page.locator('input[type="date"]').first().fill('1990-01-01')
-    await page.getByPlaceholder('Calle, número, depto...').fill('Calle 123')
-    await page.getByPlaceholder('Ej: Las Condes').fill('Ñuñoa')
-    await page.getByLabel('Región').selectOption('Metropolitana de Santiago')
-    await page.getByPlaceholder('+56 9 1234 5678').first().fill('+56912345678')
-    await page.getByLabel('Previsión de Salud').selectOption('Fonasa')
-    await page.getByRole('button', { name: 'Socio Andino Club Pamir' }).click()
-    await page.getByPlaceholder('Nombre completo').fill('Contacto')
-    await page.getByPlaceholder('Ej: Madre, Cónyuge, Hermano...').fill('Madre')
-    await page.getByPlaceholder('+56 9 1234 5678').nth(1).fill('+56987654321')
-    await page.getByRole('button', { name: 'O+' }).click()
-
-    // Alergias: Sí — leave detail empty to trigger superRefine
-    const alergiasSection = page.getByText('Alergias Conocidas').locator('..')
-    await alergiasSection.getByRole('button', { name: 'Sí' }).click()
-
-    // Rest to No
-    const enfermedadesSection = page.getByText('Enfermedades Crónicas').locator('..')
-    await enfermedadesSection.getByRole('button', { name: 'No' }).click()
-    const medicamentosSection = page.getByText('¿Toma medicamentos de forma regular?').locator('..')
-    await medicamentosSection.getByRole('button', { name: 'No' }).click()
-    const cirugiasSection = page.getByText('Cirugías o Lesiones').locator('..')
-    await cirugiasSection.getByRole('button', { name: 'No' }).click()
-    const fumaSection = page.getByText('¿Fuma?').locator('..')
-    await fumaSection.getByRole('button', { name: 'No' }).click()
-    const lentesSection = page.getByText('¿Usa lentes ópticos?').locator('..')
-    await lentesSection.getByRole('button', { name: 'No' }).click()
-
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
-    const checkboxes = page.getByRole('checkbox')
-    const count = await checkboxes.count()
-    for (let i = 0; i < count; i++) {
-      await checkboxes.nth(i).check()
-    }
-
-    await page.getByRole('button', { name: /Registrar Integrante/i }).click()
+    await arriveAtStep3(page)
+    await fillStep3(page, { alergiasSi: true })
+    await siguiente(page)
     await expect(page.getByText('Describe las alergias conocidas')).toBeVisible()
+    await expect(page.getByText('Paso 3 de 4')).toBeVisible()
   })
 })
 
-test.describe('RegistroIntegrante – cláusulas legales', () => {
-  test('requiere aceptar todas las cláusulas', async ({ page }) => {
+test.describe('RegistroIntegrante – paso 4: cláusulas legales', () => {
+  test('requiere aceptar todas las cláusulas para registrar', async ({ page }) => {
     await goToRegistroIntegrante(page)
-    // Submit without checking clauses
+    await arriveAtStep4(page)
     await page.getByRole('button', { name: /Registrar Integrante/i }).click()
-    await expect(
-      page.getByText('Debes aceptar esta declaración para continuar'),
-    ).toBeVisible()
+    await expect(page.getByText('Debes aceptar esta declaración para continuar')).toBeVisible()
+    await expect(page.getByText('Paso 4 de 4')).toBeVisible()
   })
 })
 
 test.describe('RegistroIntegrante – flujo de éxito', () => {
-  test('muestra pantalla de éxito al enviar formulario completo', async ({ page }) => {
+  test('completa los 4 pasos, termina en la pantalla de éxito y el body no lleva membresiaClub/nombreClub', async ({
+    page,
+  }) => {
     await goToRegistroIntegrante(page)
 
-    // Sección I
-    await page.getByPlaceholder('Ej: Juan Andrés Pérez González').fill('María Paz López')
-    await page.getByPlaceholder('12.345.678-K').fill('12345678K')
-    await page.getByPlaceholder('Ej: Chilena').fill('Chilena')
-    await page.getByRole('button', { name: 'Femenino' }).click()
-    await page.locator('input[type="date"]').first().fill('1990-05-15')
-    await page.getByPlaceholder('Calle, número, depto...').fill('Av. Las Condes 1234')
-    await page.getByPlaceholder('Ej: Las Condes').fill('Las Condes')
-    await page.getByLabel('Región').selectOption('Metropolitana de Santiago')
-    await page.getByPlaceholder('+56 9 1234 5678').first().fill('+56912345678')
-    // Email is readonly — pre-filled from user session (test@example.com)
-    await page.getByLabel('Previsión de Salud').selectOption('Fonasa')
-    await page.getByRole('button', { name: 'Socio Andino Club Pamir' }).click()
+    let capturedBody: Record<string, unknown> | null = null
+    await page.route('**/api/integrantes', (route) => {
+      if (route.request().method() === 'POST') {
+        capturedBody = route.request().postDataJSON() as Record<string, unknown>
+        void route.fulfill({ status: 201, json: MOCK_INTEGRANTE })
+      } else {
+        void route.continue()
+      }
+    })
 
-    // Sección II
-    await page.getByPlaceholder('Nombre completo').fill('Juan López')
-    await page.getByPlaceholder('Ej: Madre, Cónyuge, Hermano...').fill('Hermano')
-    await page.getByPlaceholder('+56 9 1234 5678').nth(1).fill('+56987654321')
-
-    // Sección III — grupo sanguíneo
-    await page.getByRole('button', { name: 'O+' }).click()
-
-    // Alergias: No
-    const alergiasSection = page.getByText('Alergias Conocidas').locator('..')
-    await alergiasSection.getByRole('button', { name: 'No' }).click()
-
-    // Enfermedades: No
-    const enfermedadesSection = page.getByText('Enfermedades Crónicas').locator('..')
-    await enfermedadesSection.getByRole('button', { name: 'No' }).click()
-
-    // Medicamentos: No
-    const medicamentosSection = page.getByText('¿Toma medicamentos de forma regular?').locator('..')
-    await medicamentosSection.getByRole('button', { name: 'No' }).click()
-
-    // Cirugías: No
-    const cirugiasSection = page.getByText('Cirugías o Lesiones').locator('..')
-    await cirugiasSection.getByRole('button', { name: 'No' }).click()
-
-    // Fuma: No
-    const fumaSection = page.getByText('¿Fuma?').locator('..')
-    await fumaSection.getByRole('button', { name: 'No' }).click()
-
-    // Lentes: No
-    const lentesSection = page.getByText('¿Usa lentes ópticos?').locator('..')
-    await lentesSection.getByRole('button', { name: 'No' }).click()
-
-    // Sección IV — cláusulas (scroll and check all)
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
-    const checkboxes = page.getByRole('checkbox')
-    const count = await checkboxes.count()
-    for (let i = 0; i < count; i++) {
-      await checkboxes.nth(i).check()
-    }
-
+    await fillStep1(page)
+    await siguiente(page)
+    await fillStep2(page)
+    await siguiente(page)
+    await fillStep3(page)
+    await siguiente(page)
+    await checkAllClauses(page)
     await page.getByRole('button', { name: /Registrar Integrante/i }).click()
 
     await expect(page.getByText('Integrante registrado')).toBeVisible({ timeout: 5000 })
+    expect(capturedBody).not.toBeNull()
+    expect(capturedBody).not.toHaveProperty('membresiaClub')
+    expect(capturedBody).not.toHaveProperty('nombreClub')
+
+    // La confirmación TIENE que irse sola. Mostrarla no alcanza: tapa la
+    // pantalla entera, así que si se queda pegada deja la app inusable y no
+    // hay forma de navegar a ningún lado.
+    //
+    // Esto no es hipotético, pasó: `SuccessReveal` tenía `onFinished` entre
+    // las dependencias del efecto que cuenta el tiempo de lectura, y como acá
+    // se le pasa una flecha inline (identidad nueva en cada render), cada
+    // render cancelaba la cuenta y arrancaba otra. Medido, el overlay seguía
+    // tapando la pantalla a los 3,5 segundos. Los otros tres wizards se
+    // salvaban solo porque pasan una función estable, que es justo la clase de
+    // casualidad que un test tiene que dejar de permitir.
+    await expect(page.getByText('Integrante registrado')).toHaveCount(0, { timeout: 5000 })
+  })
+})
+
+test.describe('RegistroIntegrante – error del servidor', () => {
+  test('un POST fallido deja al usuario en el wizard con el mensaje visible y sus datos intactos', async ({
+    page,
+  }) => {
+    await goToRegistroIntegrante(page)
+    await page.route('**/api/integrantes', (route) => {
+      if (route.request().method() === 'POST') {
+        void route.fulfill({ status: 500, json: { error: 'No se pudo registrar el integrante' } })
+      } else {
+        void route.continue()
+      }
+    })
+
+    await fillStep1(page, { nombreCompleto: 'Dato Que No Se Pierde' })
+    await siguiente(page)
+    await fillStep2(page)
+    await siguiente(page)
+    await fillStep3(page)
+    await siguiente(page)
+    await checkAllClauses(page)
+    await page.getByRole('button', { name: /Registrar Integrante/i }).click()
+
+    await expect(page.getByText('No se pudo registrar el integrante')).toBeVisible()
+    await expect(page.getByText('Integrante registrado')).toHaveCount(0)
+
+    // Los datos del paso 1 siguen ahí, tres "Atrás" más tarde.
+    await page.getByRole('button', { name: 'Atrás' }).click()
+    await page.getByRole('button', { name: 'Atrás' }).click()
+    await page.getByRole('button', { name: 'Atrás' }).click()
+    await expect(page.getByText('Paso 1 de 4')).toBeVisible()
+    await expect(page.getByPlaceholder('Ej: Juan Andrés Pérez González')).toHaveValue('Dato Que No Se Pierde')
+  })
+})
+
+test.describe('RegistroIntegrante – advertencia antes de salir', () => {
+  test('con datos sin guardar, "Volver" pide confirmación antes de salir', async ({ page }) => {
+    await goToRegistroIntegrante(page)
+    await page.getByPlaceholder('Ej: Juan Andrés Pérez González').fill('Alguien Escribiendo')
+
+    let dialogMessage = ''
+    page.once('dialog', (dialog) => {
+      dialogMessage = dialog.message()
+      void dialog.dismiss()
+    })
+    await page.getByRole('button', { name: /Volver/i }).click()
+    await expect.poll(() => dialogMessage).not.toBe('')
+    // Se quedó en el formulario: el dialog se rechazó.
+    await expect(page.getByPlaceholder('Ej: Juan Andrés Pérez González')).toHaveValue('Alguien Escribiendo')
   })
 })

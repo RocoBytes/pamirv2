@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   AlertCircle,
-  ArrowLeft,
   CalendarDays,
   CalendarOff,
   ChevronLeft,
@@ -11,12 +10,12 @@ import {
   Plus,
   Settings2,
 } from 'lucide-react'
-import logoPamir from '../assets/logo_PAMIR.png'
-
 import type { CategoriaEventoRecord, EventoListItem } from '../types/evento'
 import { puedeGestionarCategoria } from '../types/evento'
 import { fetchCategoriasEvento, fetchEventos } from '../lib/api'
+import { useOrganization } from '../hooks/useOrganization'
 import { Button } from './ui/Button'
+import { AppShell, type ShellContext } from './shell/AppShell'
 import { EventoCard } from './EventoCard'
 import { EventoCalendar } from './EventoCalendar'
 import { EventoDetailModal } from './EventoDetailModal'
@@ -52,6 +51,7 @@ interface EventosPageProps {
   onBack: () => void
   onCrearEvento: () => void
   onGestionarEvento: (id: string) => void
+  shell: ShellContext
 }
 
 export function EventosPage({
@@ -61,7 +61,9 @@ export function EventosPage({
   onBack,
   onCrearEvento,
   onGestionarEvento,
+  shell,
 }: EventosPageProps) {
+  const { shortName } = useOrganization()
   const [categorias, setCategorias] = useState<CategoriaEventoRecord[]>([])
   const [eventos, setEventos] = useState<EventoListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -110,43 +112,29 @@ export function EventosPage({
   }
 
   return (
-    <div className="min-h-screen bg-[#f0f4fb]">
-      <header className="bg-white border-b border-[#4a6fad]/10 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <img src={logoPamir} alt="Pamir Andino Club" className="w-11 h-11 object-contain" />
-            <span className="font-bold text-slate-900 text-lg">Pamir</span>
-          </div>
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft size={16} />
-            Volver
-          </Button>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+    <AppShell shell={shell} active="eventos" onBack={onBack}>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2 text-[#4a6fad] text-xs font-semibold uppercase tracking-widest mb-1">
+            <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
               <CalendarDays size={14} />
-              Andino Club Pamir
+              {shortName}
             </div>
             <h1 className="text-xl font-bold text-slate-900">Eventos del club</h1>
-            <p className="text-sm text-[#757874] mt-0.5">
+            <p className="text-sm text-on-surface-variant mt-0.5">
               Calendario de actividades e inscripciones.
             </p>
           </div>
           <div className="flex items-center gap-2">
             {/* Toggle calendario / lista */}
-            <div className="inline-flex rounded-xl border border-[#4a6fad]/20 bg-white p-0.5">
+            <div className="inline-flex rounded-xl border border-secondary/20 bg-white p-0.5">
               <button
                 type="button"
                 onClick={() => setVista('calendario')}
                 aria-pressed={vista === 'calendario'}
                 className={[
                   'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]',
-                  vista === 'calendario' ? 'bg-[#264c99] text-white' : 'text-[#757874] hover:bg-[#f0f4fb]',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                  vista === 'calendario' ? 'bg-primary text-white' : 'text-on-surface-variant hover:bg-surface-container-low',
                 ].join(' ')}
               >
                 <CalendarDays size={14} />
@@ -158,8 +146,8 @@ export function EventosPage({
                 aria-pressed={vista === 'lista'}
                 className={[
                   'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]',
-                  vista === 'lista' ? 'bg-[#264c99] text-white' : 'text-[#757874] hover:bg-[#f0f4fb]',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                  vista === 'lista' ? 'bg-primary text-white' : 'text-on-surface-variant hover:bg-surface-container-low',
                 ].join(' ')}
               >
                 <List size={14} />
@@ -183,10 +171,10 @@ export function EventosPage({
             aria-pressed={slugsSeleccionados.length === 0}
             className={[
               'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
               slugsSeleccionados.length === 0
-                ? 'bg-[#264c99] text-white border-[#264c99]'
-                : 'bg-white text-[#757874] border-[#4a6fad]/20 hover:bg-[#f0f4fb]',
+                ? 'bg-primary text-white border-primary'
+                : 'bg-white text-on-surface-variant border-secondary/20 hover:bg-surface-container-low',
             ].join(' ')}
           >
             Todas
@@ -201,10 +189,10 @@ export function EventosPage({
                 aria-pressed={activa}
                 className={[
                   'inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                   activa
-                    ? 'bg-[#e8eef7] text-[#264c99] border-[#264c99]/40'
-                    : 'bg-white text-[#757874] border-[#4a6fad]/20 hover:bg-[#f0f4fb]',
+                    ? 'bg-primary-fixed text-primary border-primary/40'
+                    : 'bg-white text-on-surface-variant border-secondary/20 hover:bg-surface-container-low',
                 ].join(' ')}
               >
                 <span
@@ -217,12 +205,12 @@ export function EventosPage({
             )
           })}
           {vista === 'lista' && (
-            <label className="ml-auto inline-flex items-center gap-2 text-xs font-medium text-[#757874] cursor-pointer select-none">
+            <label className="ml-auto inline-flex items-center gap-2 text-xs font-medium text-on-surface-variant cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={verPasados}
                 onChange={(e) => setVerPasados(e.target.checked)}
-                className="w-4 h-4 rounded border-[#4a6fad]/40 text-[#264c99] focus:ring-[#264c99]"
+                className="w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
               />
               Ver pasados
             </label>
@@ -231,7 +219,7 @@ export function EventosPage({
 
         {/* Navegación de mes (solo calendario) */}
         {vista === 'calendario' && (
-          <div className="mb-4 flex items-center justify-between bg-[#264c99] text-white rounded-2xl px-2 py-1.5">
+          <div className="mb-4 flex items-center justify-between bg-primary text-white rounded-2xl px-2 py-1.5">
             <button
               type="button"
               onClick={() => setMes((m) => shiftMes(m, -1))}
@@ -254,18 +242,18 @@ export function EventosPage({
 
         {/* States */}
         {isLoading && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-[#757874]">
-            <Loader2 className="animate-spin text-[#264c99]" size={28} />
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
+            <Loader2 className="animate-spin text-primary" size={28} />
             <p className="text-sm">Cargando eventos...</p>
           </div>
         )}
 
         {error && !isLoading && (
           <div className="flex flex-col items-center py-12 gap-4 text-center">
-            <AlertCircle size={32} className="text-[#A4636E]" />
+            <AlertCircle size={32} className="text-error" />
             <div>
               <p className="font-semibold text-slate-700">Error al cargar</p>
-              <p className="text-sm text-[#757874] mt-1">{error}</p>
+              <p className="text-sm text-on-surface-variant mt-1">{error}</p>
             </div>
             <Button variant="secondary" size="sm" onClick={() => void loadEventos()}>
               Reintentar
@@ -279,12 +267,12 @@ export function EventosPage({
 
         {!isLoading && !error && vista === 'lista' && eventos.length === 0 && (
           <div className="flex flex-col items-center py-12 gap-3 text-center">
-            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-[#e8eef7]">
-              <CalendarOff size={24} className="text-[#264c99]" />
+            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-fixed">
+              <CalendarOff size={24} className="text-primary" />
             </div>
             <div>
               <p className="font-semibold text-slate-700">Sin eventos próximos</p>
-              <p className="text-sm text-[#757874] mt-0.5">
+              <p className="text-sm text-on-surface-variant mt-0.5">
                 {puedeGestionar
                   ? 'Usa el botón Crear evento para publicar la primera actividad'
                   : 'Cuando el club publique actividades las verás aquí'}
@@ -301,7 +289,7 @@ export function EventosPage({
                 {puedeGestionarCategoria(esAdminEventos, gestorCategoriaIds, evento.categoriaId) && (
                   <button
                     onClick={() => onGestionarEvento(evento.id)}
-                    className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-[#4a6fad] hover:text-[#264c99] px-2 py-1 rounded-lg hover:bg-[#e8eef7] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]"
+                    className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-secondary hover:text-primary px-2 py-1 rounded-lg hover:bg-primary-fixed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     aria-label={`Gestionar ${evento.titulo}`}
                   >
                     <Settings2 size={13} />
@@ -312,7 +300,6 @@ export function EventosPage({
             ))}
           </div>
         )}
-      </main>
 
       {selectedEventoId && (
         <EventoDetailModal
@@ -327,6 +314,6 @@ export function EventosPage({
           onChanged={() => void loadEventos()}
         />
       )}
-    </div>
+    </AppShell>
   )
 }

@@ -17,6 +17,7 @@ export const SalidaStatus = {
 };
 export const RolUsuario = {
     SOCIO: 'SOCIO',
+    LIDER: 'LIDER',
     ADMIN: 'ADMIN'
 };
 export const EstadoEvento = {
@@ -41,4 +42,8 @@ export const EstadoNotificacion = {
     PENDIENTE: 'PENDIENTE',
     ENVIADA: 'ENVIADA',
     ERROR: 'ERROR'
+};
+export const OrganizationStatus = {
+    ACTIVE: 'ACTIVE',
+    SUSPENDED: 'SUSPENDED'
 };

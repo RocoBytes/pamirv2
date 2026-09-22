@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test'
 import type { Page, Route } from '@playwright/test'
-import { setAuth, mockHasIntegrante, mockSalidas, MOCK_INTEGRANTE } from './helpers'
+import {
+  setAuth,
+  mockMe,
+  mockHasIntegrante,
+  mockSalidas,
+  MOCK_INTEGRANTE,
+  MOCK_ADMIN,
+  MOCK_USER,
+} from './helpers'
 
 function mockIntegranteNoSocio(page: Page) {
   return page.route('**/api/integrantes/me', (route: Route) => {
@@ -54,21 +62,55 @@ test.describe('Documentación del Club – página', () => {
     await expect(page.getByText(/retenes de.*Carabineros/)).toBeVisible()
   })
 
-  test('lista documentos agrupados por categoría con link de descarga', async ({ page }) => {
+  test('lista documentos agrupados por categoría y descarga vía URL firmada de GCS', async ({ page }) => {
     await mockDocumentos(page, [
-      { id: 'd1', categoria: 'AVISO_EXPEDICION', nombre: 'Aviso Retén San José de Maipo', descripcion: 'Formulario PDF', driveFileUrl: 'https://drive.google.com/file/d/test1' },
-      { id: 'd2', categoria: 'CHECKLIST', nombre: 'Check-list Alta Montaña', driveFileUrl: 'https://drive.google.com/file/d/test2' },
-      { id: 'd3', categoria: 'MATRIZ_RIESGO', nombre: 'Matriz de Riesgo 3x3', driveFileUrl: null },
+      { id: 'd1', categoria: 'AVISO_EXPEDICION', nombre: 'Aviso Retén San José de Maipo', descripcion: 'Formulario PDF', driveFileId: 'gcs-obj-1' },
+      { id: 'd2', categoria: 'CHECKLIST', nombre: 'Check-list Alta Montaña', driveFileId: 'gcs-obj-2' },
+      { id: 'd3', categoria: 'MATRIZ_RIESGO', nombre: 'Matriz de Riesgo 3x3', driveFileId: null },
     ])
+    await page.route('**/api/documentos/d1/url', (route: Route) => {
+      void route.fulfill({
+        status: 200,
+        json: {
+          url: 'https://storage.googleapis.com/pamirv2-files-dev/orgs/x/documento/gcs-obj-1.pdf?sig=abc',
+          expiresInSeconds: 600,
+        },
+      })
+    })
+    await page.route('https://storage.googleapis.com/**', (route: Route) => {
+      void route.fulfill({
+        status: 200,
+        headers: { 'Content-Disposition': 'attachment; filename="aviso.pdf"' },
+        body: 'contenido-fake',
+      })
+    })
     await page.goto('/')
     await page.getByRole('button', { name: 'Abrir documentación del club' }).click()
 
     await expect(page.getByText('Formularios de Aviso de Expedición — Retenes de Carabineros')).toBeVisible()
     await expect(page.getByText('Check-lists de Salidas')).toBeVisible()
     await expect(page.getByText('Aviso Retén San José de Maipo')).toBeVisible()
-    await expect(page.getByRole('link', { name: /Aviso Retén San José de Maipo/ })).toHaveAttribute('href', 'https://drive.google.com/file/d/test1')
+
+    const boton = page.getByRole('button', { name: /Aviso Retén San José de Maipo/ })
+    const [descarga] = await Promise.all([page.waitForEvent('download'), boton.click()])
+    expect(descarga.suggestedFilename()).toBe('aviso.pdf')
+
     // Documento sin archivo aún: visible pero deshabilitado
-    await expect(page.getByRole('link', { name: /Matriz de Riesgo 3x3/ })).toHaveAttribute('aria-disabled', 'true')
+    await expect(page.getByRole('button', { name: /Matriz de Riesgo 3x3/ })).toBeDisabled()
+  })
+
+  test('archivo ya no disponible (404) muestra el mensaje inline', async ({ page }) => {
+    await mockDocumentos(page, [
+      { id: 'd1', categoria: 'AVISO_EXPEDICION', nombre: 'Aviso Retén San José de Maipo', driveFileId: 'gcs-obj-1' },
+    ])
+    await page.route('**/api/documentos/d1/url', (route: Route) => {
+      void route.fulfill({ status: 404, json: { message: 'Documento no encontrado' } })
+    })
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Abrir documentación del club' }).click()
+
+    await page.getByRole('button', { name: /Aviso Retén San José de Maipo/ }).click()
+    await expect(page.getByText('El archivo ya no está disponible.')).toBeVisible()
   })
 
   test('el botón Volver regresa al dashboard', async ({ page }) => {
@@ -78,5 +120,42 @@ test.describe('Documentación del Club – página', () => {
     await expect(page.getByText('Documentos en preparación')).toBeVisible()
     await page.getByRole('button', { name: /Volver/ }).click()
     await expect(page.getByText('Mis Salidas')).toBeVisible()
+  })
+})
+
+// ─── Subida desde la propia pantalla de Documentación ────────────────────────
+// La capacidad ya existía en el Panel de Administración; acá se verifica que
+// además esté donde el admin la necesita, y que siga cerrada para quien no lo es.
+test.describe('Documentación – gestión desde la pantalla', () => {
+  async function abrirDocumentos(page: Page, user: Record<string, unknown>) {
+    await setAuth(page, user)
+    await mockMe(page, user)
+    await mockHasIntegrante(page)
+    await mockSalidas(page, [])
+    await page.route('**/api/eventos*', (r: Route) => void r.fulfill({ status: 200, json: [] }))
+    await page.route('**/api/documentos', (r: Route) => void r.fulfill({ status: 200, json: [] }))
+    await page.route('**/api/documentos/admin', (r: Route) =>
+      void r.fulfill({ status: 200, json: [] }),
+    )
+    await page.goto('/')
+    await page.getByLabel('Abrir documentación del club').click()
+  }
+
+  test('un admin puede subir sin salir de la pantalla', async ({ page }) => {
+    await abrirDocumentos(page, MOCK_ADMIN)
+    await expect(page.getByRole('heading', { name: 'Gestionar documentos' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Subir documento/ })).toBeVisible()
+  })
+
+  test('el selector de archivo solo admite PDF', async ({ page }) => {
+    await abrirDocumentos(page, MOCK_ADMIN)
+    await expect(page.locator('#doc-file')).toHaveAttribute('accept', '.pdf,application/pdf')
+  })
+
+  test('un socio ve la documentación pero no la gestión', async ({ page }) => {
+    await abrirDocumentos(page, MOCK_USER)
+    await expect(page.getByText('Documentación del Club')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Gestionar documentos' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /Subir documento/ })).toHaveCount(0)
   })
 })

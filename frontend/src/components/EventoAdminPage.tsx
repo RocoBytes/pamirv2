@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import {
   AlertCircle,
   AlertTriangle,
-  ArrowLeft,
   Ban,
   CalendarDays,
   EyeOff,
@@ -12,8 +11,6 @@ import {
   Send,
   Trash2,
 } from 'lucide-react'
-import logoPamir from '../assets/logo_PAMIR.png'
-
 import type { EventoDetail, EventoRecord } from '../types/evento'
 import { ESTADO_EVENTO_COLORS, ESTADO_EVENTO_LABELS } from '../types/evento'
 import {
@@ -26,6 +23,7 @@ import {
 } from '../lib/api'
 import type { EventoConCategoria } from '../lib/api'
 import { Button } from './ui/Button'
+import { AppShell, type ShellContext } from './shell/AppShell'
 import { EventoForm } from './EventoForm'
 import { PostulantesTab } from './PostulantesTab'
 
@@ -77,7 +75,7 @@ export function ConfirmDialog({
       aria-labelledby="evento-confirm-title"
     >
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#4a6fad]/15">
+        <div className="px-5 py-4 border-b border-secondary/15">
           <h2 id="evento-confirm-title" className="text-base font-bold text-slate-900 leading-snug">
             {title}
           </h2>
@@ -92,9 +90,9 @@ export function ConfirmDialog({
           )}
           {withMotivo && (
             <div className="flex flex-col gap-1">
-              <label htmlFor="motivo-cancelacion" className="text-sm font-semibold text-[#264c99]">
+              <label htmlFor="motivo-cancelacion" className="text-sm font-semibold text-primary">
                 Motivo
-                {motivoRequired && <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>}
+                {motivoRequired && <span className="text-error ml-1" aria-hidden="true">*</span>}
               </label>
               <textarea
                 id="motivo-cancelacion"
@@ -109,14 +107,14 @@ export function ConfirmDialog({
                 className={[
                   'w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900',
                   'transition-colors duration-150',
-                  'focus:outline-none focus:ring-2 focus:ring-[#264c99] focus:border-[#264c99]',
+                  'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
                   motivoError
-                    ? 'border-[#A4636E] focus:ring-[#A4636E] focus:border-[#A4636E]'
-                    : 'border-[#4a6fad]/40',
+                    ? 'border-error focus:ring-error focus:border-error'
+                    : 'border-secondary/40',
                 ].join(' ')}
               />
               {motivoError && (
-                <p className="text-xs text-[#A4636E]" role="alert">
+                <p className="text-xs text-error" role="alert">
                   {motivoError}
                 </p>
               )}
@@ -163,12 +161,12 @@ function AvisoEditor({ evento, onSaved }: { evento: EventoDetail; onSaved: (e: E
   }
 
   return (
-    <section className="bg-white rounded-2xl border border-[#4a6fad]/15 p-5 shadow-sm flex flex-col gap-3">
-      <h2 className="text-sm font-bold text-[#264c99] flex items-center gap-2">
+    <section className="bg-white rounded-2xl border border-secondary/15 p-5 shadow-sm flex flex-col gap-3">
+      <h2 className="text-sm font-bold text-primary flex items-center gap-2">
         <Megaphone size={16} />
         Aviso destacado
       </h2>
-      <p className="text-xs text-[#757874]">
+      <p className="text-xs text-on-surface-variant">
         Un evento finalizado solo permite editar el aviso destacado.
       </p>
       <input
@@ -177,12 +175,12 @@ function AvisoEditor({ evento, onSaved }: { evento: EventoDetail; onSaved: (e: E
         onChange={(e) => setAviso(e.target.value)}
         aria-label="Aviso destacado"
         className={[
-          'w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 border-[#4a6fad]/40',
-          'focus:outline-none focus:ring-2 focus:ring-[#264c99] focus:border-[#264c99]',
+          'w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 border-secondary/40',
+          'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
         ].join(' ')}
       />
       {error && (
-        <p className="text-xs text-[#A4636E]" role="alert">
+        <p className="text-xs text-error" role="alert">
           {error}
         </p>
       )}
@@ -206,6 +204,7 @@ interface EventoAdminPageProps {
   gestorCategoriaIds?: number[]
   onDone: () => void
   onCancel: () => void
+  shell: ShellContext
 }
 
 export function EventoAdminPage({
@@ -214,6 +213,7 @@ export function EventoAdminPage({
   gestorCategoriaIds = [],
   onDone,
   onCancel,
+  shell,
 }: EventoAdminPageProps) {
   const [evento, setEvento] = useState<EventoDetail | null>(null)
   const [loading, setLoading] = useState(eventoId !== null)
@@ -284,23 +284,9 @@ export function EventoAdminPage({
   const esCreacion = eventoId === null && evento === null
 
   return (
-    <div className="min-h-screen bg-[#f0f4fb]">
-      <header className="bg-white border-b border-[#4a6fad]/10 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <img src={logoPamir} alt="Pamir Andino Club" className="w-11 h-11 object-contain" />
-            <span className="font-bold text-slate-900 text-lg">Pamir</span>
-          </div>
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            <ArrowLeft size={16} />
-            Volver
-          </Button>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
+    <AppShell shell={shell} active="none" onBack={onCancel} width="narrow" chrome="focused">
         <div className="mb-5">
-          <div className="flex items-center gap-2 text-[#4a6fad] text-xs font-semibold uppercase tracking-widest mb-1">
+          <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
             <CalendarDays size={14} />
             Gestión de eventos
           </div>
@@ -319,14 +305,14 @@ export function EventoAdminPage({
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-[#4a6fad]/15 mb-5">
+        <div className="flex gap-1 border-b border-secondary/15 mb-5">
           <button
             type="button"
             onClick={() => setTab('ficha')}
             className={
               tab === 'ficha'
-                ? 'px-4 py-2 text-sm font-semibold text-[#264c99] border-b-2 border-[#264c99] -mb-px'
-                : 'px-4 py-2 text-sm font-semibold text-[#757874] hover:text-[#264c99] transition-colors'
+                ? 'px-4 py-2 text-sm font-semibold text-primary border-b-2 border-primary -mb-px'
+                : 'px-4 py-2 text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors'
             }
           >
             Ficha
@@ -337,8 +323,8 @@ export function EventoAdminPage({
               onClick={() => setTab('postulantes')}
               className={
                 tab === 'postulantes'
-                  ? 'px-4 py-2 text-sm font-semibold text-[#264c99] border-b-2 border-[#264c99] -mb-px'
-                  : 'px-4 py-2 text-sm font-semibold text-[#757874] hover:text-[#264c99] transition-colors'
+                  ? 'px-4 py-2 text-sm font-semibold text-primary border-b-2 border-primary -mb-px'
+                  : 'px-4 py-2 text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors'
               }
             >
               Postulantes
@@ -348,7 +334,7 @@ export function EventoAdminPage({
               type="button"
               disabled
               title="Guarda el evento primero"
-              className="px-4 py-2 text-sm font-semibold text-[#757874]/50 cursor-not-allowed"
+              className="px-4 py-2 text-sm font-semibold text-on-surface-variant/50 cursor-not-allowed"
             >
               Postulantes
             </button>
@@ -356,16 +342,16 @@ export function EventoAdminPage({
         </div>
 
         {loading && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-[#757874]">
-            <Loader2 className="animate-spin text-[#264c99]" size={28} />
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
+            <Loader2 className="animate-spin text-primary" size={28} />
             <p className="text-sm">Cargando evento...</p>
           </div>
         )}
 
         {loadError && !loading && (
           <div className="flex flex-col items-center py-12 gap-4 text-center">
-            <AlertCircle size={32} className="text-[#A4636E]" />
-            <p className="text-sm text-[#757874]">{loadError}</p>
+            <AlertCircle size={32} className="text-error" />
+            <p className="text-sm text-on-surface-variant">{loadError}</p>
             <Button variant="secondary" size="sm" onClick={onCancel}>
               Volver a eventos
             </Button>
@@ -419,7 +405,7 @@ export function EventoAdminPage({
 
                 {actionError && (
                   <div
-                    className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 px-4 py-3 text-sm text-[#8b3a44]"
+                    className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-4 py-3 text-sm text-on-error-container"
                     role="alert"
                   >
                     <AlertCircle size={16} className="shrink-0 mt-0.5" />
@@ -428,7 +414,7 @@ export function EventoAdminPage({
                 )}
 
                 {guardado && (
-                  <p className="text-xs font-medium text-[#2c6e49] bg-[#e9f3ec] border border-[#2c6e49]/20 rounded-xl px-3 py-2">
+                  <p className="text-xs font-medium text-pine bg-pine-container border border-pine/20 rounded-xl px-3 py-2">
                     Cambios guardados.
                   </p>
                 )}
@@ -436,7 +422,7 @@ export function EventoAdminPage({
             )}
 
             {evento?.estado === 'CANCELADO' ? (
-              <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 px-4 py-3 text-sm text-[#8b3a44]">
+              <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-4 py-3 text-sm text-on-error-container">
                 <AlertTriangle size={16} className="shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold">Este evento está cancelado y ya no puede editarse.</p>
@@ -457,7 +443,6 @@ export function EventoAdminPage({
             )}
           </>
         )}
-      </main>
 
       {confirmando === 'publicar' && (
         <ConfirmDialog
@@ -503,6 +488,6 @@ export function EventoAdminPage({
           onClose={() => setConfirmando(null)}
         />
       )}
-    </div>
+    </AppShell>
   )
 }

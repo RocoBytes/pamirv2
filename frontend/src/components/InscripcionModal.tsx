@@ -1,10 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { AnimatePresence, motion } from 'motion/react'
 import { AlertCircle, Car, CarFront, ChevronLeft, Minus, Plus, ScrollText, X } from 'lucide-react'
 
 import type { DeclaracionVigente, EventoDetail } from '../types/evento'
 import { inscribirseEvento } from '../lib/api'
+import { originFromElement, type RevealOrigin } from '../lib/reveal-geometry'
+import { useStepDirection } from '../hooks/useStepDirection'
 import { Button } from './ui/Button'
+import { stepVariants } from './ui/motion'
+import { SuccessReveal, type RevealStatus } from './ui/SuccessReveal'
 
 interface InscripcionModalProps {
   evento: EventoDetail
@@ -20,8 +25,20 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
   const [aceptados, setAceptados] = useState<boolean[]>(declaracion.items.map(() => false))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+  /** Mientras no sea null hay una onda de confirmación en curso sobre el modal. */
+  const [revealOrigin, setRevealOrigin] = useState<RevealOrigin | null>(null)
+
+  const direction = useStepDirection(step)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   const todosAceptados = aceptados.length > 0 && aceptados.every(Boolean)
+
+  // A diferencia de los wizards de pantalla completa, acá no hay `window` que
+  // desplazar: el scroll vive dentro del propio modal.
+  useEffect(() => {
+    contentRef.current?.scrollTo(0, 0)
+  }, [step])
 
   function elegirVehiculo(valor: boolean) {
     setTieneVehiculo(valor)
@@ -37,8 +54,11 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
     setAceptados((prev) => prev.map((v, i) => (i === index ? !v : v)))
   }
 
-  async function confirmar() {
+  async function confirmar(origin: RevealOrigin) {
     if (tieneVehiculo === null || !todosAceptados) return
+    // La onda arranca ya, en el mismo cuadro del toque; lo que espera la
+    // confirmación del servidor es el check, no la expansión.
+    setRevealOrigin(origin)
     setSubmitting(true)
     setError(null)
     try {
@@ -48,18 +68,25 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
         declaracionVersionId: declaracion.id,
         itemsAceptados: aceptados,
       })
-      onSuccess()
+      setSuccess(true)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No se pudo enviar la inscripción'
-      // Doble submit / pestaña vieja: ya existe la postulación, refrescar igual
+      // Doble submit / pestaña vieja: ya existe la postulación — para quien
+      // se inscribió, estar ya inscrito ES el éxito, así que también muestra
+      // la onda en vez de un error.
       if (/Ya estás inscrito/i.test(message)) {
-        onSuccess()
+        setSuccess(true)
         return
       }
       setError(message)
       setSubmitting(false)
     }
   }
+
+  // La onda se superpone al modal en vez de cerrarlo con un `onSuccess()`
+  // inmediato: el formulario queda debajo, que es lo que hace que la
+  // confirmación parezca nacer del botón en vez de aparecer de la nada.
+  const revealStatus: RevealStatus = error ? 'error' : success ? 'success' : 'saving'
 
   return createPortal(
     <div
@@ -69,12 +96,12 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
       aria-labelledby="inscripcion-title"
     >
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#4a6fad]/15">
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-secondary/15">
           <div className="min-w-0">
             <h2 id="inscripcion-title" className="text-base font-bold text-slate-900 leading-snug truncate">
               Inscripción — {evento.titulo}
             </h2>
-            <p className="text-xs text-[#757874] mt-0.5">Paso {step} de 3</p>
+            <p className="text-xs text-on-surface-variant mt-0.5">Paso {step} de 3</p>
           </div>
           <button
             onClick={onClose}
@@ -85,7 +112,16 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
           </button>
         </div>
 
-        <div className="px-5 py-5 overflow-y-auto">
+        <div ref={contentRef} className="px-5 py-5 overflow-y-auto">
+          <AnimatePresence mode="wait" initial={false} custom={direction}>
+            <motion.div
+              key={step}
+              custom={direction}
+              variants={stepVariants(direction)}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+            >
           {step === 1 && (
             <div className="flex flex-col gap-4">
               <p className="text-sm font-semibold text-slate-900">¿Cuento con vehículo propio?</p>
@@ -93,17 +129,17 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
                 <button
                   type="button"
                   onClick={() => elegirVehiculo(true)}
-                  className="flex flex-col items-center gap-2 rounded-2xl border-2 border-[#4a6fad]/30 hover:border-[#264c99] hover:bg-[#f0f4fb] px-4 py-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]"
+                  className="flex flex-col items-center gap-2 rounded-2xl border-2 border-secondary/30 hover:border-primary hover:bg-surface-container-low px-4 py-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
-                  <CarFront size={28} className="text-[#264c99]" />
+                  <CarFront size={28} className="text-primary" />
                   <span className="text-sm font-bold text-slate-900">SÍ</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => elegirVehiculo(false)}
-                  className="flex flex-col items-center gap-2 rounded-2xl border-2 border-[#4a6fad]/30 hover:border-[#264c99] hover:bg-[#f0f4fb] px-4 py-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]"
+                  className="flex flex-col items-center gap-2 rounded-2xl border-2 border-secondary/30 hover:border-primary hover:bg-surface-container-low px-4 py-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
-                  <Car size={28} className="text-[#757874]" />
+                  <Car size={28} className="text-on-surface-variant" />
                   <span className="text-sm font-bold text-slate-900">NO</span>
                 </button>
               </div>
@@ -120,7 +156,7 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
                   type="button"
                   onClick={() => setCupos((c) => Math.max(0, c - 1))}
                   aria-label="Restar un cupo"
-                  className="w-10 h-10 flex items-center justify-center rounded-full bg-[#e8eef7] text-[#264c99] hover:bg-[#dde6f7] transition-colors disabled:opacity-40"
+                  className="w-10 h-10 flex items-center justify-center rounded-full bg-primary-fixed text-primary hover:bg-surface-container transition-colors disabled:opacity-40"
                   disabled={cupos <= 0}
                 >
                   <Minus size={18} />
@@ -132,13 +168,13 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
                   type="button"
                   onClick={() => setCupos((c) => Math.min(30, c + 1))}
                   aria-label="Sumar un cupo"
-                  className="w-10 h-10 flex items-center justify-center rounded-full bg-[#e8eef7] text-[#264c99] hover:bg-[#dde6f7] transition-colors disabled:opacity-40"
+                  className="w-10 h-10 flex items-center justify-center rounded-full bg-primary-fixed text-primary hover:bg-surface-container transition-colors disabled:opacity-40"
                   disabled={cupos >= 30}
                 >
                   <Plus size={18} />
                 </button>
               </div>
-              <p className="text-xs text-[#757874] text-center">
+              <p className="text-xs text-on-surface-variant text-center">
                 Sin contar al conductor. Puedes dejarlo en 0.
               </p>
               <div className="flex justify-between pt-2">
@@ -156,21 +192,21 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
           {step === 3 && (
             <div className="flex flex-col gap-4">
               <div className="flex items-start gap-2">
-                <ScrollText size={18} className="text-[#264c99] shrink-0 mt-0.5" />
+                <ScrollText size={18} className="text-primary shrink-0 mt-0.5" />
                 <p className="text-sm font-semibold text-slate-900">{declaracion.titulo}</p>
               </div>
-              <p className="text-xs text-[#757874] -mt-2">
+              <p className="text-xs text-on-surface-variant -mt-2">
                 Acepta cada punto individualmente: tu aceptación punto por punto queda registrada.
               </p>
               <ul className="flex flex-col gap-2">
                 {declaracion.items.map((item, i) => (
                   <li key={i}>
-                    <label className="flex items-start gap-3 rounded-xl border border-[#4a6fad]/20 bg-slate-50 px-3 py-2.5 cursor-pointer hover:bg-[#f0f4fb] transition-colors">
+                    <label className="flex items-start gap-3 rounded-xl border border-secondary/20 bg-slate-50 px-3 py-2.5 cursor-pointer hover:bg-surface-container-low transition-colors">
                       <input
                         type="checkbox"
                         checked={aceptados[i] ?? false}
                         onChange={() => toggleItem(i)}
-                        className="mt-0.5 w-4 h-4 shrink-0 rounded border-[#4a6fad]/40 text-[#264c99] focus:ring-[#264c99]"
+                        className="mt-0.5 w-4 h-4 shrink-0 rounded border-secondary/40 text-primary focus:ring-primary"
                       />
                       <span className="text-xs text-slate-700 leading-relaxed">{item}</span>
                     </label>
@@ -180,7 +216,7 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
 
               {error && (
                 <div
-                  className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 px-3 py-2.5 text-sm text-[#8b3a44]"
+                  className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-3 py-2.5 text-sm text-on-error-container"
                   role="alert"
                 >
                   <AlertCircle size={15} className="shrink-0 mt-0.5" />
@@ -202,15 +238,28 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
                   size="sm"
                   disabled={!todosAceptados || submitting}
                   loading={submitting}
-                  onClick={() => void confirmar()}
+                  onClick={(e) => void confirmar(originFromElement(e.currentTarget))}
                 >
                   Confirmar inscripción
                 </Button>
               </div>
             </div>
           )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
+
+      {revealOrigin && (
+        <SuccessReveal
+          origin={revealOrigin}
+          status={revealStatus}
+          title="¡Listo!"
+          detail="Inscripción confirmada"
+          onFinished={onSuccess}
+          onRetracted={() => setRevealOrigin(null)}
+        />
+      )}
     </div>,
     document.body,
   )

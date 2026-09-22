@@ -76,15 +76,15 @@ function CheckboxGroup<T extends string>({
 
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-semibold text-[#264c99]">
+      <legend className="text-sm font-semibold text-primary">
         {label}
         {required && (
-          <span className="text-[#A4636E] ml-1" aria-hidden="true">
+          <span className="text-error ml-1" aria-hidden="true">
             *
           </span>
         )}
       </legend>
-      {hint && <p className="text-xs text-[#757874] -mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-on-surface-variant -mt-1">{hint}</p>}
       <div className="flex flex-col gap-1.5">
         {options.map((opt) => {
           const checked = selected.includes(opt)
@@ -93,10 +93,10 @@ function CheckboxGroup<T extends string>({
               key={opt}
               className={[
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all duration-150 select-none',
-                'focus-within:ring-2 focus-within:ring-[#264c99]/40',
+                'focus-within:ring-2 focus-within:ring-primary/40',
                 checked
-                  ? 'bg-[#e8eef7] border-[#264c99]/40 text-[#1e3c7a]'
-                  : 'bg-white border-[#4a6fad]/25 text-slate-700 hover:border-[#264c99]/40 hover:bg-[#f5f8f5]',
+                  ? 'bg-primary-fixed border-primary/40 text-primary-hover'
+                  : 'bg-white border-secondary/25 text-slate-700 hover:border-primary/40 hover:bg-surface-container-low',
               ].join(' ')}
             >
               <input
@@ -110,8 +110,8 @@ function CheckboxGroup<T extends string>({
                 className={[
                   'flex items-center justify-center w-4 h-4 rounded border shrink-0 transition-colors',
                   checked
-                    ? 'bg-[#264c99] border-[#264c99]'
-                    : 'bg-white border-[#4a6fad]/50',
+                    ? 'bg-primary border-primary'
+                    : 'bg-white border-secondary/50',
                 ].join(' ')}
                 aria-hidden="true"
               >
@@ -137,7 +137,7 @@ function CheckboxGroup<T extends string>({
         })}
       </div>
       {error && (
-        <p className="text-xs text-[#A4636E]" role="alert">
+        <p className="text-xs text-error" role="alert">
           {error}
         </p>
       )}
@@ -197,10 +197,10 @@ export function Step4Communications({
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="idDispositivoFrecuencia"
-          className="text-sm font-semibold text-[#264c99]"
+          className="text-sm font-semibold text-primary"
         >
           ID de Dispositivo / Frecuencia Radial{' '}
-          <span className="text-[#757874] font-normal">(opcional)</span>
+          <span className="text-on-surface-variant font-normal">(opcional)</span>
         </label>
         <input
           id="idDispositivoFrecuencia"
@@ -210,14 +210,14 @@ export function Step4Communications({
           {...register('idDispositivoFrecuencia')}
           className={[
             'w-full px-3 py-2.5 rounded-xl border bg-white text-sm text-slate-800',
-            'placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
+            'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
             errors.idDispositivoFrecuencia
-              ? 'border-[#A4636E]'
-              : 'border-[#4a6fad]/30',
+              ? 'border-error'
+              : 'border-secondary/30',
           ].join(' ')}
         />
         {errors.idDispositivoFrecuencia && (
-          <p className="text-xs text-[#A4636E]" role="alert">
+          <p className="text-xs text-error" role="alert">
             {errors.idDispositivoFrecuencia.message}
           </p>
         )}
@@ -246,7 +246,7 @@ export function Step4Communications({
           <div className="flex flex-col gap-1.5 pl-7">
             <label
               htmlFor="equipoColectivoOtro"
-              className="text-xs font-semibold text-[#264c99]"
+              className="text-xs font-semibold text-primary"
             >
               Especifica el equipo adicional
             </label>
@@ -258,14 +258,14 @@ export function Step4Communications({
               {...register('equipoColectivoOtro')}
               className={[
                 'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800',
-                'placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
+                'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
                 errors.equipoColectivoOtro
-                  ? 'border-[#A4636E]'
-                  : 'border-[#4a6fad]/30',
+                  ? 'border-error'
+                  : 'border-secondary/30',
               ].join(' ')}
             />
             {errors.equipoColectivoOtro && (
-              <p className="text-xs text-[#A4636E]" role="alert">
+              <p className="text-xs text-error" role="alert">
                 {errors.equipoColectivoOtro.message}
               </p>
             )}

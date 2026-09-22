@@ -1,78 +1,164 @@
-import { useState } from 'react'
-import { Eye, EyeOff, Loader2, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Loader2, CheckCircle, AlertCircle, ArrowLeft, ArrowRight, UserPlus, AtSign, Lock, ShieldCheck } from 'lucide-react'
 import { Button } from './ui/Button'
-import { forgotPassword, resetPassword } from '../lib/api'
-import logoPamir from '../assets/logo_PAMIR.png'
+import { Input } from './ui/Input'
+import { PasswordInput } from './ui/PasswordInput'
+import { Checkbox } from './ui/Checkbox'
+import { ClubLogo } from './ClubLogo'
+import { AuthVisualPanel } from './auth/AuthVisualPanel'
+import { clubDisplayName } from '../lib/club-brand'
+import { clubPreferido } from '../lib/club-preferido'
+import { useIsDesktop } from '../hooks/useMediaQuery'
+import { forgotPassword, resetPassword, consultarInvitacion, aceptarInvitacion, fetchMarcaClub } from '../lib/api'
+import type { ConsultarInvitacionResponse } from '../types/invitacion'
+import type { OrganizationBrand } from '../types/salida'
 
-type View = 'login' | 'register' | 'verify-pending' | 'forgot' | 'reset' | 'verify-success' | 'verify-error'
+type View = 'login' | 'forgot' | 'reset' | 'verify-success' | 'verify-error' | 'accept-invite'
 
 interface AuthPageProps {
-  onLogin: (email: string, password: string) => Promise<void>
-  onRegister: (name: string, email: string, password: string) => Promise<void>
+  // remember: true guarda la sesión en localStorage ("recordar este
+  // equipo"); false, en sessionStorage (muere al cerrar el navegador). Ver
+  // establishSession en lib/storage.ts.
+  onLogin: (email: string, password: string, remember: boolean) => Promise<void>
   isLoading: boolean
   verifiedStatus?: 'success' | 'error'
   resetToken?: string
+  inviteToken?: string
 }
 
-export function AuthPage({ onLogin, onRegister, isLoading, verifiedStatus, resetToken }: AuthPageProps) {
+export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, inviteToken }: AuthPageProps) {
+  const isDesktop = useIsDesktop()
+
   const initialView: View = verifiedStatus === 'success'
     ? 'verify-success'
     : verifiedStatus === 'error'
     ? 'verify-error'
     : resetToken
     ? 'reset'
+    : inviteToken
+    ? 'accept-invite'
     : 'login'
 
   const [view, setView] = useState<View>(initialView)
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [pendingEmail, setPendingEmail] = useState('')
+  const [loginNote, setLoginNote] = useState<string | null>(null)
 
   // Form fields
-  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
+  // Sin marcar por defecto: la sesión dura lo que dure el navegador salvo que
+  // el socio lo pida explícitamente. Es el default seguro en un equipo
+  // compartido (un refugio, el computador del club).
+  const [rememberDevice, setRememberDevice] = useState(false)
   const [forgotEmail, setForgotEmail] = useState('')
   const [forgotSent, setForgotSent] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [resetDone, setResetDone] = useState(false)
 
+  // Aceptar invitación
+  const [inviteInfo, setInviteInfo] = useState<ConsultarInvitacionResponse | null>(null)
+  const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken))
+  const [inviteLoadError, setInviteLoadError] = useState<string | null>(null)
+  const [inviteName, setInviteName] = useState('')
+  const [invitePassword, setInvitePassword] = useState('')
+  const [inviteConfirmPassword, setInviteConfirmPassword] = useState('')
+  const [inviteSubmitting, setInviteSubmitting] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!inviteToken) return
+    let cancelled = false
+    setInviteLoading(true)
+    setInviteLoadError(null)
+    consultarInvitacion(inviteToken)
+      .then((data) => {
+        if (cancelled) return
+        setInviteInfo(data)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setInviteLoadError(err instanceof Error ? err.message : 'No se pudo consultar la invitación')
+      })
+      .finally(() => {
+        if (cancelled) return
+        setInviteLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [inviteToken])
+
+  // Club preferido (ver club-preferido.ts): ?club=<slug> en la URL, o si no
+  // viene, el último club con el que se inició sesión en este navegador.
+  // Gobierna SOLO la marca del login — nunca antes de resolver una invitación
+  // en curso, que ya trae su propio club (inviteOrg más abajo tiene
+  // prioridad). Si no hay slug o la consulta falla, queda el neutral de hoy.
+  const [preferredOrg, setPreferredOrg] = useState<OrganizationBrand | null>(null)
+
+  useEffect(() => {
+    if (inviteToken) return
+    const slug = clubPreferido()
+    if (!slug) return
+    let cancelled = false
+    fetchMarcaClub(slug)
+      .then((org) => {
+        if (cancelled) return
+        setPreferredOrg(org)
+      })
+      .catch(() => {
+        // Sin conexión, club borrado, etc.: queda el neutral de hoy
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [inviteToken])
+
   function clearError() { setError(null) }
+
+  async function handleAcceptInvite(e: React.FormEvent) {
+    e.preventDefault()
+    setInviteError(null)
+
+    if (!inviteName.trim()) {
+      setInviteError('El nombre es requerido')
+      return
+    }
+    if (invitePassword.length < 8) {
+      setInviteError('La contraseña debe tener al menos 8 caracteres')
+      return
+    }
+    if (invitePassword !== inviteConfirmPassword) {
+      setInviteError('Las contraseñas no coinciden')
+      return
+    }
+
+    setInviteSubmitting(true)
+    try {
+      const { email: aceptadoEmail } = await aceptarInvitacion(inviteToken!, inviteName.trim(), invitePassword)
+      try {
+        // Cuenta recién creada, sin checkbox de "recordar" en esta vista:
+        // se recuerda por defecto, igual que el comportamiento de siempre.
+        await onLogin(aceptadoEmail, invitePassword, true)
+      } catch {
+        setLoginNote('Tu cuenta fue creada. Inicia sesión con tu nueva contraseña.')
+        setView('login')
+      }
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : 'No se pudo aceptar la invitación')
+    } finally {
+      setInviteSubmitting(false)
+    }
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     clearError()
     setSubmitting(true)
     try {
-      await onLogin(email, password)
+      await onLogin(email, password, rememberDevice)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleRegister(e: React.FormEvent) {
-    e.preventDefault()
-    clearError()
-    if (password !== confirmPassword) {
-      setError('Las contraseñas no coinciden')
-      return
-    }
-    if (password.length < 8) {
-      setError('La contraseña debe tener al menos 8 caracteres')
-      return
-    }
-    setSubmitting(true)
-    try {
-      await onRegister(name, email, password)
-      setPendingEmail(email)
-      setView('verify-pending')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al crear la cuenta')
     } finally {
       setSubmitting(false)
     }
@@ -110,241 +196,301 @@ export function AuthPage({ onLogin, onRegister, isLoading, verifiedStatus, reset
     }
   }
 
-  const inputClass = 'w-full rounded-xl border border-[#4a6fad]/40 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#264c99] focus:border-[#264c99] transition-colors'
+  // "Aceptar invitación", con la invitación ya consultada, siempre manda: es
+  // el club exacto al que invitaron, más confiable que cualquier preferencia
+  // de este navegador. Sin invitación en curso, cae al club preferido
+  // (?club=<slug> o el recordado); sin ninguno de los dos, el neutral de hoy.
+  const inviteOrg = view === 'accept-invite' ? (inviteInfo?.organization ?? null) : null
+  const logoOrg = inviteOrg ?? preferredOrg
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-4"
-      style={{ background: 'linear-gradient(135deg, #0f1f3d 0%, #1a3060 100%)' }}
-    >
-      {/* Background pattern */}
-      <div className="absolute inset-0 opacity-[0.04] pointer-events-none" aria-hidden="true">
-        <div className="w-full h-full" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '32px 32px' }} />
-      </div>
+    <div className="min-h-dvh lg:grid lg:grid-cols-2">
+      {/* Columna del formulario PRIMERO en el DOM: el e2e de branding asume
+          que el logo del club es el primer <img> de la página, y es además
+          el orden correcto para un lector de pantalla (el contenido antes
+          que la imagen decorativa). */}
+      <div className="min-h-dvh flex flex-col bg-surface-container-lowest px-4">
+        <div className="flex-1 flex items-center justify-center py-10">
+          <div className="w-full max-w-[360px] flex flex-col gap-8">
 
-      <div className="relative w-full max-w-md">
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-10">
-          <img src={logoPamir} alt="Pamir Andino Club" className="w-36 h-36 object-contain drop-shadow-lg mb-2" />
-          <p className="text-white/50 mt-1 text-center text-sm">Registro de salidas de montaña</p>
-        </div>
-
-        <div className="bg-[#fafaf8] rounded-2xl shadow-2xl p-8">
-
-          {/* ── Verificación exitosa ─────────────────────────────────── */}
-          {view === 'verify-success' && (
-            <div className="flex flex-col items-center gap-4 text-center">
-              <CheckCircle size={48} className="text-[#264c99]" />
-              <h2 className="text-xl font-bold text-slate-800">¡Cuenta verificada!</h2>
-              <p className="text-[#757874] text-sm">Tu email fue confirmado. Ahora puedes iniciar sesión.</p>
-              <Button fullWidth onClick={() => setView('login')}>Iniciar sesión</Button>
-            </div>
-          )}
-
-          {/* ── Error de verificación ────────────────────────────────── */}
-          {view === 'verify-error' && (
-            <div className="flex flex-col items-center gap-4 text-center">
-              <AlertCircle size={48} className="text-[#A4636E]" />
-              <h2 className="text-xl font-bold text-slate-800">Enlace inválido</h2>
-              <p className="text-[#757874] text-sm">El enlace de verificación es inválido o ya fue usado.</p>
-              <Button fullWidth onClick={() => setView('login')}>Volver al inicio</Button>
-            </div>
-          )}
-
-          {/* ── Verificación pendiente ───────────────────────────────── */}
-          {view === 'verify-pending' && (
-            <div className="flex flex-col items-center gap-4 text-center">
-              <div className="flex items-center justify-center w-16 h-16 rounded-full bg-[#e8eef7]">
-                <CheckCircle size={32} className="text-[#264c99]" />
+            {/* ── Verificación exitosa ─────────────────────────────────── */}
+            {view === 'verify-success' && (
+              <div className="flex flex-col items-center gap-4 text-center">
+                <CheckCircle size={48} className="text-primary" />
+                <h1 className="text-xl font-bold text-slate-800">¡Cuenta verificada!</h1>
+                <p className="text-on-surface-variant text-sm">Tu email fue confirmado. Ahora puedes iniciar sesión.</p>
+                <Button fullWidth onClick={() => setView('login')}>Iniciar sesión</Button>
               </div>
-              <h2 className="text-xl font-bold text-slate-800">Revisa tu correo</h2>
-              <p className="text-[#757874] text-sm">
-                Enviamos un enlace de verificación a <strong className="text-slate-700">{pendingEmail}</strong>.
-                Haz clic en el enlace para activar tu cuenta.
-              </p>
-              <p className="text-xs text-[#757874]/70">¿No llegó? Revisa la carpeta de spam.</p>
-              <Button variant="ghost" fullWidth onClick={() => setView('login')}>Volver al inicio de sesión</Button>
-            </div>
-          )}
+            )}
 
-          {/* ── Restablecer contraseña ───────────────────────────────── */}
-          {view === 'reset' && (
-            <>
-              <h2 className="text-xl font-bold text-slate-800 mb-1">Nueva contraseña</h2>
-              <p className="text-[#757874] text-sm mb-6">Ingresa tu nueva contraseña.</p>
-              {resetDone ? (
-                <div className="flex flex-col gap-4 text-center">
-                  <CheckCircle size={40} className="text-[#264c99] mx-auto" />
-                  <p className="text-slate-700 text-sm font-medium">¡Contraseña actualizada! Ya puedes iniciar sesión.</p>
-                  <Button fullWidth onClick={() => setView('login')}>Iniciar sesión</Button>
+            {/* ── Error de verificación ────────────────────────────────── */}
+            {view === 'verify-error' && (
+              <div className="flex flex-col items-center gap-4 text-center">
+                <AlertCircle size={48} className="text-error" />
+                <h1 className="text-xl font-bold text-slate-800">Enlace inválido</h1>
+                <p className="text-on-surface-variant text-sm">El enlace de verificación es inválido o ya fue usado.</p>
+                <Button fullWidth onClick={() => setView('login')}>Volver al inicio</Button>
+              </div>
+            )}
+
+            {/* ── Restablecer contraseña ───────────────────────────────── */}
+            {view === 'reset' && (
+              <>
+                <div className="flex flex-col gap-1">
+                  <h1 className="text-xl font-bold text-slate-800">Nueva contraseña</h1>
+                  <p className="text-on-surface-variant text-sm">Ingresa tu nueva contraseña.</p>
                 </div>
-              ) : (
-                <form onSubmit={(e) => void handleReset(e)} className="flex flex-col gap-4">
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
+                {resetDone ? (
+                  <div className="flex flex-col gap-4 text-center">
+                    <CheckCircle size={40} className="text-primary mx-auto" />
+                    <p className="text-slate-700 text-sm font-medium">¡Contraseña actualizada! Ya puedes iniciar sesión.</p>
+                    <Button fullWidth onClick={() => setView('login')}>Iniciar sesión</Button>
+                  </div>
+                ) : (
+                  <form onSubmit={(e) => void handleReset(e)} className="flex flex-col gap-4">
+                    <PasswordInput
+                      label="Nueva contraseña"
+                      hint="Mínimo 8 caracteres"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Nueva contraseña (mín. 8 caracteres)"
                       required
-                      className={inputClass + ' pr-10'}
+                      autoComplete="new-password"
+                      leftIcon={<Lock size={16} />}
                     />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#757874]">
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
+                    {error && <p className="text-xs text-error" role="alert">{error}</p>}
+                    <Button type="submit" fullWidth disabled={submitting}>
+                      {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Actualizar contraseña'}
+                    </Button>
+                  </form>
+                )}
+              </>
+            )}
+
+            {/* ── Aceptar invitación ───────────────────────────────────── */}
+            {view === 'accept-invite' && (
+              <>
+                {inviteLoading && (
+                  <div className="flex flex-col items-center gap-3 py-6 text-center">
+                    <Loader2 size={32} className="animate-spin text-primary" />
+                    <p className="text-sm text-on-surface-variant">Consultando invitación...</p>
                   </div>
-                  {error && <p className="text-xs text-[#A4636E]" role="alert">{error}</p>}
-                  <Button type="submit" fullWidth disabled={submitting}>
-                    {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Actualizar contraseña'}
-                  </Button>
-                </form>
-              )}
-            </>
-          )}
+                )}
 
-          {/* ── Olvidé mi contraseña ─────────────────────────────────── */}
-          {view === 'forgot' && (
-            <>
-              <button onClick={() => setView('login')} className="flex items-center gap-1 text-sm text-[#757874] hover:text-slate-700 mb-4 transition-colors">
-                <ArrowLeft size={14} />Volver
-              </button>
-              <h2 className="text-xl font-bold text-slate-800 mb-1">Restablecer contraseña</h2>
-              <p className="text-[#757874] text-sm mb-6">Ingresa tu email y te enviaremos un enlace.</p>
-              {forgotSent ? (
-                <div className="flex flex-col gap-3 text-center">
-                  <CheckCircle size={40} className="text-[#264c99] mx-auto" />
-                  <p className="text-slate-700 text-sm">Si el email está registrado, recibirás el enlace en breve. Revisa tu bandeja de entrada y la carpeta de spam.</p>
-                  <Button variant="ghost" fullWidth onClick={() => setView('login')}>Volver al inicio</Button>
+                {!inviteLoading && inviteLoadError && (
+                  <div className="flex flex-col items-center gap-4 text-center">
+                    <AlertCircle size={48} className="text-error" />
+                    <h1 className="text-xl font-bold text-slate-800">Invitación no disponible</h1>
+                    <p className="text-on-surface-variant text-sm" role="alert">{inviteLoadError}</p>
+                    <Button fullWidth onClick={() => setView('login')}>Volver al inicio</Button>
+                  </div>
+                )}
+
+                {!inviteLoading && !inviteLoadError && inviteInfo && (
+                  <>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2 text-secondary">
+                        <UserPlus size={18} />
+                        <h1 className="text-xl font-bold text-slate-800">Crea tu cuenta</h1>
+                      </div>
+                      <p className="text-on-surface-variant text-sm">
+                        <span className="font-semibold text-slate-700">{inviteInfo.invitadoPor}</span> te invitó a
+                        unirse a <span className="font-semibold text-slate-700">{clubDisplayName(inviteInfo.organization)}</span>{' '}
+                        como <span className="font-semibold text-slate-700">{inviteInfo.rolLabel}</span>.
+                      </p>
+                    </div>
+
+                    <form onSubmit={(e) => void handleAcceptInvite(e)} className="flex flex-col gap-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-semibold text-primary">Email</span>
+                        <p
+                          className="w-full rounded-xl border border-secondary/40 bg-surface-container-low px-3 py-2 text-sm text-on-surface-variant"
+                          aria-label="Email de la invitación"
+                        >
+                          {inviteInfo.email}
+                        </p>
+                      </div>
+
+                      <Input
+                        type="text"
+                        label="Nombre completo"
+                        value={inviteName}
+                        onChange={(e) => { setInviteName(e.target.value); setInviteError(null) }}
+                        required
+                        autoComplete="name"
+                      />
+
+                      <PasswordInput
+                        label="Contraseña"
+                        hint="Mínimo 8 caracteres"
+                        value={invitePassword}
+                        onChange={(e) => { setInvitePassword(e.target.value); setInviteError(null) }}
+                        required
+                        autoComplete="new-password"
+                        leftIcon={<Lock size={16} />}
+                      />
+
+                      <PasswordInput
+                        label="Confirmar contraseña"
+                        value={inviteConfirmPassword}
+                        onChange={(e) => { setInviteConfirmPassword(e.target.value); setInviteError(null) }}
+                        required
+                        autoComplete="new-password"
+                        leftIcon={<Lock size={16} />}
+                      />
+
+                      {inviteError && <p className="text-xs text-error" role="alert">{inviteError}</p>}
+
+                      <Button type="submit" fullWidth disabled={inviteSubmitting}>
+                        {inviteSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Crear cuenta'}
+                      </Button>
+                    </form>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* ── Olvidé mi contraseña ─────────────────────────────────── */}
+            {view === 'forgot' && (
+              <>
+                <button
+                  onClick={() => setView('login')}
+                  className="inline-flex items-center gap-1 self-start text-sm text-on-surface-variant hover:text-slate-700 transition-colors rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <ArrowLeft size={14} />Volver
+                </button>
+                <div className="flex flex-col gap-1 -mt-4">
+                  <h1 className="text-xl font-bold text-slate-800">Restablecer contraseña</h1>
+                  <p className="text-on-surface-variant text-sm">Ingresa tu email y te enviaremos un enlace.</p>
                 </div>
-              ) : (
-                <form onSubmit={(e) => void handleForgot(e)} className="flex flex-col gap-4">
-                  <input
+                {forgotSent ? (
+                  <div className="flex flex-col gap-3 text-center">
+                    <CheckCircle size={40} className="text-primary mx-auto" />
+                    <p className="text-slate-700 text-sm">Si el email está registrado, recibirás el enlace en breve. Revisa tu bandeja de entrada y la carpeta de spam.</p>
+                    <Button variant="ghost" fullWidth onClick={() => setView('login')}>Volver al inicio</Button>
+                  </div>
+                ) : (
+                  <form onSubmit={(e) => void handleForgot(e)} className="flex flex-col gap-4">
+                    <Input
+                      type="email"
+                      label="Correo electrónico"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="tu@correo.cl"
+                      required
+                      autoComplete="email"
+                      leftIcon={<AtSign size={16} />}
+                    />
+                    {error && <p className="text-xs text-error" role="alert">{error}</p>}
+                    <Button type="submit" fullWidth disabled={submitting}>
+                      {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Enviar enlace'}
+                    </Button>
+                  </form>
+                )}
+              </>
+            )}
+
+            {/* ── Login ────────────────────────────────────────────────── */}
+            {view === 'login' && (
+              <>
+                <div className="flex flex-col items-start gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shrink-0 overflow-hidden">
+                    <ClubLogo org={logoOrg} alt="" className="w-9 h-9 object-contain" />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <p className="text-label-caps uppercase tracking-[0.05em] text-secondary">
+                      Registro de salidas y expediciones
+                    </p>
+                    <h1 className="text-headline-lg text-slate-800">Iniciar sesión</h1>
+                    <p className="text-sm text-on-surface-variant">
+                      Ingresa tus credenciales para acceder a la plataforma.
+                    </p>
+                  </div>
+                </div>
+
+                {loginNote && (
+                  <div className="flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">
+                    <CheckCircle size={14} className="shrink-0 mt-0.5" />
+                    <p>{loginNote}</p>
+                  </div>
+                )}
+
+                <form onSubmit={(e) => void handleLogin(e)} className="flex flex-col gap-4">
+                  <Input
                     type="email"
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
-                    placeholder="Tu email"
+                    label="Correo electrónico"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); clearError() }}
+                    placeholder="tu@correo.cl"
                     required
-                    className={inputClass}
+                    autoComplete="email"
+                    leftIcon={<AtSign size={16} />}
                   />
-                  {error && <p className="text-xs text-[#A4636E]" role="alert">{error}</p>}
-                  <Button type="submit" fullWidth disabled={submitting}>
-                    {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Enviar enlace'}
-                  </Button>
-                </form>
-              )}
-            </>
-          )}
-
-          {/* ── Registro ─────────────────────────────────────────────── */}
-          {view === 'register' && (
-            <>
-              <button onClick={() => setView('login')} className="flex items-center gap-1 text-sm text-[#757874] hover:text-slate-700 mb-4 transition-colors">
-                <ArrowLeft size={14} />Volver al inicio de sesión
-              </button>
-              <h2 className="text-xl font-bold text-slate-800 mb-1">Crear cuenta</h2>
-              <p className="text-[#757874] text-sm mb-6">Usa cualquier correo: Gmail, Outlook, Yahoo, etc.</p>
-              <form onSubmit={(e) => void handleRegister(e)} className="flex flex-col gap-4">
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => { setName(e.target.value); clearError() }}
-                  placeholder="Nombre completo"
-                  required
-                  className={inputClass}
-                />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); clearError() }}
-                  placeholder="Email"
-                  required
-                  className={inputClass}
-                />
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
+                  <PasswordInput
+                    label="Contraseña"
                     value={password}
                     onChange={(e) => { setPassword(e.target.value); clearError() }}
-                    placeholder="Contraseña (mín. 8 caracteres)"
-                    required
-                    className={inputClass + ' pr-10'}
-                  />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#757874]">
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-                <div className="relative">
-                  <input
-                    type={showConfirm ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={(e) => { setConfirmPassword(e.target.value); clearError() }}
-                    placeholder="Confirmar contraseña"
-                    required
-                    className={inputClass + ' pr-10'}
-                  />
-                  <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#757874]">
-                    {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-                {error && <p className="text-xs text-[#A4636E]" role="alert">{error}</p>}
-                <Button type="submit" fullWidth disabled={submitting || isLoading}>
-                  {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Crear cuenta'}
-                </Button>
-              </form>
-            </>
-          )}
-
-          {/* ── Login ────────────────────────────────────────────────── */}
-          {view === 'login' && (
-            <>
-              <h2 className="text-xl font-bold text-slate-800 mb-1" style={{ fontFamily: "'Manrope', sans-serif" }}>Bienvenido</h2>
-              <p className="text-[#757874] text-sm mb-7">Inicia sesión para guardar y sincronizar tus salidas.</p>
-              <form onSubmit={(e) => void handleLogin(e)} className="flex flex-col gap-4 mb-5">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); clearError() }}
-                  placeholder="Email"
-                  required
-                  autoComplete="email"
-                  className={inputClass}
-                />
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); clearError() }}
-                    placeholder="Contraseña"
                     required
                     autoComplete="current-password"
-                    className={inputClass + ' pr-10'}
+                    leftIcon={<Lock size={16} />}
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#757874]">
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-                {error && <p className="text-xs text-[#A4636E]" role="alert">{error}</p>}
-                <Button type="submit" fullWidth disabled={submitting || isLoading}>
-                  {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Iniciar sesión'}
-                </Button>
-              </form>
-              <div className="flex justify-between text-xs text-[#4a6fad] mb-5">
-                <button type="button" onClick={() => { clearError(); setView('register') }} className="hover:underline">
-                  ¿No tienes cuenta? Regístrate
-                </button>
-                <button type="button" onClick={() => { clearError(); setView('forgot') }} className="hover:underline">
-                  ¿Olvidaste tu contraseña?
-                </button>
-              </div>
-            </>
-          )}
 
+                  <div className="flex items-center justify-between gap-3">
+                    <Checkbox
+                      label="Recordar este equipo"
+                      className="whitespace-nowrap"
+                      checked={rememberDevice}
+                      onChange={(e) => setRememberDevice(e.target.checked)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { clearError(); setView('forgot') }}
+                      className="text-xs text-secondary whitespace-nowrap hover:underline rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      ¿Olvidaste tu contraseña?
+                    </button>
+                  </div>
+
+                  {error && <p className="text-xs text-error" role="alert">{error}</p>}
+
+                  <Button type="submit" fullWidth disabled={submitting || isLoading}>
+                    {submitting ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <>
+                        Iniciar sesión
+                        <ArrowRight size={16} />
+                      </>
+                    )}
+                  </Button>
+                </form>
+
+                <div className="flex items-start gap-2 text-xs text-on-surface-variant">
+                  <ShieldCheck size={14} className="shrink-0 mt-0.5" />
+                  <p>El acceso está restringido a socios y cordadas registradas.</p>
+                </div>
+              </>
+            )}
+
+          </div>
         </div>
 
-        <p className="text-white/30 text-xs text-center mt-6">
-          Sistema de registro alpino &mdash; Pamir v1.0
-        </p>
+        <footer className="pb-6 text-center text-xs text-on-surface-variant">
+          © 2026 RIALA · Seguridad en Montaña
+        </footer>
       </div>
+
+      {/* Panel visual a sangre completa. Se RENDERIZA condicionalmente en vez
+          de ocultarse con `hidden lg:block`: el navegador descarga igual la
+          imagen (y descargaría el video) de un <img> que está dentro de un
+          contenedor display:none. En móvil el panel ni siquiera se ve, así que
+          su costo tiene que ser cero bytes, no "bytes despriorizados". Misma
+          razón por la que el dashboard elige variante desde JS — ver el
+          comentario de hooks/useMediaQuery.ts. */}
+      {isDesktop && (
+        <div className="relative">
+          <AuthVisualPanel />
+        </div>
+      )}
     </div>
   )
 }

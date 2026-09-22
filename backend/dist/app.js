@@ -36,6 +36,14 @@ app.use('/api/auth', rateLimit({
     legacyHeaders: false,
     message: { error: 'Demasiadas solicitudes de autenticación, intenta más tarde' },
 }));
+// Límite específico para invitaciones (envían correo, sistema cerrado)
+app.use('/api/invitaciones', rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas solicitudes de invitaciones, intenta más tarde' },
+}));
 // Límite general para el resto de la API
 app.use('/api', rateLimit({
     windowMs: 15 * 60 * 1000,

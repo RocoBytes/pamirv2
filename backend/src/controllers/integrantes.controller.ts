@@ -1,9 +1,15 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { sendEmail } from '../lib/google-gmail.js';
-import { buildConfirmationEmail } from '../lib/email-templates.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
+import { sendClubEmail } from '../lib/email/club-email.js';
+import { buildConfirmationEmail, brandingFor } from '../lib/email-templates.js';
+import { subjectConfirmacionRegistro } from '../lib/email/subjects.js';
+import { isAdmin } from '../lib/authz.js';
+import { membresiaParaNuevaFicha } from '../lib/integrante-membresia.js';
 
+// membresiaClub/nombreClub NO son parte del contrato de entrada: el
+// formulario de registro pertenece al club donde se crea, así que el
+// servidor decide la membresía (ver membresiaParaNuevaFicha) y nunca lee esos
+// campos del body, aunque un frontend cacheado viejo todavía los envíe.
 interface CreateIntegranteBody {
   nombreCompleto: string;
   rut: string;
@@ -30,8 +36,6 @@ interface CreateIntegranteBody {
   cirugiasLesionesDetalle?: string;
   fuma: boolean;
   usaLentes: boolean;
-  membresiaClub: string;
-  nombreClub?: string;
   declaracionSalud: boolean;
   aceptacionRiesgo: boolean;
   consentimientoDatos: boolean;
@@ -43,19 +47,26 @@ export async function createIntegrante(req: Request, res: Response): Promise<voi
   try {
     const data = req.body as CreateIntegranteBody;
 
-    if (req.user!.email !== ADMIN_EMAIL && req.user!.email !== data.email) {
+    if (!isAdmin(req.user) && req.user!.email !== data.email) {
       res.status(403).json({ error: 'No autorizado para crear integrantes para otros usuarios' });
       return;
     }
 
-    const existing = await prisma.integrante.findUnique({ where: { rut: data.rut } });
+    const organizationId = req.user!.organizationId;
+
+    const existing = await prisma.integrante.findUnique({
+      where: { organizationId_rut: { organizationId, rut: data.rut } },
+    });
     if (existing) {
       res.status(409).json({ error: 'Ya existe un integrante registrado con ese RUT' });
       return;
     }
 
+    const { membresiaClub, nombreClub } = membresiaParaNuevaFicha({ organization: req.user!.organization });
+
     const integrante = await prisma.integrante.create({
       data: {
+        organizationId,
         nombreCompleto: data.nombreCompleto,
         rut: data.rut,
         nacionalidad: data.nacionalidad,
@@ -81,8 +92,8 @@ export async function createIntegrante(req: Request, res: Response): Promise<voi
         cirugiasLesionesDetalle: data.cirugiasLesionesDetalle ?? null,
         fuma: data.fuma,
         usaLentes: data.usaLentes,
-        membresiaClub: data.membresiaClub,
-        nombreClub: data.nombreClub ?? null,
+        membresiaClub,
+        nombreClub,
         declaracionSalud: data.declaracionSalud,
         aceptacionRiesgo: data.aceptacionRiesgo,
         consentimientoDatos: data.consentimientoDatos,
@@ -97,11 +108,13 @@ export async function createIntegrante(req: Request, res: Response): Promise<voi
       },
     });
 
-    sendEmail(
-      data.email,
-      'Confirmación de registro — Pamir',
-      buildConfirmationEmail(data),
-    ).catch((err) => console.error('[email] Error al enviar confirmación:', err));
+    const branding = brandingFor(req.user!.organization);
+    sendClubEmail(req.user!.organization, {
+      to: data.email,
+      subject: subjectConfirmacionRegistro(branding),
+      html: buildConfirmationEmail(data, branding),
+      kind: 'notificacion',
+    }).catch((err) => console.error('[email] Error al enviar confirmación:', err));
 
     res.status(201).json(integrante);
   } catch (error) {
@@ -133,9 +146,10 @@ export async function getMyIntegrante(req: Request, res: Response): Promise<void
 export async function getIntegranteByRut(req: Request, res: Response): Promise<void> {
   try {
     const rut = decodeURIComponent(req.params.rut as string);
+    const organizationId = req.user!.organizationId;
 
     const integrante = await prisma.integrante.findUnique({
-      where: { rut },
+      where: { organizationId_rut: { organizationId, rut } },
       select: {
         id: true,
         nombreCompleto: true,

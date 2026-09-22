@@ -20,9 +20,10 @@ import {
   formatRangoFechas,
   puedeGestionarCategoria,
 } from '../types/evento'
-import { fetchEvento, retirarseEvento } from '../lib/api'
+import { fetchEvento, retirarseEvento, fetchEventoItinerarioUrl } from '../lib/api'
 import { Button } from './ui/Button'
 import { InscripcionModal } from './InscripcionModal'
+import { FileDownloadButton } from './FileDownloadButton'
 
 interface EventoDetailModalProps {
   eventoId: string
@@ -38,7 +39,7 @@ interface EventoDetailModalProps {
 function FilaFicha({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between items-baseline gap-4 py-2 border-b border-slate-50">
-      <span className="text-[#757874] shrink-0">{label}</span>
+      <span className="text-on-surface-variant shrink-0">{label}</span>
       <span className="font-medium text-slate-900 text-right">{value}</span>
     </div>
   )
@@ -54,8 +55,8 @@ function SeccionTexto({
   children?: ReactNode
 }) {
   return (
-    <section className="bg-white rounded-2xl border border-[#4a6fad]/15 p-5 shadow-sm">
-      <h3 className="text-sm font-bold text-[#264c99] mb-2">{titulo}</h3>
+    <section className="bg-white rounded-2xl border border-secondary/15 p-5 shadow-sm">
+      <h3 className="text-sm font-bold text-primary mb-2">{titulo}</h3>
       {texto && <p className="text-sm text-slate-900 whitespace-pre-line">{texto}</p>}
       {children}
     </section>
@@ -119,7 +120,7 @@ export function EventoDetailModal({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
         <div className="bg-white rounded-3xl p-8 flex flex-col items-center gap-3">
-          <Loader2 className="animate-spin text-[#264c99]" size={32} />
+          <Loader2 className="animate-spin text-primary" size={32} />
           <p className="text-sm font-medium text-slate-700">Cargando evento...</p>
         </div>
       </div>
@@ -130,9 +131,9 @@ export function EventoDetailModal({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
         <div className="bg-white rounded-3xl max-w-sm w-full p-6 text-center shadow-xl">
-          <AlertCircle size={40} className="text-[#A4636E] mx-auto mb-4" />
+          <AlertCircle size={40} className="text-error mx-auto mb-4" />
           <h3 className="text-lg font-bold text-slate-900 mb-2">Error</h3>
-          <p className="text-sm text-[#757874] mb-6">{error || 'No se encontró el evento'}</p>
+          <p className="text-sm text-on-surface-variant mb-6">{error || 'No se encontró el evento'}</p>
           <Button variant="secondary" className="w-full" onClick={onClose}>
             Cerrar
           </Button>
@@ -157,11 +158,11 @@ export function EventoDetailModal({
       aria-modal="true"
       aria-label={`Detalle del evento ${evento.titulo}`}
     >
-      <div className="bg-[#f0f4fb] sm:rounded-3xl w-full h-full sm:h-[85vh] max-w-2xl flex flex-col overflow-hidden shadow-2xl">
+      <div className="bg-surface-container-low sm:rounded-3xl w-full h-full sm:h-[85vh] max-w-2xl flex flex-col overflow-hidden shadow-2xl">
         {/* Header */}
-        <header className="bg-white border-b border-[#4a6fad]/15 px-4 sm:px-6 h-14 flex items-center justify-between shrink-0">
+        <header className="bg-white border-b border-secondary/15 px-4 sm:px-6 h-14 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <CalendarDays size={20} className="text-[#264c99] shrink-0" />
+            <CalendarDays size={20} className="text-primary shrink-0" />
             <span className="font-semibold text-slate-900 truncate pr-4">Evento del club</span>
           </div>
           <button
@@ -175,7 +176,7 @@ export function EventoDetailModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-          <div className="bg-white rounded-2xl border border-[#4a6fad]/15 p-5 sm:p-6 mb-4 shadow-sm">
+          <div className="bg-white rounded-2xl border border-secondary/15 p-5 sm:p-6 mb-4 shadow-sm">
             <div className="flex flex-wrap items-center gap-2 mb-4">
               {evento.categoria && (
                 <span
@@ -204,7 +205,7 @@ export function EventoDetailModal({
             )}
 
             {evento.estado === 'CANCELADO' && evento.motivoCancelacion && (
-              <p className="text-sm text-[#8b3a44] bg-[#f5e8ea] border border-[#A4636E]/20 rounded-xl px-3 py-2 mb-2">
+              <p className="text-sm text-on-error-container bg-error-container border border-error/20 rounded-xl px-3 py-2 mb-2">
                 Motivo de la cancelación: {evento.motivoCancelacion}
               </p>
             )}
@@ -254,23 +255,21 @@ export function EventoDetailModal({
 
           <div className="grid gap-4">
             {evento.objetivo && <SeccionTexto titulo="Objetivo" texto={evento.objetivo} />}
-            {(evento.itinerario || evento.itinerarioFileUrl) && (
+            {(evento.itinerario || evento.itinerarioFileId) && (
               <SeccionTexto titulo="Itinerario" texto={evento.itinerario ?? undefined}>
-                {evento.itinerarioFileUrl && (
-                  <a
-                    href={evento.itinerarioFileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 mt-2 px-3 py-2 bg-[#e8eef7] text-[#1e3c7a] rounded-xl hover:bg-[#dde6f7] transition-colors text-sm font-medium"
+                {evento.itinerarioFileId && (
+                  <FileDownloadButton
+                    fetchUrl={() => fetchEventoItinerarioUrl(evento.id)}
+                    className="inline-flex items-center gap-2 mt-2 px-3 py-2 bg-primary-fixed text-primary-hover rounded-xl hover:bg-surface-container transition-colors text-sm font-medium disabled:opacity-60"
                   >
                     <Paperclip size={16} /> Ver itinerario adjunto
                     {evento.itinerarioFileName ? ` (${evento.itinerarioFileName})` : ''}
-                  </a>
+                  </FileDownloadButton>
                 )}
               </SeccionTexto>
             )}
             {evento.cupos !== null && (
-              <p className="text-xs text-[#757874] px-1">
+              <p className="text-xs text-on-surface-variant px-1">
                 El organizador selecciona entre los postulantes al cierre de inscripciones.
               </p>
             )}
@@ -282,9 +281,9 @@ export function EventoDetailModal({
           </div>
 
           {/* Bloque de inscripción */}
-          <div className="mt-4 bg-white rounded-2xl border border-[#4a6fad]/15 p-5 shadow-sm flex flex-col gap-3">
+          <div className="mt-4 bg-white rounded-2xl border border-secondary/15 p-5 shadow-sm flex flex-col gap-3">
             {miEstado === 'SELECCIONADO' && (
-              <p className="flex items-start gap-2 text-sm font-semibold text-[#2c6e49] bg-[#e9f3ec] border border-[#2c6e49]/20 rounded-xl px-3 py-2.5">
+              <p className="flex items-start gap-2 text-sm font-semibold text-pine bg-pine-container border border-pine/20 rounded-xl px-3 py-2.5">
                 <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
                 ¡Quedaste seleccionado/a! El organizador se pondrá en contacto con los detalles.
               </p>
@@ -298,7 +297,7 @@ export function EventoDetailModal({
 
             {miEstado === 'POSTULADO' && (
               <>
-                <p className="text-sm font-medium text-[#264c99] bg-[#e8eef7] border border-[#264c99]/20 rounded-xl px-3 py-2.5">
+                <p className="text-sm font-medium text-primary bg-primary-fixed border border-primary/20 rounded-xl px-3 py-2.5">
                   Estás postulado/a{corteTexto ? ` · resultado después del ${corteTexto}` : ''}
                 </p>
                 {evento.estado === 'PUBLICADO' && !confirmandoRetiro && (
@@ -364,7 +363,7 @@ export function EventoDetailModal({
 
             {accionError && (
               <p
-                className="flex items-start gap-2 text-sm text-[#8b3a44] bg-[#f5e8ea] border border-[#A4636E]/30 rounded-xl px-3 py-2.5"
+                className="flex items-start gap-2 text-sm text-on-error-container bg-error-container border border-error/30 rounded-xl px-3 py-2.5"
                 role="alert"
               >
                 <AlertCircle size={15} className="shrink-0 mt-0.5" />
@@ -372,12 +371,12 @@ export function EventoDetailModal({
               </p>
             )}
 
-            <p className="text-center text-xs font-medium text-[#4a6fad]">{visible.badge}</p>
+            <p className="text-center text-xs font-medium text-secondary">{visible.badge}</p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="bg-white border-t border-[#4a6fad]/15 p-4 sm:p-6 shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+        <div className="bg-white border-t border-secondary/15 p-4 sm:p-6 shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <Button variant="ghost" onClick={onClose} className="w-full sm:w-auto">
             Cerrar
           </Button>

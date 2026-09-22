@@ -6,6 +6,7 @@ import {
   getEventoById,
   inscribirse,
   retirarse,
+  getItinerarioUrl,
 } from '../controllers/eventos.controller.js';
 import {
   createEvento,
@@ -30,6 +31,7 @@ router.use(authMiddleware, requireAuth);
 router.get('/categorias', getCategorias);
 router.get('/', getEventos);
 router.get('/:id', getEventoById);
+router.get('/:id/itinerario/url', getItinerarioUrl);
 router.post('/:id/inscripcion', inscribirse);
 router.delete('/:id/inscripcion', retirarse);
 

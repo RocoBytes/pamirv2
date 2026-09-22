@@ -1,5 +1,7 @@
 import { prisma } from '../lib/prisma.js';
-import { ADMIN_EMAIL } from '../lib/constants.js';
+import { isAdmin } from '../lib/authz.js';
+import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
+import { toPublicOrganizationBrand } from '../lib/serializers/organization.js';
 const MAX_COMENTARIO_LENGTH = 2000;
 function isNota(v) {
     return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5;
@@ -8,10 +10,15 @@ function isNota(v) {
 export async function getEvaluacion(req, res) {
     try {
         const token = req.params['token'];
-        const evalToken = await prisma.evaluacionToken.findUnique({
+        // Público: el token identifica el club por sí solo — se resuelve en
+        // contexto de plataforma.
+        const evalToken = await runAsPlatform(() => prisma.evaluacionToken.findUnique({
             where: { token },
-            include: { salida: { select: { nombreActividad: true, fechaInicio: true } } },
-        });
+            include: {
+                salida: { select: { nombreActividad: true, fechaInicio: true } },
+                organization: { select: { slug: true, name: true, shortName: true, logoObjectKey: true } },
+            },
+        }));
         if (!evalToken) {
             res.status(404).json({ error: 'Evaluación no encontrada' });
             return;
@@ -20,6 +27,7 @@ export async function getEvaluacion(req, res) {
             nombreActividad: evalToken.salida.nombreActividad,
             fechaInicio: evalToken.salida.fechaInicio,
             used: evalToken.used,
+            organization: toPublicOrganizationBrand(evalToken.organization),
         });
     }
     catch (error) {
@@ -42,7 +50,9 @@ export async function submitEvaluacion(req, res) {
             res.status(400).json({ error: `El comentario no puede superar los ${MAX_COMENTARIO_LENGTH} caracteres` });
             return;
         }
-        const evalToken = await prisma.evaluacionToken.findUnique({ where: { token } });
+        // Público: el token identifica el club por sí solo — se resuelve en
+        // contexto de plataforma.
+        const evalToken = await runAsPlatform(() => prisma.evaluacionToken.findUnique({ where: { token } }));
         if (!evalToken) {
             res.status(404).json({ error: 'Evaluación no encontrada' });
             return;
@@ -51,8 +61,10 @@ export async function submitEvaluacion(req, res) {
             res.status(409).json({ error: 'Esta evaluación ya fue respondida' });
             return;
         }
-        // updateMany con guard `used: false` evita doble envío concurrente
-        await prisma.$transaction(async (tx) => {
+        // El resto del flujo (marcar el token usado y crear la respuesta) corre
+        // dentro del club de la salida que resolvió el token.
+        await runWithOrganization(evalToken.organizationId, () => prisma.$transaction(async (tx) => {
+            // updateMany con guard `used: false` evita doble envío concurrente
             const marked = await tx.evaluacionToken.updateMany({
                 where: { id: evalToken.id, used: false },
                 data: { used: true },
@@ -62,6 +74,10 @@ export async function submitEvaluacion(req, res) {
             }
             await tx.evaluacionRespuesta.create({
                 data: {
+                    // La respuesta hereda el club de su token de evaluación, que ya es
+                    // el mismo club de la salida (copiado al crear el token) — no hay
+                    // req.user en este flujo público.
+                    organizationId: evalToken.organizationId,
                     salidaId: evalToken.salidaId,
                     notaObjetivos: body.notaObjetivos,
                     notaItinerario: body.notaItinerario,
@@ -69,7 +85,7 @@ export async function submitEvaluacion(req, res) {
                     comentario: comentario || null,
                 },
             });
-        });
+        }));
         res.status(201).json({ ok: true });
     }
     catch (error) {
@@ -84,7 +100,7 @@ export async function submitEvaluacion(req, res) {
 // GET /api/evaluaciones/resultados/:salidaId — solo admin
 export async function getResultados(req, res) {
     try {
-        if (req.user?.email !== ADMIN_EMAIL) {
+        if (!isAdmin(req.user)) {
             res.status(403).json({ error: 'No tienes permiso para ver los resultados' });
             return;
         }

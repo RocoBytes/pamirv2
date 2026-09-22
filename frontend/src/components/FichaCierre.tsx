@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   Mountain,
   X,
@@ -34,7 +35,12 @@ import {
   DESEMPENO_EQUIPO_LABELS,
 } from '../types/salida'
 import { fetchSalidas, uploadGpx, createCierre } from '../lib/api'
+import { originFromSubmitEvent, type RevealOrigin } from '../lib/reveal-geometry'
+import { useStepDirection } from '../hooks/useStepDirection'
 import { Button } from './ui/Button'
+import { stepVariants } from './ui/motion'
+import { SuccessReveal, type RevealStatus } from './ui/SuccessReveal'
+import { ClubLogo } from './ClubLogo'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -207,14 +213,14 @@ function InfoTooltip({ text }: { text: string }) {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-label="Más información"
-        className="inline-flex items-center justify-center rounded-full text-[#4a6fad] hover:text-[#264c99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]/40 transition-colors"
+        className="inline-flex items-center justify-center rounded-full text-secondary hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
       >
         <Info size={16} />
       </button>
       {open && (
         <span
           role="note"
-          className="absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-[#4a6fad]/25 bg-white px-3 py-2 text-xs font-normal leading-relaxed text-slate-700 shadow-lg"
+          className="absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-secondary/25 bg-white px-3 py-2 text-xs font-normal leading-relaxed text-slate-700 shadow-lg"
         >
           {text}
         </span>
@@ -248,10 +254,10 @@ function RadioGroup<T extends string>({
 }: RadioGroupProps<T>) {
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-semibold text-[#264c99]">
+      <legend className="text-sm font-semibold text-primary">
         {label}
         {required && (
-          <span className="text-[#A4636E] ml-1" aria-hidden="true">
+          <span className="text-error ml-1" aria-hidden="true">
             *
           </span>
         )}
@@ -265,10 +271,10 @@ function RadioGroup<T extends string>({
               key={opt}
               className={[
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all duration-150 select-none',
-                'focus-within:ring-2 focus-within:ring-[#264c99]/40',
+                'focus-within:ring-2 focus-within:ring-primary/40',
                 checked
-                  ? 'bg-[#e8eef7] border-[#264c99]/40 text-[#1e3c7a]'
-                  : 'bg-white border-[#4a6fad]/25 text-slate-700 hover:border-[#264c99]/40 hover:bg-[#f5f8f5]',
+                  ? 'bg-primary-fixed border-primary/40 text-primary-hover'
+                  : 'bg-white border-secondary/25 text-slate-700 hover:border-primary/40 hover:bg-surface-container-low',
               ].join(' ')}
             >
               <input
@@ -280,7 +286,7 @@ function RadioGroup<T extends string>({
               <span
                 className={[
                   'flex items-center justify-center w-4 h-4 rounded-full border shrink-0 transition-colors',
-                  checked ? 'bg-[#264c99] border-[#264c99]' : 'bg-white border-[#4a6fad]/50',
+                  checked ? 'bg-primary border-primary' : 'bg-white border-secondary/50',
                 ].join(' ')}
                 aria-hidden="true"
               >
@@ -292,7 +298,7 @@ function RadioGroup<T extends string>({
         })}
       </div>
       {error && (
-        <p className="text-xs text-[#A4636E]" role="alert">
+        <p className="text-xs text-error" role="alert">
           {error}
         </p>
       )}
@@ -331,10 +337,10 @@ function CheckboxGroup<T extends string>({
 
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-semibold text-[#264c99]">
+      <legend className="text-sm font-semibold text-primary">
         {label}
         {required && (
-          <span className="text-[#A4636E] ml-1" aria-hidden="true">
+          <span className="text-error ml-1" aria-hidden="true">
             *
           </span>
         )}
@@ -347,10 +353,10 @@ function CheckboxGroup<T extends string>({
               key={opt}
               className={[
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all duration-150 select-none',
-                'focus-within:ring-2 focus-within:ring-[#264c99]/40',
+                'focus-within:ring-2 focus-within:ring-primary/40',
                 checked
-                  ? 'bg-[#e8eef7] border-[#264c99]/40 text-[#1e3c7a]'
-                  : 'bg-white border-[#4a6fad]/25 text-slate-700 hover:border-[#264c99]/40 hover:bg-[#f5f8f5]',
+                  ? 'bg-primary-fixed border-primary/40 text-primary-hover'
+                  : 'bg-white border-secondary/25 text-slate-700 hover:border-primary/40 hover:bg-surface-container-low',
               ].join(' ')}
             >
               <input
@@ -362,7 +368,7 @@ function CheckboxGroup<T extends string>({
               <span
                 className={[
                   'flex items-center justify-center w-4 h-4 rounded border shrink-0 transition-colors',
-                  checked ? 'bg-[#264c99] border-[#264c99]' : 'bg-white border-[#4a6fad]/50',
+                  checked ? 'bg-primary border-primary' : 'bg-white border-secondary/50',
                 ].join(' ')}
                 aria-hidden="true"
               >
@@ -384,7 +390,7 @@ function CheckboxGroup<T extends string>({
         })}
       </div>
       {error && (
-        <p className="text-xs text-[#A4636E]" role="alert">
+        <p className="text-xs text-error" role="alert">
           {error}
         </p>
       )}
@@ -419,31 +425,31 @@ function GpxFilePicker({ value, onChange }: GpxFilePickerProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-sm font-semibold text-[#264c99]">
+      <span className="text-sm font-semibold text-primary">
         Ruta real trazada (GPX){' '}
-        <span className="text-[#757874] font-normal">(opcional)</span>
+        <span className="text-on-surface-variant font-normal">(opcional)</span>
       </span>
-      <p className="text-xs text-[#757874]">
-        Adjunta el archivo .gpx registrado durante la actividad. Se subirá a Google Drive al guardar.
+      <p className="text-xs text-on-surface-variant">
+        Adjunta el archivo .gpx registrado durante la actividad. Se subirá al guardar.
       </p>
 
       {value ? (
-        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-[#264c99]/40 bg-[#e8eef7]">
-          <Paperclip size={15} className="text-[#264c99] shrink-0" />
-          <span className="text-sm text-[#1e3c7a] flex-1 truncate">{value.name}</span>
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-primary/40 bg-primary-fixed">
+          <Paperclip size={15} className="text-primary shrink-0" />
+          <span className="text-sm text-primary-hover flex-1 truncate">{value.name}</span>
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="shrink-0 text-[#4a6fad] hover:text-[#A4636E] transition-colors"
+            className="shrink-0 text-secondary hover:text-error transition-colors"
             aria-label="Quitar archivo"
           >
             <X size={15} />
           </button>
         </div>
       ) : (
-        <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-[#4a6fad]/40 bg-white cursor-pointer hover:border-[#264c99]/60 hover:bg-[#f5f8f5] transition-colors">
-          <Paperclip size={15} className="text-[#4a6fad]/60" />
-          <span className="text-sm text-[#757874]">Seleccionar archivo .gpx…</span>
+        <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-secondary/40 bg-white cursor-pointer hover:border-primary/60 hover:bg-surface-container-low transition-colors">
+          <Paperclip size={15} className="text-secondary/60" />
+          <span className="text-sm text-on-surface-variant">Seleccionar archivo .gpx…</span>
           <input
             type="file"
             accept=".gpx"
@@ -454,7 +460,7 @@ function GpxFilePicker({ value, onChange }: GpxFilePickerProps) {
       )}
 
       {sizeError && (
-        <p className="text-xs text-[#A4636E]" role="alert">
+        <p className="text-xs text-error" role="alert">
           {sizeError}
         </p>
       )}
@@ -492,6 +498,10 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1)
   const [gpxFile, setGpxFile] = useState<File | null>(null)
+  /** Mientras no sea null hay una onda de confirmación en curso sobre el formulario. */
+  const [revealOrigin, setRevealOrigin] = useState<RevealOrigin | null>(null)
+
+  const direction = useStepDirection(currentStep)
 
   const {
     register,
@@ -584,7 +594,10 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
   }, [trigger])
 
   const onSubmit = useCallback(
-    async (values: CierreFormValues) => {
+    async (values: CierreFormValues, origin: RevealOrigin) => {
+      // La onda arranca ya, en el mismo cuadro del toque; lo que espera la
+      // confirmación del servidor es el check, no la expansión.
+      setRevealOrigin(origin)
       setIsSubmitting(true)
       setSubmitError(null)
       try {
@@ -616,56 +629,50 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
             await uploadGpx(values.salidaId, gpxFile)
           }
         setSubmitSuccess(true)
-        setTimeout(onDone, 1500)
+        // El `setTimeout(onDone, 1500)` que había acá se fue: ahora navega
+        // cuando SuccessReveal termina de leerse la confirmación, en vez de un
+        // reloj a ciegas compitiendo contra la animación.
       } catch (err) {
         setSubmitError(err instanceof Error ? err.message : 'Error al guardar el cierre')
         setIsSubmitting(false)
       }
     },
-    [onDone, gpxFile],
+    [gpxFile],
   )
 
-  // ─── Success screen ─────────────────────────────────────────────────────────
-
-  if (submitSuccess) {
-    return (
-      <div className="min-h-screen bg-[#f0f4fb] flex items-center justify-center px-4">
-        <div className="text-center">
-          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-[#e8eef7] mx-auto mb-4">
-            <Check size={32} className="text-[#264c99]" />
-          </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">Cierre registrado</h2>
-          <p className="text-[#757874] text-sm">Redirigiendo...</p>
-        </div>
-      </div>
-    )
-  }
+  // La pantalla de éxito ya no reemplaza el wizard con un `return` temprano: la
+  // onda se superpone y el formulario queda debajo, que es lo que hace que la
+  // confirmación parezca nacer de algo en vez de aparecer de la nada.
+  const revealStatus: RevealStatus = submitError ? 'error' : submitSuccess ? 'success' : 'saving'
 
   // ─── Main render ────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-[#f0f4fb] flex flex-col">
+    <div className="min-h-screen bg-alpine-canvas flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-[#4a6fad]/15 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-outline-variant/40 shadow-sm pt-safe">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <button
             onClick={onCancel}
-            className="flex items-center gap-1.5 text-sm text-[#757874] hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] rounded transition-colors"
+            className="flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded transition-colors"
             aria-label="Cancelar y volver"
           >
             <X size={18} />
             <span className="hidden sm:inline">Cancelar</span>
           </button>
-          <div className="flex items-center gap-2">
-            <Mountain size={18} className="text-[#264c99]" />
-            <span className="font-semibold text-slate-800 text-sm">Cierre de Actividad</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <ClubLogo alt="" className="w-9 h-9 object-contain shrink-0" />
+            <Mountain size={18} className="text-primary shrink-0" aria-hidden="true" />
+            <span className="font-semibold text-on-surface text-body-medium truncate">
+              Cierre de Actividad
+            </span>
           </div>
-          <span className="text-xs text-[#757874] font-medium">{currentStep} / 5</span>
+          <span className="text-xs text-on-surface-variant font-medium">{currentStep} / 5</span>
         </div>
       </header>
 
       {/* Progress bars + step label */}
-      <div className="bg-white border-b border-[#4a6fad]/10">
+      <div className="bg-white border-b border-secondary/10">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-3 pb-2">
           <div className="flex gap-1.5 mb-2" role="list" aria-label="Progreso del formulario">
             {([1, 2, 3, 4, 5] as const).map((s) => (
@@ -675,15 +682,15 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                 className={[
                   'flex-1 h-1 rounded-full transition-colors duration-300',
                   s < currentStep
-                    ? 'bg-[#264c99]'
+                    ? 'bg-primary'
                     : s === currentStep
-                    ? 'bg-[#264c99]/60'
-                    : 'bg-[#dde6f7]',
+                    ? 'bg-primary/60'
+                    : 'bg-surface-container',
                 ].join(' ')}
               />
             ))}
           </div>
-          <p className="text-xs font-semibold text-[#264c99] uppercase tracking-wider">
+          <p className="text-xs font-semibold text-primary uppercase tracking-wider">
             Paso {currentStep} &mdash; {STEP_LABELS[currentStep - 1]}
           </p>
         </div>
@@ -693,7 +700,7 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-6">
         <div className="mb-6">
           <h2 className="text-xl font-bold text-slate-900">{STEP_LABELS[currentStep - 1]}</h2>
-          <p className="text-sm text-[#757874] mt-1">
+          <p className="text-sm text-on-surface-variant mt-1">
             {currentStep === 1
               ? 'Registra cómo resultó la salida y cierra el expediente de la actividad.'
               : currentStep === 2
@@ -707,38 +714,59 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
         </div>
 
         {loadingSalidas && (
-          <div className="flex items-center gap-2 text-sm text-[#757874] py-6 justify-center">
-            <Loader2 className="animate-spin text-[#264c99]" size={20} />
+          <div className="flex items-center gap-2 text-sm text-on-surface-variant py-6 justify-center">
+            <Loader2 className="animate-spin text-primary" size={20} />
             Cargando salidas...
           </div>
         )}
 
         {loadError && (
-          <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 mb-5 text-sm text-[#8b3a44]">
+          <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 mb-5 text-sm text-on-error-container">
             <AlertCircle size={15} className="mt-0.5 shrink-0" />
             <span>{loadError}</span>
           </div>
         )}
 
         {!loadingSalidas && !loadError && (
-          <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
+          <form
+            // El origen se mide SÍNCRONAMENTE acá, pero la onda recién nace
+            // dentro del handler de submit VÁLIDO (ver el comentario homólogo
+            // en wizard/Step5Status): react-hook-form valida con `await` y
+            // para entonces el navegador ya limpió `currentTarget`.
+            onSubmit={(event) => {
+              const origin = originFromSubmitEvent(event)
+              void handleSubmit((values) => onSubmit(values, origin))(event)
+            }}
+            noValidate
+            className="flex flex-col gap-6"
+          >
+          <AnimatePresence mode="wait" initial={false} custom={direction}>
+            <motion.div
+              key={currentStep}
+              custom={direction}
+              variants={stepVariants(direction)}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="flex flex-col gap-6"
+            >
 
             {/* ── PASO 1: Cierre de Actividad ─────────────────────────── */}
             {currentStep === 1 && (
               <>
                 {/* Selección de Salida */}
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="salidaId" className="text-sm font-semibold text-[#264c99]">
+                  <label htmlFor="salidaId" className="text-sm font-semibold text-primary">
                     Formulario de Salida asociado
-                    <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+                    <span className="text-error ml-1" aria-hidden="true">*</span>
                   </label>
                   {preselectedSalidaId ? (
                     <>
-                      <p className="text-xs text-[#757874] -mt-0.5">
+                      <p className="text-xs text-on-surface-variant -mt-0.5">
                         Cerrando la siguiente salida:
                       </p>
                       <input type="hidden" {...register('salidaId')} />
-                      <div className="rounded-xl border border-[#4a6fad]/40 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-900">
+                      <div className="rounded-xl border border-secondary/40 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-900">
                         {(() => {
                           const s = salidas.find((x) => x.id === preselectedSalidaId)
                           return s ? `${s.nombreActividad} (${s.ubicacionGeografica})` : 'Cargando…'
@@ -747,7 +775,7 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                     </>
                   ) : (
                     <>
-                      <p className="text-xs text-[#757874] -mt-0.5">
+                      <p className="text-xs text-on-surface-variant -mt-0.5">
                         Selecciona la salida que deseas cerrar.
                       </p>
                       <div className="relative">
@@ -758,10 +786,10 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                           className={[
                             'w-full appearance-none rounded-xl border bg-white px-3 py-2 pr-9 text-sm text-slate-900',
                             'transition-colors duration-150',
-                            'focus:outline-none focus:ring-2 focus:ring-[#264c99] focus:border-[#264c99]',
+                            'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
                             errors.salidaId
-                              ? 'border-[#A4636E] focus:ring-[#A4636E] focus:border-[#A4636E]'
-                              : 'border-[#4a6fad]/40',
+                              ? 'border-error focus:ring-error focus:border-error'
+                              : 'border-secondary/40',
                           ].join(' ')}
                         >
                           <option value="">— Selecciona una salida —</option>
@@ -774,14 +802,14 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                             ))}
                         </select>
                         <ChevronDown
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#4a6fad]/60 pointer-events-none"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary/60 pointer-events-none"
                           size={16}
                         />
                       </div>
                     </>
                   )}
                   {errors.salidaId && (
-                    <p className="text-xs text-[#A4636E]" role="alert">
+                    <p className="text-xs text-error" role="alert">
                       {errors.salidaId.message}
                     </p>
                   )}
@@ -791,10 +819,10 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                 <div className="flex flex-col gap-1">
                   <label
                     htmlFor="fechaFinalizacionReal"
-                    className="text-sm font-semibold text-[#264c99]"
+                    className="text-sm font-semibold text-primary"
                   >
                     Fecha de Finalización Real
-                    <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+                    <span className="text-error ml-1" aria-hidden="true">*</span>
                   </label>
                   <input
                     id="fechaFinalizacionReal"
@@ -804,14 +832,14 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                     className={[
                       'w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900',
                       'transition-colors duration-150',
-                      'focus:outline-none focus:ring-2 focus:ring-[#264c99] focus:border-[#264c99]',
+                      'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
                       errors.fechaFinalizacionReal
-                        ? 'border-[#A4636E] focus:ring-[#A4636E] focus:border-[#A4636E]'
-                        : 'border-[#4a6fad]/40',
+                        ? 'border-error focus:ring-error focus:border-error'
+                        : 'border-secondary/40',
                     ].join(' ')}
                   />
                   {errors.fechaFinalizacionReal && (
-                    <p className="text-xs text-[#A4636E]" role="alert">
+                    <p className="text-xs text-error" role="alert">
                       {errors.fechaFinalizacionReal.message}
                     </p>
                   )}
@@ -836,11 +864,11 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
 
                 {/* Altitud Máxima */}
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="altitudMaxima" className="text-sm font-semibold text-[#264c99]">
+                  <label htmlFor="altitudMaxima" className="text-sm font-semibold text-primary">
                     Altitud máxima alcanzada (m.s.n.m.)
-                    <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+                    <span className="text-error ml-1" aria-hidden="true">*</span>
                   </label>
-                  <p className="text-xs text-[#757874] -mt-0.5">
+                  <p className="text-xs text-on-surface-variant -mt-0.5">
                     Independiente si lograron o no el objetivo.
                   </p>
                   <input
@@ -851,12 +879,12 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                     {...register('altitudMaxima', { valueAsNumber: true })}
                     className={[
                       'w-full md:w-1/2 rounded-xl border px-3 py-2.5 text-sm text-slate-900 bg-white',
-                      'placeholder:text-[#757874]/50 focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-colors',
-                      errors.altitudMaxima ? 'border-[#A4636E]' : 'border-[#4a6fad]/40',
+                      'placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors',
+                      errors.altitudMaxima ? 'border-error' : 'border-secondary/40',
                     ].join(' ')}
                   />
                   {errors.altitudMaxima && (
-                    <p className="text-xs text-[#A4636E]" role="alert">
+                    <p className="text-xs text-error" role="alert">
                       {errors.altitudMaxima.message}
                     </p>
                   )}
@@ -935,7 +963,7 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                       <div className="flex flex-col gap-1.5 pl-7">
                         <label
                           htmlFor="motivosCambiosOtro"
-                          className="text-xs font-semibold text-[#264c99]"
+                          className="text-xs font-semibold text-primary"
                         >
                           Especifica el motivo
                         </label>
@@ -947,14 +975,14 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                           {...register('motivosCambiosOtro')}
                           className={[
                             'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800',
-                            'placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
+                            'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
                             errors.motivosCambiosOtro
-                              ? 'border-[#A4636E]'
-                              : 'border-[#4a6fad]/30',
+                              ? 'border-error'
+                              : 'border-secondary/30',
                           ].join(' ')}
                         />
                         {errors.motivosCambiosOtro && (
-                          <p className="text-xs text-[#A4636E]" role="alert">
+                          <p className="text-xs text-error" role="alert">
                             {errors.motivosCambiosOtro.message}
                           </p>
                         )}
@@ -1012,7 +1040,7 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
 
                 {/* Q1 detalle — solo si hubo incidente */}
                 {ocurrioIncidenteVal === 'SI' && (
-                  <div className="flex flex-col gap-4 pl-7 border-l-2 border-[#264c99]/20">
+                  <div className="flex flex-col gap-4 pl-7 border-l-2 border-primary/20">
                     {/* Tipo de incidente */}
                     <Controller
                       control={control}
@@ -1038,10 +1066,10 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                       <div className="flex flex-col gap-1.5">
                         <label
                           htmlFor="incidenteOtroDescripcion"
-                          className="text-sm font-semibold text-[#264c99]"
+                          className="text-sm font-semibold text-primary"
                         >
                           Descripción del incidente
-                          <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+                          <span className="text-error ml-1" aria-hidden="true">*</span>
                         </label>
                         <textarea
                           id="incidenteOtroDescripcion"
@@ -1052,13 +1080,13 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                           aria-invalid={errors.incidenteOtroDescripcion ? 'true' : undefined}
                           className={[
                             'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                            'placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
-                            errors.incidenteOtroDescripcion ? 'border-[#A4636E]' : 'border-[#4a6fad]/30',
+                            'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                            errors.incidenteOtroDescripcion ? 'border-error' : 'border-secondary/30',
                           ].join(' ')}
                         />
                         <div className="flex justify-between items-center">
                           {errors.incidenteOtroDescripcion ? (
-                            <p className="text-xs text-[#A4636E]" role="alert">
+                            <p className="text-xs text-error" role="alert">
                               {errors.incidenteOtroDescripcion.message}
                             </p>
                           ) : (
@@ -1068,8 +1096,8 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                             className={[
                               'text-xs tabular-nums',
                               incidenteOtroDescripcionVal.length > 900
-                                ? 'text-[#A4636E]'
-                                : 'text-[#757874]',
+                                ? 'text-error'
+                                : 'text-on-surface-variant',
                             ].join(' ')}
                           >
                             {incidenteOtroDescripcionVal.length} / 1000
@@ -1108,7 +1136,7 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
 
                 {/* Q2 detalle — solo si hubo accidente */}
                 {ocurrioAccidenteVal === 'SI' && (
-                  <div className="flex flex-col gap-4 pl-7 border-l-2 border-[#264c99]/20">
+                  <div className="flex flex-col gap-4 pl-7 border-l-2 border-primary/20">
                     {/* Tipo de accidente */}
                     <Controller
                       control={control}
@@ -1134,10 +1162,10 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                       <div className="flex flex-col gap-1.5">
                         <label
                           htmlFor="accidenteOtroDescripcion"
-                          className="text-sm font-semibold text-[#264c99]"
+                          className="text-sm font-semibold text-primary"
                         >
                           Descripción del accidente
-                          <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+                          <span className="text-error ml-1" aria-hidden="true">*</span>
                         </label>
                         <textarea
                           id="accidenteOtroDescripcion"
@@ -1148,13 +1176,13 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                           aria-invalid={errors.accidenteOtroDescripcion ? 'true' : undefined}
                           className={[
                             'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                            'placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
-                            errors.accidenteOtroDescripcion ? 'border-[#A4636E]' : 'border-[#4a6fad]/30',
+                            'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                            errors.accidenteOtroDescripcion ? 'border-error' : 'border-secondary/30',
                           ].join(' ')}
                         />
                         <div className="flex justify-between items-center">
                           {errors.accidenteOtroDescripcion ? (
-                            <p className="text-xs text-[#A4636E]" role="alert">
+                            <p className="text-xs text-error" role="alert">
                               {errors.accidenteOtroDescripcion.message}
                             </p>
                           ) : (
@@ -1164,8 +1192,8 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                             className={[
                               'text-xs tabular-nums',
                               accidenteOtroDescripcionVal.length > 900
-                                ? 'text-[#A4636E]'
-                                : 'text-[#757874]',
+                                ? 'text-error'
+                                : 'text-on-surface-variant',
                             ].join(' ')}
                           >
                             {accidenteOtroDescripcionVal.length} / 1000
@@ -1215,15 +1243,15 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
 
                 {/* Q13: Detalle de falla (condicional) */}
                 {showDetalleFalla && (
-                  <div className="flex flex-col gap-1.5 pl-7 border-l-2 border-[#A4636E]/20">
+                  <div className="flex flex-col gap-1.5 pl-7 border-l-2 border-error/20">
                     <label
                       htmlFor="detalleFallaEquipo"
-                      className="text-sm font-semibold text-[#264c99]"
+                      className="text-sm font-semibold text-primary"
                     >
                       Detalle de falla de equipamiento
-                      <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+                      <span className="text-error ml-1" aria-hidden="true">*</span>
                     </label>
-                    <p className="text-xs text-[#757874] -mt-0.5">
+                    <p className="text-xs text-on-surface-variant -mt-0.5">
                       Ej: Se rompió un crampón, la radio no tenía alcance, etc.
                     </p>
                     <textarea
@@ -1235,15 +1263,15 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                       aria-invalid={errors.detalleFallaEquipo ? 'true' : undefined}
                       className={[
                         'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                        'placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
+                        'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
                         errors.detalleFallaEquipo
-                          ? 'border-[#A4636E]'
-                          : 'border-[#4a6fad]/30',
+                          ? 'border-error'
+                          : 'border-secondary/30',
                       ].join(' ')}
                     />
                     <div className="flex justify-between items-center">
                       {errors.detalleFallaEquipo ? (
-                        <p className="text-xs text-[#A4636E]" role="alert">
+                        <p className="text-xs text-error" role="alert">
                           {errors.detalleFallaEquipo.message}
                         </p>
                       ) : (
@@ -1253,8 +1281,8 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                         className={[
                           'text-xs tabular-nums',
                           detalleFallaEquipoVal.length > 900
-                            ? 'text-[#A4636E]'
-                            : 'text-[#757874]',
+                            ? 'text-error'
+                            : 'text-on-surface-variant',
                         ].join(' ')}
                       >
                         {detalleFallaEquipoVal.length} / 1000
@@ -1270,12 +1298,12 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                 <div className="flex flex-col gap-1.5">
                   <label
                     htmlFor="observacionesRuta"
-                    className="text-sm font-semibold text-[#264c99]"
+                    className="text-sm font-semibold text-primary"
                   >
                     Observaciones sobre la Ruta
-                    <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+                    <span className="text-error ml-1" aria-hidden="true">*</span>
                   </label>
-                  <p className="text-xs text-[#757874] -mt-0.5">
+                  <p className="text-xs text-on-surface-variant -mt-0.5">
                     Ej: &quot;Mucha más nieve de lo esperado&quot;, &quot;derrumbe&quot;,
                     &quot;Sin agua en el campamento base&quot;
                   </p>
@@ -1288,15 +1316,15 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                     aria-invalid={errors.observacionesRuta ? 'true' : undefined}
                     className={[
                       'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                      'placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
+                      'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
                       errors.observacionesRuta
-                        ? 'border-[#A4636E]'
-                        : 'border-[#4a6fad]/30',
+                        ? 'border-error'
+                        : 'border-secondary/30',
                     ].join(' ')}
                   />
                   <div className="flex justify-between items-center">
                     {errors.observacionesRuta ? (
-                      <p className="text-xs text-[#A4636E]" role="alert">
+                      <p className="text-xs text-error" role="alert">
                         {errors.observacionesRuta.message}
                       </p>
                     ) : (
@@ -1306,8 +1334,8 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                       className={[
                         'text-xs tabular-nums',
                         observacionesRutaVal.length > 900
-                          ? 'text-[#A4636E]'
-                          : 'text-[#757874]',
+                          ? 'text-error'
+                          : 'text-on-surface-variant',
                       ].join(' ')}
                     >
                       {observacionesRutaVal.length} / 1000
@@ -1321,11 +1349,11 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                   name="precisionPronostico"
                   render={({ field }) => (
                     <fieldset className="flex flex-col gap-2">
-                      <legend className="text-sm font-semibold text-[#264c99]">
+                      <legend className="text-sm font-semibold text-primary">
                         Precisión del Pronóstico Meteorológico
-                        <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+                        <span className="text-error ml-1" aria-hidden="true">*</span>
                       </legend>
-                      <div className="flex items-center justify-between gap-1 text-xs text-[#757874] mb-1">
+                      <div className="flex items-center justify-between gap-1 text-xs text-on-surface-variant mb-1">
                         <span>1 &mdash; Totalmente errado</span>
                         <span>5 &mdash; Muy preciso</span>
                       </div>
@@ -1337,10 +1365,10 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                             onClick={() => field.onChange(n)}
                             className={[
                               'flex-1 py-3 rounded-xl border text-sm font-bold transition-all duration-150',
-                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]/40',
+                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                               field.value === n
-                                ? 'bg-[#264c99] border-[#264c99] text-white'
-                                : 'bg-white border-[#4a6fad]/30 text-slate-700 hover:border-[#264c99]/40 hover:bg-[#f5f8f5]',
+                                ? 'bg-primary border-primary text-white'
+                                : 'bg-white border-secondary/30 text-slate-700 hover:border-primary/40 hover:bg-surface-container-low',
                             ].join(' ')}
                           >
                             {n}
@@ -1348,7 +1376,7 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                         ))}
                       </div>
                       {errors.precisionPronostico && (
-                        <p className="text-xs text-[#A4636E]" role="alert">
+                        <p className="text-xs text-error" role="alert">
                           {errors.precisionPronostico.message}
                         </p>
                       )}
@@ -1381,10 +1409,10 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                 <div className="flex flex-col gap-1.5">
                   <label
                     htmlFor="leccionesAprendidas"
-                    className="text-sm font-semibold text-[#264c99]"
+                    className="text-sm font-semibold text-primary"
                   >
                     ¿Qué aprendió la cordada en esta salida?
-                    <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+                    <span className="text-error ml-1" aria-hidden="true">*</span>
                   </label>
                   <textarea
                     id="leccionesAprendidas"
@@ -1395,13 +1423,13 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                     aria-invalid={errors.leccionesAprendidas ? 'true' : undefined}
                     className={[
                       'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                      'placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
-                      errors.leccionesAprendidas ? 'border-[#A4636E]' : 'border-[#4a6fad]/30',
+                      'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                      errors.leccionesAprendidas ? 'border-error' : 'border-secondary/30',
                     ].join(' ')}
                   />
                   <div className="flex justify-between items-center">
                     {errors.leccionesAprendidas ? (
-                      <p className="text-xs text-[#A4636E]" role="alert">
+                      <p className="text-xs text-error" role="alert">
                         {errors.leccionesAprendidas.message}
                       </p>
                     ) : (
@@ -1410,7 +1438,7 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                     <span
                       className={[
                         'text-xs tabular-nums',
-                        leccionesAprendidasVal.length > 900 ? 'text-[#A4636E]' : 'text-[#757874]',
+                        leccionesAprendidasVal.length > 900 ? 'text-error' : 'text-on-surface-variant',
                       ].join(' ')}
                     >
                       {leccionesAprendidasVal.length} / 1000
@@ -1422,7 +1450,7 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                 <div className="flex flex-col gap-1.5">
                   <label
                     htmlFor="recomendacionesFuturos"
-                    className="text-sm font-semibold text-[#264c99]"
+                    className="text-sm font-semibold text-primary"
                   >
                     Recomendaciones para futuros socios que realicen esta ruta
                   </label>
@@ -1434,8 +1462,8 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                     {...register('recomendacionesFuturos')}
                     className={[
                       'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                      'placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
-                      'border-[#4a6fad]/30',
+                      'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                      'border-secondary/30',
                     ].join(' ')}
                   />
                   <div className="flex justify-end">
@@ -1443,8 +1471,8 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                       className={[
                         'text-xs tabular-nums',
                         recomendacionesFuturosVal.length > 900
-                          ? 'text-[#A4636E]'
-                          : 'text-[#757874]',
+                          ? 'text-error'
+                          : 'text-on-surface-variant',
                       ].join(' ')}
                     >
                       {recomendacionesFuturosVal.length} / 1000
@@ -1456,11 +1484,11 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                 <div className="flex flex-col gap-1.5">
                   <label
                     htmlFor="sugerenciasClub"
-                    className="text-sm font-semibold text-[#264c99]"
+                    className="text-sm font-semibold text-primary"
                   >
                     Sugerencias para el Club
                   </label>
-                  <p className="text-xs text-[#757874] -mt-0.5">
+                  <p className="text-xs text-on-surface-variant -mt-0.5">
                     Ej: &quot;Se necesita renovar las cuerdas de 60m&quot;, &quot;Falta
                     capacitación en uso de GPS&quot;.
                   </p>
@@ -1472,15 +1500,15 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                     {...register('sugerenciasClub')}
                     className={[
                       'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                      'placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
-                      'border-[#4a6fad]/30',
+                      'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                      'border-secondary/30',
                     ].join(' ')}
                   />
                   <div className="flex justify-end">
                     <span
                       className={[
                         'text-xs tabular-nums',
-                        sugerenciasClubVal.length > 900 ? 'text-[#A4636E]' : 'text-[#757874]',
+                        sugerenciasClubVal.length > 900 ? 'text-error' : 'text-on-surface-variant',
                       ].join(' ')}
                     >
                       {sugerenciasClubVal.length} / 1000
@@ -1490,7 +1518,10 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
 
                 {/* Error de envío */}
                 {submitError && (
-                  <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-sm text-[#8b3a44]">
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container"
+                  >
                     <AlertCircle size={15} className="mt-0.5 shrink-0" />
                     <span>{submitError}</span>
                   </div>
@@ -1520,9 +1551,22 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                 </div>
               </>
             )}
+            </motion.div>
+          </AnimatePresence>
           </form>
         )}
       </main>
+
+      {revealOrigin && (
+        <SuccessReveal
+          origin={revealOrigin}
+          status={revealStatus}
+          title="¡Listo!"
+          detail="Cierre registrado"
+          onFinished={onDone}
+          onRetracted={() => setRevealOrigin(null)}
+        />
+      )}
     </div>
   )
 }

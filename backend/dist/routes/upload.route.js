@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { authMiddleware } from '../middleware/auth.middleware.js';
+import { authMiddleware, requireAuth } from '../middleware/auth.middleware.js';
 import { uploadGpx, uploadPronostico } from '../controllers/upload.controller.js';
 const router = Router();
-// authMiddleware: popula req.user si hay token válido (no bloquea invitados)
-router.use(authMiddleware);
+// Sistema cerrado: ninguna ruta de subida admite acceso anónimo.
+router.use(authMiddleware, requireAuth);
 /**
  * POST /api/salidas/:id/gpx
  * Multipart/form-data con campo "file" conteniendo el archivo .gpx.

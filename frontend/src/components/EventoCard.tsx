@@ -23,9 +23,9 @@ export function EventoCard({ evento, onClick }: EventoCardProps) {
     <button
       onClick={() => onClick(evento.id)}
       className={[
-        'w-full text-left bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm hover:shadow-md',
+        'w-full text-left bg-white rounded-2xl border border-secondary/15 shadow-sm hover:shadow-md',
         'transition-shadow duration-200 overflow-hidden',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
         muted ? 'opacity-70' : '',
       ]
         .filter(Boolean)
@@ -54,7 +54,7 @@ export function EventoCard({ evento, onClick }: EventoCardProps) {
             {visible.badge}
           </span>
           {evento.miInscripcion?.estado === 'POSTULADO' && (
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#264c99] bg-[#e8eef7] border border-[#264c99]/20 px-2 py-0.5 rounded-md">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-fixed border border-primary/20 px-2 py-0.5 rounded-md">
               Postulado/a
             </span>
           )}
@@ -64,10 +64,10 @@ export function EventoCard({ evento, onClick }: EventoCardProps) {
           {evento.titulo}
         </h3>
 
-        <div className="grid gap-1.5 text-xs text-[#757874]">
+        <div className="grid gap-1.5 text-xs text-on-surface-variant">
           {rango && (
             <div className="flex items-center gap-1.5">
-              <Calendar size={13} className="text-[#757874]/60 shrink-0" />
+              <Calendar size={13} className="text-on-surface-variant/60 shrink-0" />
               <span>
                 {rango}
                 {evento.duracionTexto && ` · ${evento.duracionTexto}`}
@@ -76,26 +76,26 @@ export function EventoCard({ evento, onClick }: EventoCardProps) {
           )}
           {evento.ubicacion && (
             <div className="flex items-center gap-1.5">
-              <MapPin size={13} className="text-[#757874]/60 shrink-0" />
+              <MapPin size={13} className="text-on-surface-variant/60 shrink-0" />
               <span className="truncate">{evento.ubicacion}</span>
             </div>
           )}
           {evento.alturaMaximaMsnm !== null && (
             <div className="flex items-center gap-1.5">
-              <Mountain size={13} className="text-[#757874]/60 shrink-0" />
+              <Mountain size={13} className="text-on-surface-variant/60 shrink-0" />
               <span>{evento.alturaMaximaMsnm.toLocaleString('es-CL')} msnm</span>
             </div>
           )}
           {evento.organizadorNombre && (
             <div className="flex items-center gap-1.5">
-              <UserRound size={13} className="text-[#757874]/60 shrink-0" />
+              <UserRound size={13} className="text-on-surface-variant/60 shrink-0" />
               <span className="truncate">{evento.organizadorNombre}</span>
             </div>
           )}
           {evento.cupos !== null && (
             <div className="flex items-center gap-1.5">
-              <Users size={13} className="text-[#757874]/60 shrink-0" />
-              <span className="font-medium text-[#4a6fad]">
+              <Users size={13} className="text-on-surface-variant/60 shrink-0" />
+              <span className="font-medium text-secondary">
                 {evento.cupos} cupos · {evento.totalPostulantes}{' '}
                 {evento.totalPostulantes === 1 ? 'postulante' : 'postulantes'}
               </span>
@@ -103,7 +103,7 @@ export function EventoCard({ evento, onClick }: EventoCardProps) {
           )}
           {visible.tone === 'open' && evento.fechaCorte && (
             <div className="flex items-center gap-1.5">
-              <Clock size={13} className="text-[#757874]/60 shrink-0" />
+              <Clock size={13} className="text-on-surface-variant/60 shrink-0" />
               <span>Inscripciones hasta {formatCorteSantiago(new Date(evento.fechaCorte))}</span>
             </div>
           )}
