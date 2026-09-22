@@ -62,6 +62,13 @@ async function fillStep3(page: Page, { alergiasSi = false }: { alergiasSi?: bool
 
 async function checkAllClauses(page: Page) {
   const checkboxes = page.getByRole('checkbox')
+  // `.count()` NO espera a nada: devuelve lo que haya en el DOM en ese
+  // instante. Llamándolo apenas se toca "Siguiente", el paso 4 todavía no se
+  // montó (el anterior se está yendo) y devuelve 0 — el bucle no marca nada,
+  // el submit queda bloqueado por validación y el test falla mucho después,
+  // con un mensaje que no tiene nada que ver. Esperar a que exista la primera
+  // casilla ancla el conteo al momento en que el paso ya está en pantalla.
+  await expect(checkboxes.first()).toBeVisible()
   const count = await checkboxes.count()
   for (let i = 0; i < count; i++) {
     await checkboxes.nth(i).check()
@@ -72,24 +79,48 @@ async function siguiente(page: Page) {
   await page.getByRole('button', { name: 'Siguiente' }).click()
 }
 
+// El rótulo "Paso N de 4" vive en el indicador de progreso, FUERA del
+// contenedor que anima el cambio de paso, así que cambia en cuanto se toca
+// "Siguiente" — mientras el paso anterior todavía se está yendo y el nuevo ni
+// siquiera se montó. Esperar solo ese rótulo dejaba seguir con el formulario
+// vacío: medido, `getByRole('checkbox').count()` devolvía 0 en ese instante y
+// 4 unos 400ms después, así que `checkAllClauses` no marcaba nada y el submit
+// quedaba bloqueado por validación sin que el test se enterara.
+//
+// Por eso cada llegada espera además el ENCABEZADO del paso, que sí vive
+// dentro del contenido: es la señal de que el paso está montado y se puede
+// interactuar con él. La aserción del rótulo se conserva porque sigue siendo
+// verdad y vale la pena; lo que se agrega es la garantía que faltaba.
+const STEP_HEADINGS = [
+  'Información Personal y de Contacto',
+  'Contacto de Emergencia',
+  'Perfil Médico y Antecedentes',
+  'Cláusulas Legales y Consentimiento Informado',
+] as const
+
+async function expectAtStep(page: Page, step: 1 | 2 | 3 | 4) {
+  await expect(page.getByText(`Paso ${step} de 4`)).toBeVisible()
+  await expect(page.getByRole('heading', { name: STEP_HEADINGS[step - 1] })).toBeVisible()
+}
+
 async function arriveAtStep2(page: Page) {
   await fillStep1(page)
   await siguiente(page)
-  await expect(page.getByText('Paso 2 de 4')).toBeVisible()
+  await expectAtStep(page, 2)
 }
 
 async function arriveAtStep3(page: Page) {
   await arriveAtStep2(page)
   await fillStep2(page)
   await siguiente(page)
-  await expect(page.getByText('Paso 3 de 4')).toBeVisible()
+  await expectAtStep(page, 3)
 }
 
 async function arriveAtStep4(page: Page) {
   await arriveAtStep3(page)
   await fillStep3(page)
   await siguiente(page)
-  await expect(page.getByText('Paso 4 de 4')).toBeVisible()
+  await expectAtStep(page, 4)
 }
 
 test.describe('RegistroIntegrante – navegación del wizard', () => {

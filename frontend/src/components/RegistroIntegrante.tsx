@@ -1,12 +1,17 @@
 import { useForm, Controller, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ChevronLeft, Check, User } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { ChevronLeft, User } from 'lucide-react'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Input } from './ui/Input'
 import { Select } from './ui/Select'
 import { Button } from './ui/Button'
+import { stepVariants } from './ui/motion'
+import { SuccessReveal, type RevealStatus } from './ui/SuccessReveal'
 import { ClubLogo } from './ClubLogo'
 import { createIntegrante } from '../lib/api'
+import { originFromSubmitEvent, type RevealOrigin } from '../lib/reveal-geometry'
+import { useStepDirection } from '../hooks/useStepDirection'
 import {
   registroIntegranteSchema,
   type IntegranteFormData,
@@ -293,6 +298,10 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
   const [apiError, setApiError] = useState<string | null>(null)
   const [currentStep, setCurrentStep] = useState<RegistroIntegranteStepId>(FIRST_STEP)
   const [completedSteps, setCompletedSteps] = useState<Set<RegistroIntegranteStepId>>(new Set())
+  /** Mientras no sea null hay una onda de confirmación en curso sobre el formulario. */
+  const [revealOrigin, setRevealOrigin] = useState<RevealOrigin | null>(null)
+
+  const direction = useStepDirection(currentStep)
 
   const stepHeadingRef = useRef<HTMLHeadingElement>(null)
   // Campo a enfocar en el próximo cambio de paso cuando este lo provoca un
@@ -446,7 +455,10 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
     }
   }, [currentStep, setFocus])
 
-  async function onSubmit(data: IntegranteFormData) {
+  async function onSubmit(data: IntegranteFormData, origin: RevealOrigin) {
+    // La onda arranca ya, en el mismo cuadro del toque; lo que espera la
+    // confirmación del servidor es el check, no la expansión.
+    setRevealOrigin(origin)
     setApiError(null)
     try {
       await createIntegrante({
@@ -481,11 +493,9 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
         derechoImagen: data.derechoImagen,
       })
       setSuccess(true)
-      if (onComplete) {
-        setTimeout(onComplete, 1800)
-      } else {
-        setTimeout(onBack, 1800)
-      }
+      // El `setTimeout(onComplete ?? onBack, 1800)` que había acá se fue: ahora
+      // navega cuando SuccessReveal termina de leerse la confirmación, en vez
+      // de un reloj a ciegas compitiendo contra la animación.
     } catch (err) {
       setApiError(err instanceof Error ? err.message : 'Error al registrar el integrante')
     }
@@ -507,21 +517,10 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
     }
   }
 
-  if (success) {
-    return (
-      <div className="min-h-screen bg-alpine-canvas flex items-center justify-center px-4">
-        <div className="text-center">
-          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary-fixed mx-auto mb-4">
-            <Check size={32} className="text-primary" />
-          </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">Integrante registrado</h2>
-          <p className="text-on-surface-variant text-sm">
-            {onComplete ? '¡Todo listo! Accediendo al sistema...' : 'Volviendo al formulario...'}
-          </p>
-        </div>
-      </div>
-    )
-  }
+  // La pantalla de éxito ya no reemplaza el wizard con un `return` temprano: la
+  // onda se superpone y el formulario queda debajo, que es lo que hace que la
+  // confirmación parezca nacer de algo en vez de aparecer de la nada.
+  const revealStatus: RevealStatus = apiError ? 'error' : success ? 'success' : 'saving'
 
   const stepMeta = REGISTRO_INTEGRANTE_STEPS[currentStep - 1]
   const isLastStep = currentStep === LAST_STEP
@@ -591,13 +590,36 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
         </p>
 
         {apiError && (
-          <div className="rounded-xl border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container mb-5">
+          <div
+            role="alert"
+            className="rounded-xl border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container mb-5"
+          >
             {apiError}
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate className="flex flex-col gap-6">
-          <div key={currentStep} className="motion-safe:animate-step-in flex flex-col gap-6">
+        <form
+          // El origen se mide SÍNCRONAMENTE acá, pero la onda recién nace dentro
+          // del handler de submit VÁLIDO (ver el comentario homólogo en
+          // wizard/Step5Status): react-hook-form valida con `await` y para
+          // entonces el navegador ya limpió `currentTarget`.
+          onSubmit={(event) => {
+            const origin = originFromSubmitEvent(event)
+            void handleSubmit((data) => onSubmit(data, origin), onInvalid)(event)
+          }}
+          noValidate
+          className="flex flex-col gap-6"
+        >
+          <AnimatePresence mode="wait" initial={false} custom={direction}>
+            <motion.div
+              key={currentStep}
+              custom={direction}
+              variants={stepVariants(direction)}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="flex flex-col gap-6"
+            >
             {currentStep === 1 && (
               <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
                 <SectionHeader number="I" title={stepMeta.title} headingRef={stepHeadingRef} />
@@ -1057,7 +1079,8 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
                 </div>
               </div>
             )}
-          </div>
+            </motion.div>
+          </AnimatePresence>
 
           {/* Navegación del wizard */}
           <div className="flex items-center gap-3 pb-8">
@@ -1091,6 +1114,20 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
           </div>
         </form>
       </main>
+
+      {revealOrigin && (
+        <SuccessReveal
+          origin={revealOrigin}
+          status={revealStatus}
+          title="¡Listo!"
+          detail="Integrante registrado"
+          onFinished={() => {
+            if (onComplete) onComplete()
+            else onBack()
+          }}
+          onRetracted={() => setRevealOrigin(null)}
+        />
+      )}
     </div>
   )
 }
