@@ -874,3 +874,39 @@ export async function healthCheck(): Promise<{ status: string }> {
   const res = await fetch(`${API_BASE}/health`)
   return handleResponse<{ status: string }>(res)
 }
+
+// ─── Preferencias de navegación (por socio) ──────────────────────────────────
+
+export interface NavPreferences {
+  /** Pestañas de la barra inferior, en orden. */
+  tabs: string[]
+  /** Accesos rápidos visibles, en orden. */
+  quick: string[]
+}
+
+// null = el usuario nunca personalizó, así que manda el orden por defecto del
+// frontend. Es distinto de unas preferencias guardadas que casualmente
+// coinciden con el default: esas sobreviven a un cambio del default.
+export async function fetchNavPreferences(): Promise<NavPreferences | null> {
+  const res = await fetch(`${API_BASE}/me/nav-preferences`, { headers: authHeaders() })
+  const data = await handleResponse<{ preferences: NavPreferences | null }>(res)
+  return data.preferences
+}
+
+export async function saveNavPreferences(prefs: NavPreferences): Promise<NavPreferences> {
+  const res = await fetch(`${API_BASE}/me/nav-preferences`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(prefs),
+  })
+  const data = await handleResponse<{ preferences: NavPreferences }>(res)
+  return data.preferences
+}
+
+export async function resetNavPreferences(): Promise<void> {
+  const res = await fetch(`${API_BASE}/me/nav-preferences`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  await handleResponse<{ preferences: null }>(res)
+}

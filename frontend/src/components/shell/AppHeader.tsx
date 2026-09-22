@@ -4,7 +4,8 @@ import { Button } from '../ui/Button'
 import { useOrganization } from '../../hooks/useOrganization'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { userInitials } from './userInitials'
-import { visibleNavItems, type NavKey } from './navItems'
+import { applyOrder, visibleNavItems, type NavKey } from './navItems'
+import { useNavPreferences } from '../../hooks/useNavPreferences'
 
 interface AppHeaderProps {
   userName: string
@@ -54,7 +55,8 @@ export function AppHeader({
 }: AppHeaderProps) {
   const { shortName } = useOrganization()
   const initials = userInitials(userName)
-  const navItems = visibleNavItems(canSeeDocumentos)
+  const { preferences } = useNavPreferences()
+  const navItems = applyOrder(visibleNavItems(canSeeDocumentos), preferences?.tabs)
 
   return (
     <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-outline-variant/40 shadow-sm pt-safe">

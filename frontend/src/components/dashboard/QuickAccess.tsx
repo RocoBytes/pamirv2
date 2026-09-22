@@ -10,12 +10,19 @@ import {
   UserPlus,
   IdCard,
   MoreHorizontal,
+  SlidersHorizontal,
   ChevronRight,
   X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cardSurface, cardInteractive } from '../ui/Card'
 import { SectionLabel } from '../ui/SectionLabel'
+import { applyOrder, visibleNavItems } from '../shell/navItems'
+import { PersonalizarNav } from '../shell/PersonalizarNav'
+import { useNavPreferences } from '../../hooks/useNavPreferences'
+
+/** Cuántos accesos se muestran destacados en desktop antes de la segunda fila. */
+const DESKTOP_FEATURED = 4
 
 interface QuickAccessProps {
   isDesktop: boolean
@@ -75,7 +82,9 @@ export function QuickAccess({
   onNewIntegrante,
 }: QuickAccessProps) {
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [personalizando, setPersonalizando] = useState(false)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const { preferences } = useNavPreferences()
 
   const closeSheet = useCallback(() => setSheetOpen(false), [])
 
@@ -90,10 +99,11 @@ export function QuickAccess({
   }, [sheetOpen, closeSheet])
 
   // ── Una sola definición de los accesos; abajo se pinta de dos formas ───────
-  // "primary" son los destinos de consulta; "secondary" son acciones de gestión
-  // que en el boceto desktop viven en su propia fila y en mobile caen al
-  // desplegable "Ver más".
-  const primary: QuickItem[] = [
+  // Esta lista es el ORDEN POR DEFECTO. La preferencia del socio la reordena,
+  // y el reparto entre destacados y secundarios sale de la posición: así
+  // reordenar tiene un efecto real (lo que sube queda a un toque) en vez de ser
+  // cosmético. Los gates de rol se aplican acá, antes que cualquier preferencia.
+  const defaultOrder: QuickItem[] = [
     {
       key: 'contactos',
       title: 'Contactos Esenciales',
@@ -156,7 +166,7 @@ export function QuickAccess({
       : []),
   ]
 
-  const secondary: QuickItem[] = [
+  const managementDefaults: QuickItem[] = [
     ...(puedeInvitar
       ? [
           {
@@ -189,11 +199,50 @@ export function QuickAccess({
       : []),
   ]
 
+  // El orden guardado se aplica sobre la lista completa; el corte decide qué
+  // se ve destacado y qué queda en segunda fila (desktop) o en "Ver más"
+  // (mobile). Un acceso que el socio nunca ordenó cae al final, nunca se pierde.
+  const ordered = applyOrder([...defaultOrder, ...managementDefaults], preferences?.quick)
+  const primary = ordered.slice(0, DESKTOP_FEATURED)
+  const secondary = ordered.slice(DESKTOP_FEATURED)
+
+  const personalizarTabs = visibleNavItems(canSeeDocumentos).map((item) => ({
+    key: item.key,
+    label: item.label,
+    icon: item.icon,
+  }))
+  const personalizarQuick = ordered.map((item) => ({
+    key: item.key,
+    label: item.title,
+    icon: item.icon,
+  }))
+
+  const personalizarDialog = personalizando && (
+    <PersonalizarNav
+      tabs={personalizarTabs}
+      quick={personalizarQuick}
+      onClose={() => setPersonalizando(false)}
+    />
+  )
+
   // ── Desktop: 4 tarjetas ricas + una fila de acciones de gestión ───────────
   if (isDesktop) {
     return (
       <section>
-        <SectionLabel>Herramientas &amp; Recursos Rápidos</SectionLabel>
+        <SectionLabel
+          action={
+            <button
+              type="button"
+              onClick={() => setPersonalizando(true)}
+              className="inline-flex items-center gap-1.5 text-body-sm font-semibold text-primary rounded px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <SlidersHorizontal size={14} aria-hidden="true" />
+              Personalizar
+            </button>
+          }
+        >
+          Herramientas &amp; Recursos Rápidos
+        </SectionLabel>
 
         <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5"
@@ -271,6 +320,7 @@ export function QuickAccess({
             })}
           </div>
         )}
+        {personalizarDialog}
       </section>
     )
   }
@@ -283,7 +333,20 @@ export function QuickAccess({
 
   return (
     <section>
-      <SectionLabel>Accesos Rápidos</SectionLabel>
+      <SectionLabel
+        action={
+          <button
+            type="button"
+            onClick={() => setPersonalizando(true)}
+            className="inline-flex items-center gap-1 text-body-sm font-semibold text-primary rounded px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <SlidersHorizontal size={14} aria-hidden="true" />
+            Personalizar
+          </button>
+        }
+      >
+        Accesos Rápidos
+      </SectionLabel>
 
       <motion.div
         className="grid grid-cols-4 gap-2"
@@ -429,6 +492,7 @@ export function QuickAccess({
           </motion.div>
         )}
       </AnimatePresence>
+        {personalizarDialog}
     </section>
   )
 }

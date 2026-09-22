@@ -36,3 +36,29 @@ const ALL_ITEMS: NavItem[] = [
 export function visibleNavItems(canSeeDocumentos: boolean): NavItem[] {
   return ALL_ITEMS.filter((item) => item.key !== 'documentos' || canSeeDocumentos)
 }
+
+/**
+ * Destinos que no se pueden mover fuera de la barra.
+ *
+ * Es el espejo de PINNED_TABS en el backend, que es quien lo garantiza de
+ * verdad. Acá está para que la interfaz de personalización no ofrezca quitarlos
+ * y después el servidor los reponga en silencio.
+ */
+export const PINNED_TABS: NavKey[] = ['inicio', 'contactos']
+
+/**
+ * Aplica un orden guardado a una lista de destinos.
+ *
+ * La preferencia es SOLO orden, nunca visibilidad: lo que un socio puede abrir
+ * lo deciden los gates de rol al renderizar, no lo que tenga guardado. Por eso
+ * un destino que no figure en el orden guardado no desaparece — va al final.
+ * Así, cuando se agregue un destino nuevo, quien ya había personalizado lo ve
+ * igual en vez de quedarse sin enterarse de que existe.
+ */
+export function applyOrder<T extends { key: string }>(items: T[], order: string[] | undefined): T[] {
+  if (!order || order.length === 0) return items
+  const rank = new Map(order.map((key, index) => [key, index]))
+  return [...items].sort(
+    (a, b) => (rank.get(a.key) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.key) ?? Number.MAX_SAFE_INTEGER),
+  )
+}

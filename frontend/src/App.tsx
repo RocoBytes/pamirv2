@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { MotionConfig } from 'motion/react'
 import { useAuth } from './hooks/useAuth'
 import { OrganizationProvider } from './contexts/OrganizationContext'
+import { NavPreferencesProvider } from './contexts/NavPreferencesContext'
 import { documentTitle, esSocioDelClub } from './lib/club-brand'
 import { AuthPage } from './components/AuthPage'
 import { Dashboard } from './components/Dashboard'
@@ -336,7 +337,12 @@ export default function App() {
     // que cada componente tenga que preguntarlo por su cuenta.
     <MotionConfig reducedMotion="user">
       <OrganizationProvider organization={auth.user?.organization ?? null}>
-        <AppContent {...auth} />
+        {/* enabled sigue a la sesión: sin token no hay a quién consultarle sus
+            preferencias, y al cerrar sesión se descartan para que el próximo
+            usuario de este navegador no herede la navegación del anterior. */}
+        <NavPreferencesProvider enabled={!!(auth.user && auth.token)}>
+          <AppContent {...auth} />
+        </NavPreferencesProvider>
       </OrganizationProvider>
     </MotionConfig>
   )

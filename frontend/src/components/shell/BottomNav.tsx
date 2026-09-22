@@ -1,6 +1,7 @@
 import { motion } from 'motion/react'
 import { pressable } from '../ui/motion'
-import { visibleNavItems, type NavKey } from './navItems'
+import { applyOrder, visibleNavItems, type NavKey } from './navItems'
+import { useNavPreferences } from '../../hooks/useNavPreferences'
 
 interface BottomNavProps {
   active: NavKey | 'none'
@@ -16,7 +17,8 @@ interface BottomNavProps {
  * separación, holgados para dedos con guantes o frío — el caso de uso real.
  */
 export function BottomNav({ active, onNavigate, canSeeDocumentos }: BottomNavProps) {
-  const items = visibleNavItems(canSeeDocumentos)
+  const { preferences } = useNavPreferences()
+  const items = applyOrder(visibleNavItems(canSeeDocumentos), preferences?.tabs)
 
   return (
     <nav
