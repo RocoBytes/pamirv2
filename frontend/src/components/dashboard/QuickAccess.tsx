@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { bottomSheet, dialog, listContainer, listItem, pressable, scrim } from '../ui/motion'
 import {
   Siren,
   CalendarDays,
@@ -193,15 +195,22 @@ export function QuickAccess({
       <section>
         <SectionLabel>Herramientas &amp; Recursos Rápidos</SectionLabel>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <motion.div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5"
+          variants={listContainer}
+          initial="hidden"
+          animate="visible"
+        >
           {primary.map((item) => {
             const Icon = item.icon
             return (
-              <button
+              <motion.button
                 key={item.key}
                 type="button"
                 onClick={item.onClick}
                 aria-label={item.ariaLabel}
+                variants={listItem}
+                whileTap={pressable.whileTap}
                 className={`${cardSurface} ${cardInteractive} group p-4 flex flex-col justify-between gap-3 text-left rounded-xl`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -222,21 +231,23 @@ export function QuickAccess({
                   </h3>
                   <p className="text-body-sm text-on-surface-variant mt-0.5">{item.description}</p>
                 </div>
-              </button>
+              </motion.button>
             )
           })}
-        </div>
+        </motion.div>
 
         {secondary.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-3.5">
             {secondary.map((item) => {
               const Icon = item.icon
               return (
-                <button
+                <motion.button
                   key={item.key}
                   type="button"
                   onClick={item.onClick}
                   aria-label={item.ariaLabel}
+                  whileTap={pressable.whileTap}
+                  transition={pressable.transition}
                   className={`${cardSurface} ${cardInteractive} px-4 py-3 flex items-center justify-between gap-3 text-left rounded-xl`}
                 >
                   <span className="flex items-center gap-3 min-w-0">
@@ -255,7 +266,7 @@ export function QuickAccess({
                     </span>
                   </span>
                   <ChevronRight size={16} className="text-on-surface-variant shrink-0" aria-hidden="true" />
-                </button>
+                </motion.button>
               )
             })}
           </div>
@@ -274,15 +285,22 @@ export function QuickAccess({
     <section>
       <SectionLabel>Accesos Rápidos</SectionLabel>
 
-      <div className="grid grid-cols-4 gap-2">
+      <motion.div
+        className="grid grid-cols-4 gap-2"
+        variants={listContainer}
+        initial="hidden"
+        animate="visible"
+      >
         {tiles.map((item) => {
           const Icon = item.icon
           return (
-            <button
+            <motion.button
               key={item.key}
               type="button"
               onClick={item.onClick}
               aria-label={item.ariaLabel}
+              variants={listItem}
+              whileTap={pressable.whileTap}
               className={`${cardSurface} flex flex-col items-center justify-start gap-1.5 p-2 pt-3 rounded-xl min-h-[88px] text-center active:bg-surface-container-low transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
             >
               <span
@@ -297,16 +315,18 @@ export function QuickAccess({
               >
                 {item.shortLabel}
               </span>
-            </button>
+            </motion.button>
           )
         })}
 
         {needsSheet && (
-          <button
+          <motion.button
             type="button"
             onClick={() => setSheetOpen(true)}
             aria-haspopup="dialog"
             aria-expanded={sheetOpen}
+            variants={listItem}
+            whileTap={pressable.whileTap}
             className={`${cardSurface} flex flex-col items-center justify-start gap-1.5 p-2 pt-3 rounded-xl min-h-[88px] text-center active:bg-surface-container-low transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
           >
             <span className="w-10 h-10 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center shrink-0">
@@ -315,23 +335,51 @@ export function QuickAccess({
             <span className="text-label-caps font-semibold text-on-surface leading-tight">
               Ver más
             </span>
-          </button>
+          </motion.button>
         )}
-      </div>
+      </motion.div>
 
-      {sheetOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-alpine-dark/60 backdrop-blur-sm p-4"
-          onClick={closeSheet}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="accesos-adicionales-title"
-            className={`${cardSurface} w-full max-w-md p-4 pb-safe`}
-            onClick={(event) => event.stopPropagation()}
+      <AnimatePresence>
+        {sheetOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-alpine-dark/60 backdrop-blur-sm p-4"
+            onClick={closeSheet}
+            variants={scrim}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
           >
-            <div className="flex items-center justify-between gap-3 pb-3 border-b border-outline-variant/40 mb-3">
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="accesos-adicionales-title"
+              className={`${cardSurface} w-full max-w-md p-4 pb-safe`}
+              onClick={(event) => event.stopPropagation()}
+              // En mobile sube desde el borde y se puede arrastrar para cerrar,
+              // que es el gesto que la gente ya espera de una hoja inferior. En
+              // desktop es un diálogo centrado y arrastrarlo no significa nada.
+              variants={isDesktop ? dialog : bottomSheet}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              drag={isDesktop ? false : 'y'}
+              // Solo hacia abajo: el tope en 0 impide despegarla hacia arriba.
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.4 }}
+              // Cierra si el gesto fue largo o rápido; si no, vuelve a su sitio.
+              // El arrastre es un atajo, nunca la única salida: el botón de
+              // cerrar y la tecla Escape siguen estando.
+              onDragEnd={(_, info) => {
+                if (info.offset.y > 100 || info.velocity.y > 500) closeSheet()
+              }}
+            >
+              {!isDesktop && (
+                <div
+                  aria-hidden="true"
+                  className="mx-auto mb-3 h-1 w-10 rounded-full bg-outline-variant"
+                />
+              )}
+              <div className="flex items-center justify-between gap-3 pb-3 border-b border-outline-variant/40 mb-3">
               <h2 id="accesos-adicionales-title" className="text-headline-md font-bold text-on-surface">
                 Accesos Adicionales
               </h2>
@@ -377,9 +425,10 @@ export function QuickAccess({
                 )
               })}
             </div>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   )
 }

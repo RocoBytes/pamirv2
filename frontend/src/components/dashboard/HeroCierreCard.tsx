@@ -1,4 +1,6 @@
 import { Lock, ShieldCheck, CircleCheckBig } from 'lucide-react'
+import { motion } from 'motion/react'
+import { pressable } from '../ui/motion'
 import { cardSurface, cardInteractive } from '../ui/Card'
 
 interface HeroCierreCardProps {
@@ -44,9 +46,11 @@ export function HeroCierreCard({ available, locked, isDesktop, onClick }: HeroCi
   // con la de registrar salida — sube el que ya volvió, no el que va a salir.
   if (!isDesktop) {
     return (
-      <button
+      <motion.button
         type="button"
         onClick={onClick}
+        whileTap={pressable.whileTap}
+        transition={pressable.transition}
         aria-label="Abrir ficha de cierre de actividad"
         className={`${cardSurface} ${cardInteractive} w-full p-4 flex items-center justify-between gap-3 text-left`}
       >
@@ -66,14 +70,16 @@ export function HeroCierreCard({ available, locked, isDesktop, onClick }: HeroCi
         <span className="shrink-0 h-9 px-3 rounded-lg bg-surface-container-high text-on-surface text-body-medium font-semibold flex items-center">
           Notificar
         </span>
-      </button>
+      </motion.button>
     )
   }
 
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
+      whileTap={pressable.whileTap}
+      transition={pressable.transition}
       aria-label="Abrir ficha de cierre de actividad"
       className={`${cardSurface} ${cardInteractive} group w-full text-left p-6 sm:p-7 flex flex-col justify-between gap-6`}
     >
@@ -101,6 +107,6 @@ export function HeroCierreCard({ available, locked, isDesktop, onClick }: HeroCi
           Cerrar Registro
         </span>
       </div>
-    </button>
+    </motion.button>
   )
 }

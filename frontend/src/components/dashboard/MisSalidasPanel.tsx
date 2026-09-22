@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { motion } from 'motion/react'
 import {
   Loader2,
   AlertCircle,
@@ -19,6 +20,8 @@ import { STATUS_LABELS, STATUS_COLORS, DISCIPLINA_LABELS } from '../../types/sal
 import { fetchHistoricos } from '../../lib/api'
 import { Button } from '../ui/Button'
 import { cardSurface, cardInteractive } from '../ui/Card'
+import { SalidasLoadingList } from '../ui/Skeleton'
+import { listContainer, listItem, pressable } from '../ui/motion'
 import { SectionLabel } from '../ui/SectionLabel'
 
 interface MisSalidasPanelProps {
@@ -57,9 +60,11 @@ function SalidaCard({
 }) {
   const isOwner = salida.userId === currentUserId
   return (
-    <button
+    <motion.button
       type="button"
       onClick={() => onClick(salida.id)}
+      whileTap={pressable.whileTap}
+      transition={pressable.transition}
       className={`${cardSurface} ${cardInteractive} w-full text-left overflow-hidden`}
     >
       <div className="p-4 sm:p-5">
@@ -117,7 +122,7 @@ function SalidaCard({
           )}
         </div>
       </div>
-    </button>
+    </motion.button>
   )
 }
 
@@ -165,12 +170,7 @@ export function MisSalidasPanel({
 
   const listado = (
     <>
-      {isLoading && (
-        <div className="flex flex-col items-center justify-center py-12 gap-3 text-on-surface-variant">
-          <Loader2 className="animate-spin text-primary" size={28} aria-hidden="true" />
-          <p className="text-body-base">Cargando salidas...</p>
-        </div>
-      )}
+      {isLoading && <SalidasLoadingList />}
 
       {error && !isLoading && (
         <div className="flex flex-col items-center py-10 gap-4 text-center">
@@ -203,9 +203,14 @@ export function MisSalidasPanel({
       )}
 
       {!isLoading && !error && salidas.length > 0 && (
-        <div className="grid gap-3">
+        <motion.div
+          className="grid gap-3"
+          variants={listContainer}
+          initial="hidden"
+          animate="visible"
+        >
           {salidas.map((salida) => (
-            <div key={salida.id} className="min-w-0">
+            <motion.div key={salida.id} variants={listItem} className="min-w-0">
               <SalidaCard salida={salida} currentUserId={currentUserId} onClick={onSelectSalida} />
               {isAdmin && (
                 <button
@@ -218,9 +223,9 @@ export function MisSalidasPanel({
                   Ver evaluaciones
                 </button>
               )}
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
     </>
   )

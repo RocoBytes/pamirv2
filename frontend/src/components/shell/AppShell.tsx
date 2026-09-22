@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { motion } from 'motion/react'
+import { screenVariants } from '../ui/motion'
 import { AppHeader } from './AppHeader'
 import { BottomNav } from './BottomNav'
 import { AppFooter } from './AppFooter'
@@ -86,7 +88,24 @@ export function AppShell({
           .filter(Boolean)
           .join(' ')}
       >
-        {children}
+        {/*
+          La transición de pantalla se aplica acá adentro y nunca a un envoltorio
+          del shell: `transform` en un ancestro crea un bloque contenedor y
+          rompería el `position: fixed` de la barra inferior y el `sticky` del
+          header, que quedarían anclados al envoltorio en vez de al viewport.
+          El header, la barra y el pie quedan quietos y solo se mueve el
+          contenido, que además es lo que de verdad cambió.
+
+          Ir al Inicio se lee como "volver" y salir de él como "avanzar", que es
+          la jerarquía real de esta navegación: el Inicio es la raíz.
+        */}
+        <motion.div
+          variants={screenVariants(active === 'inicio' ? 'back' : 'forward')}
+          initial="hidden"
+          animate="visible"
+        >
+          {children}
+        </motion.div>
       </main>
 
       {showNav &&

@@ -10,6 +10,53 @@ import {
   MOCK_SALIDA,
 } from './helpers'
 
+// La hoja "Ver más" solo existe por debajo del corte de 1024px: arriba de ese
+// ancho los mismos accesos son tarjetas sueltas y no hay hoja que abrir.
+test.describe('Dashboard mobile – hoja "Ver más"', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 })
+    await setAuth(page, MOCK_ADMIN)
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+    await page.route('**/api/eventos*', (route: Route) => {
+      void route.fulfill({ status: 200, json: [] })
+    })
+  })
+
+  test('se abre y ofrece los accesos que no entran en el mosaico', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Ver más' }).click()
+    const hoja = page.getByRole('dialog')
+    await expect(hoja).toBeVisible()
+    await expect(hoja.getByLabel('Abrir panel de administración')).toBeVisible()
+  })
+
+  test('arrastrar la hoja hacia abajo la cierra', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Ver más' }).click()
+    const hoja = page.getByRole('dialog')
+    await expect(hoja).toBeVisible()
+
+    const caja = await hoja.boundingBox()
+    if (!caja) throw new Error('la hoja no tiene caja')
+    // Gesto desde el asa hacia abajo, más largo que el umbral de cierre.
+    await page.mouse.move(caja.x + caja.width / 2, caja.y + 12)
+    await page.mouse.down()
+    await page.mouse.move(caja.x + caja.width / 2, caja.y + 220, { steps: 12 })
+    await page.mouse.up()
+
+    await expect(hoja).toHaveCount(0)
+  })
+
+  test('el arrastre es un atajo, no la única salida: Escape también cierra', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Ver más' }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+  })
+})
+
 test.describe('Dashboard – estado bloqueado (sin integrante)', () => {
   test.beforeEach(async ({ page }) => {
     await setAuth(page)

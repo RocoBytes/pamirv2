@@ -1,4 +1,6 @@
 import { Lock, MapPinPlus, Timer, ArrowRight } from 'lucide-react'
+import { motion } from 'motion/react'
+import { pressable } from '../ui/motion'
 import { useOrganization } from '../../hooks/useOrganization'
 
 interface HeroSalidaCardProps {
@@ -52,9 +54,11 @@ export function HeroSalidaCard({ locked, isDesktop, onClick }: HeroSalidaCardPro
   }
 
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
+      whileTap={pressable.whileTap}
+      transition={pressable.transition}
       aria-label="Abrir formulario de salida"
       className={`${NIGHT_SURFACE} group w-full text-left p-6 sm:p-7 flex flex-col justify-between gap-6 transition-shadow duration-200 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rescue focus-visible:ring-offset-2`}
     >
@@ -101,6 +105,6 @@ export function HeroSalidaCard({ locked, isDesktop, onClick }: HeroSalidaCardPro
           <ArrowRight size={18} aria-hidden="true" />
         </span>
       </div>
-    </button>
+    </motion.button>
   )
 }

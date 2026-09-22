@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { MotionConfig } from 'motion/react'
 import { useAuth } from './hooks/useAuth'
 import { OrganizationProvider } from './contexts/OrganizationContext'
 import { documentTitle, esSocioDelClub } from './lib/club-brand'
@@ -329,8 +330,14 @@ export default function App() {
   // (o sin sesión) el árbol entero renderiza con branding neutral — nunca con
   // el club de la sesión anterior en este mismo navegador.
   return (
-    <OrganizationProvider organization={auth.user?.organization ?? null}>
-      <AppContent {...auth} />
-    </OrganizationProvider>
+    // reducedMotion="user" es el único interruptor de accesibilidad del
+    // movimiento en toda la app: con "reducir movimiento" activado en el
+    // sistema, motion anula transform y layout y deja solo la opacidad, sin
+    // que cada componente tenga que preguntarlo por su cuenta.
+    <MotionConfig reducedMotion="user">
+      <OrganizationProvider organization={auth.user?.organization ?? null}>
+        <AppContent {...auth} />
+      </OrganizationProvider>
+    </MotionConfig>
   )
 }

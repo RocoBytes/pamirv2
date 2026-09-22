@@ -1,3 +1,5 @@
+import { motion } from 'motion/react'
+import { pressable } from '../ui/motion'
 import { visibleNavItems, type NavKey } from './navItems'
 
 interface BottomNavProps {
@@ -26,10 +28,12 @@ export function BottomNav({ active, onNavigate, canSeeDocumentos }: BottomNavPro
           const isActive = item.key === active
           const Icon = item.icon
           return (
-            <button
+            <motion.button
               key={item.key}
               type="button"
               onClick={() => onNavigate(item.key)}
+              whileTap={pressable.whileTap}
+              transition={pressable.transition}
               aria-current={isActive ? 'page' : undefined}
               className={[
                 'flex flex-col items-center justify-center gap-1 min-w-[64px] h-14 rounded-xl px-2',
@@ -50,7 +54,7 @@ export function BottomNav({ active, onNavigate, canSeeDocumentos }: BottomNavPro
               >
                 {item.label}
               </span>
-            </button>
+            </motion.button>
           )
         })}
       </div>
