@@ -81,12 +81,15 @@ abajo) o con el CLI interactivo:
 
 ```bash
 cd backend
-npm run db:create-user -- --email alguien@club.cl --name "Nombre Apellido" --rol ADMIN
+npm run db:create-user -- --email alguien@club.cl --name "Nombre Apellido" --rol ADMIN --org pamir
 ```
 
-`--rol` acepta `SOCIO`, `LIDER` o `ADMIN` (por defecto `SOCIO`). Pide la
+`--rol` acepta `SOCIO`, `LIDER` o `ADMIN` (por defecto `SOCIO`). `--org <slug>`
+es **requerido** (ya no tiene un valor por defecto, ahora que hay más de un
+club): ejecuta `npm run tenant:list` para ver los slugs existentes. Pide la
 contraseña por stdin (nunca por flag) y la confirma dos veces si hay una TTY.
-Usa `--force` para actualizar un usuario existente en vez de fallar.
+Usa `--force` para actualizar un usuario existente en vez de fallar (nunca
+cambia de club a un usuario existente).
 
 Un usuario existente sin contraseña (por ejemplo, migrado desde Clerk) ingresa
 por primera vez usando "¿Olvidaste tu contraseña?": el enlace de
@@ -271,6 +274,92 @@ ahí en vez de volver a consultar `Organization`.
   este club", y el buscador de participantes por RUT del wizard ofrece
   agregarlo como participante express o pedirle que complete su propia ficha
   en ese club. Los datos médicos nunca se comparten entre clubes.
+
+### Alta y administración de clubes (CLI `tenant`)
+
+Dar de alta un club nuevo es más que una fila de `Organization`: sin
+categorías no se puede publicar ningún evento, y sin una declaración jurada
+vigente toda inscripción responde 422. El CLI `backend/src/scripts/tenant.ts`
+(`services/tenants.service.ts` + `lib/tenant-defaults.ts`) crea todo eso en
+una sola transacción e invita a su primer `ADMIN`, desde `backend/`:
+
+```bash
+# Alta de un club nuevo (categorías + declaración jurada + invitación del ADMIN)
+npm run tenant:create -- \
+  --slug el-montanista \
+  --name "Club El Montañista" \
+  --membresia SOCIO_EL_MONTANISTA \
+  --alert-email alertas@elmontanista.cl \
+  --contact-name "Nombre del contacto" \
+  --contact-email contacto@elmontanista.cl \
+  --admin-email admin@elmontanista.cl
+
+# Listar todos los clubes (slug, nombre, estado, membresía, usuarios, invitaciones pendientes)
+npm run tenant:list
+
+# Suspender / reactivar un club
+npm run tenant:suspend -- --slug el-montanista
+npm run tenant:activate -- --slug el-montanista
+
+# Reemitir el link del primer ADMIN (la invitación anterior expiró o el email era incorrecto)
+npm run tenant:invite -- --slug el-montanista --admin-email otro-admin@elmontanista.cl
+```
+
+`tenant:create` crea, en una sola transacción: la `Organization`, sus 6
+categorías de evento por defecto (las mismas que tiene Pamir hoy) y su
+declaración jurada vigente (mismo texto que la de Pamir, que no nombra a
+ningún club). Recién después de confirmar esa transacción emite la
+invitación del primer `ADMIN` con `crearInvitacionPlataforma` (ver más
+arriba); si el envío del correo o la emisión del link fallaran, **el club
+queda creado igual** — la salida del comando lo dice explícitamente y da el
+comando de `tenant:invite` para reintentar solo la invitación, en vez de
+dejar al operador adivinando o de revertir un club ya comprometido.
+
+El link de invitación es de **un solo uso y expira en 7 días**, igual que
+cualquier otra invitación (ver "Roles e invitaciones" más arriba); pasado ese
+plazo, o si el correo era incorrecto, `tenant:invite` reemite uno nuevo y
+revoca automáticamente cualquier invitación pendiente anterior para ese
+mismo correo.
+
+**Regla de membresía y límite del puente (bridge)**: `--membresia` debe ser
+uno de los códigos declarados en `backend/src/lib/membresias.ts`
+(`MEMBRESIAS_PROPIAS`) — hoy, exactamente dos: `SOCIO_ANDINO_PAMIR` y
+`SOCIO_EL_MONTANISTA`, uno por club real. La base de datos no impone que sea
+único (`Organization.membresiaPropia` no tiene una restricción `UNIQUE`), así
+que `tenant:create` lo comprueba a mano y rechaza un código ya usado por otro
+club: dos clubes con la misma membresía propia leerían la biblioteca de
+documentos del otro (ver `lib/documentos-access.ts` más arriba). Dar de alta
+un **tercer club** requiere agregar su código en `MEMBRESIAS_PROPIAS` (además
+de en las listas del formulario de socios y del filtro de administración del
+frontend) antes de poder crearlo.
+
+**Slugs reservados** (rechazados por `tenant:create`/`suspend`/`activate`/
+`invite`, no por el servicio en sí): cualquiera que empiece con `iso-test-`
+(los crea y purga `npm run test:isolation`), y además `platform`,
+`plataforma`, `admin`, `api`, `www`, `app`, `riala`.
+
+**Suspender un club** (`tenant:suspend`) bloquea el login y **toda** request
+autenticada de ese club con `403` (ver `middleware/auth.middleware.ts` /
+`controllers/auth.controller.ts`), pero las alertas de seguridad de "salida
+sin cierre" de sus salidas ya abiertas **siguen enviándose** — la suspensión
+no es una desconexión de emergencia de la seguridad de montaña.
+`tenant:activate` revierte todo lo anterior.
+
+**Producción (VPS)**: el contenedor `backend` de `deploy/docker-compose.yml`
+no tiene `backend/db-target.json` ni `tsx` — ahí un script solo corre
+compilado, con `ALLOW_ANY_DB_TARGET=1` (ver `backend/.env.example`) para
+saltarse una guardia pensada para el entorno local:
+
+```bash
+cd /opt/pamir
+docker compose exec -e ALLOW_ANY_DB_TARGET=1 backend node dist/scripts/tenant.js list
+docker compose exec -e ALLOW_ANY_DB_TARGET=1 backend node dist/scripts/create-user.js --email ... --name "..." --rol ADMIN --org el-montanista
+```
+
+`FRONTEND_URL` ahí debe ser la URL pública del frontend (la misma SPA sirve a
+todos los clubes, same-origin — nunca `localhost`): el CLI imprime una
+advertencia explícita si la detecta, precisamente para que nunca se le mande
+un enlace de invitación con `localhost` a un administrador real.
 
 ### Correo por club
 

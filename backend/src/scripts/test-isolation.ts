@@ -16,6 +16,17 @@ import { signToken } from '../lib/jwt.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { crearInvitacionPlataforma, type InvitacionesDeps } from '../services/invitaciones.service.js';
 import { invitacionesRepoPrisma } from '../services/invitaciones.repo.prisma.js';
+import {
+  crearClub,
+  listarClubes,
+  cambiarEstadoClub,
+  invitarAdminClub,
+  type TenantsDeps,
+  type TenantsRepo,
+  type CrearClubInput,
+} from '../services/tenants.service.js';
+import { tenantsRepoPrisma } from '../services/tenants.repo.prisma.js';
+import { computeDeclaracionHash } from '../lib/tenant-defaults.js';
 import { getFileStorage } from '../lib/storage/get-file-storage.js';
 import { buildObjectKey } from '../lib/storage/object-key.js';
 import type { FileStorage } from '../lib/storage/file-storage.js';
@@ -729,6 +740,31 @@ async function postJson(baseUrl: string, urlPath: string, payload: unknown): Pro
   return { status: res.status, body };
 }
 
+// Como postJson, pero autenticado — lo necesita la sección del CLI de clubes
+// (ver runTenantCliChecks) para crear/publicar un evento y para invitar a un
+// SOCIO, ninguno de los cuales es público.
+async function postJsonAuth(
+  baseUrl: string,
+  token: string,
+  urlPath: string,
+  payload: unknown,
+): Promise<{ status: number; body: unknown }> {
+  const res = await fetch(`${baseUrl}${urlPath}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => undefined);
+  return { status: res.status, body };
+}
+
+// Fecha calendario (YYYY-MM-DD) desplazada `dias` desde ahora — usada para
+// armar la ficha del evento operativo del club nuevo (ver runTenantCliChecks)
+// sin acoplarse a la fecha en que corra la suite.
+function fechaEnDias(dias: number): string {
+  return new Date(Date.now() + dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 async function runHttpChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
   const tokenA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
   const tokenB = signToken({ userId: seedB.adminUserId, email: seedB.adminEmail });
@@ -1209,6 +1245,253 @@ async function runFileDownloadChecks(baseUrl: string, seedA: OrgSeed, seedB: Org
   }
 }
 
+// ─── CLI de administración de clubes (Fase 7: alta operativa por consola) ──────
+// Un club creado por el servicio del CLI (services/tenants.service.ts) debe
+// quedar operativo de punta a punta, no solo con la fila de Organization en
+// pie. Corre DESPUÉS de runFileDownloadChecks y ANTES de la limpieza final:
+// el club que crea (slug "iso-test-cli-<sufijo>") lo purga el mismo barrido
+// final que ya purga A y B (purgeAllIsoTestOrganizations filtra por prefijo
+// de slug, no por id, así que no hace falta extenderlo).
+async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
+  const cliSlug = `iso-test-cli-${RANDOM_SUFFIX}`;
+  const cliAdminEmail = `admin-cli-${RANDOM_SUFFIX}@iso-test.local`;
+  const cliSocioEmail = `socio-cli-${RANDOM_SUFFIX}@iso-test.local`;
+  const cliReinviteEmail = `reinvite-admin-cli-${RANDOM_SUFFIX}@iso-test.local`;
+  const CLI_PASSWORD = 'password123';
+
+  // Repositorio real + invitación de plataforma con correo falso (nunca
+  // contacta Gmail/SMTP) — mismo patrón que fakeInvitacionDeps más arriba,
+  // pero envuelto por tenants.service.ts en vez de llamado directo.
+  const fakeInvitacionDepsCli: InvitacionesDeps = {
+    repo: invitacionesRepoPrisma,
+    sendEmail: async () => {},
+    hashPassword: async (password) => `hashed:${password}`,
+    now: () => new Date(),
+    frontendUrl: 'https://iso-test-cli.local',
+  };
+  const crearInvitacionAdminFake: TenantsDeps['crearInvitacionAdmin'] = (organizationId, email) =>
+    runWithOrganization(organizationId, () =>
+      crearInvitacionPlataforma(fakeInvitacionDepsCli, { organizationId, email, rol: 'ADMIN' }),
+    );
+
+  const depsOperativos: TenantsDeps = {
+    repo: tenantsRepoPrisma,
+    crearInvitacionAdmin: crearInvitacionAdminFake,
+    now: () => new Date(),
+  };
+
+  const cliInput: CrearClubInput = {
+    slug: cliSlug,
+    name: `Iso Test Club CLI ${RANDOM_SUFFIX}`,
+    membresiaPropia: MEMBRESIA_A,
+    alertEmail: `alert-cli-${RANDOM_SUFFIX}@iso-test.local`,
+    contactName: 'Contacto CLI',
+    contactEmail: `contacto-cli-${RANDOM_SUFFIX}@iso-test.local`,
+    adminEmail: cliAdminEmail,
+  };
+
+  // Las dos únicas membresías propias válidas hoy (MEMBRESIAS_PROPIAS) ya las
+  // usan el club real de Pamir y los clubes A/B que sembró esta misma suite
+  // (MEMBRESIA_A y MEMBRESIA_B) — no queda ningún código libre para probar el
+  // camino operativo completo de un tercer club sin reutilizar uno de los
+  // dos. Por eso esta comprobación corre primero, contra el repositorio REAL
+  // (sin bypass), y demuestra que la regla de unicidad sí rechaza esa
+  // colisión antes de usar, solo para el resto de esta sección, un
+  // repositorio cuya ÚNICA diferencia con el real es que nunca la reporta.
+  await check('crearClub (CLI) rechaza una membresía ya usada por otro club', async () => {
+    const rechazo = await runAsPlatform(() => crearClub(depsOperativos, cliInput));
+    assert.equal(rechazo.ok, false);
+    if (rechazo.ok) return;
+    assert.equal(rechazo.status, 409);
+    assert.match(rechazo.error, new RegExp(MEMBRESIA_A));
+  });
+
+  const repoConMembresiaLibre: TenantsRepo = {
+    ...tenantsRepoPrisma,
+    async findOrganizationByMembresia() {
+      return null;
+    },
+  };
+  const depsConMembresiaLibre: TenantsDeps = {
+    repo: repoConMembresiaLibre,
+    crearInvitacionAdmin: crearInvitacionAdminFake,
+    now: () => new Date(),
+  };
+
+  // Creación real, fuera de check(): si esto falla, todo lo que sigue en esta
+  // sección carece de sentido — igual que seedOrganization() más arriba,
+  // deja que el error se propague al catch general de main().
+  const creado = await runAsPlatform(() => crearClub(depsConMembresiaLibre, cliInput));
+  if (!creado.ok) {
+    throw new Error(`[test-isolation] crearClub (operativo, con bypass de membresía) falló: ${creado.error}`);
+  }
+  const cliOrganizationId = creado.body.organization.id;
+  if (!creado.body.invitacion.emitida) {
+    throw new Error('[test-isolation] la invitación del primer ADMIN del club creado por el CLI no se emitió');
+  }
+  const primerTokenAdmin = creado.body.invitacion.inviteUrl.split('#invite=')[1] ?? '';
+
+  await check('crearClub (CLI) crea 6 categorías y una declaración vigente con hash reproducible', async () => {
+    assert.equal(creado.body.categoriasCreadas, 6);
+    assert.equal(creado.body.declaracion.version, '2026-08');
+
+    const categoriasCount = await runAsPlatform(() =>
+      prisma.categoriaEvento.count({ where: { organizationId: cliOrganizationId } }),
+    );
+    assert.equal(categoriasCount, 6);
+
+    const declaracionDb = await runAsPlatform(() =>
+      prisma.declaracionJuradaVersion.findFirst({
+        where: { organizationId: cliOrganizationId, vigenteHasta: null },
+      }),
+    );
+    assert.ok(declaracionDb);
+    const items = declaracionDb?.items as unknown as string[];
+    assert.equal(declaracionDb?.hashSha256, computeDeclaracionHash(declaracionDb?.titulo ?? '', items));
+  });
+
+  let cliAdminToken = '';
+  let cliEventoId = '';
+
+  await check(
+    'el club creado por el CLI queda operativo de punta a punta: acepta la invitación, inicia sesión, ve sus 6 categorías y publica un evento con declaración vigente',
+    async () => {
+      const aceptar = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', {
+        token: primerTokenAdmin,
+        name: 'Admin Club CLI',
+        password: CLI_PASSWORD,
+      });
+      assert.equal(aceptar.status, 201);
+
+      const login = await postJson(baseUrl, '/api/auth/login', { email: cliAdminEmail, password: CLI_PASSWORD });
+      assert.equal(login.status, 200);
+      cliAdminToken = (login.body as { token: string }).token;
+
+      const categorias = await getJson(baseUrl, cliAdminToken, '/api/eventos/categorias');
+      assert.equal(categorias.status, 200);
+      const listaCategorias = categorias.body as { id: number; slug: string }[];
+      assert.equal(listaCategorias.length, 6);
+
+      const crearEvento = await postJsonAuth(baseUrl, cliAdminToken, '/api/eventos', {
+        titulo: 'Evento operativo iso-test-cli',
+        categoriaId: listaCategorias[0]?.id,
+        fechaInicio: fechaEnDias(30),
+        fechaFin: fechaEnDias(31),
+        duracionTexto: '2 días',
+        ubicacion: 'Cordillera',
+        reunionCoordinacion: 'Sede del club',
+        organizadorNombre: 'Club CLI',
+        cupos: 10,
+        fechaCorte: { fecha: fechaEnDias(20), hora: '12:00' },
+        objetivo: 'Objetivo de prueba iso-test',
+        itinerario: 'Itinerario de prueba iso-test',
+      });
+      assert.equal(crearEvento.status, 201);
+      cliEventoId = (crearEvento.body as { id: string }).id;
+
+      const publicar = await postJsonAuth(baseUrl, cliAdminToken, `/api/eventos/${cliEventoId}/publicar`, {});
+      assert.equal(publicar.status, 200);
+
+      const detalle = await getJson(baseUrl, cliAdminToken, `/api/eventos/${cliEventoId}`);
+      assert.equal(detalle.status, 200);
+      const detalleBody = detalle.body as { estado: string; declaracionVigente: { version: string } | null };
+      assert.equal(detalleBody.estado, 'PUBLICADO');
+      assert.equal(detalleBody.declaracionVigente?.version, '2026-08');
+    },
+  );
+
+  await check('invita a un SOCIO del club nuevo (invitación normal, no de plataforma)', async () => {
+    const invitar = await postJsonAuth(baseUrl, cliAdminToken, '/api/invitaciones', {
+      email: cliSocioEmail,
+      rol: 'SOCIO',
+    });
+    assert.equal(invitar.status, 201);
+  });
+
+  await check(
+    'ni el club A ni el club B ven el evento del club nuevo, y el admin del club nuevo no ve la salida del club A',
+    async () => {
+      const tokenA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+      const tokenB = signToken({ userId: seedB.adminUserId, email: seedB.adminEmail });
+      const [resDesdeA, resDesdeB] = await Promise.all([
+        getJson(baseUrl, tokenA, `/api/eventos/${cliEventoId}`),
+        getJson(baseUrl, tokenB, `/api/eventos/${cliEventoId}`),
+      ]);
+      assert.equal(resDesdeA.status, 404);
+      assert.equal(resDesdeB.status, 404);
+
+      const resSalidaDesdeCli = await getJson(baseUrl, cliAdminToken, `/api/salidas/${seedA.salidaId}`);
+      assert.equal(resSalidaDesdeCli.status, 404);
+    },
+  );
+
+  await check('suspende el club nuevo: el token del admin recibe 403 y el login queda rechazado', async () => {
+    const suspender = await runAsPlatform(() => cambiarEstadoClub(depsOperativos, cliSlug, 'SUSPENDED'));
+    assert.equal(suspender.ok, true);
+    if (!suspender.ok) return;
+    assert.equal(suspender.body.estadoAnterior, 'ACTIVE');
+    assert.equal(suspender.body.estadoNuevo, 'SUSPENDED');
+    assert.equal(suspender.body.sinCambios, false);
+
+    const resAutenticado = await getJson(baseUrl, cliAdminToken, '/api/eventos/categorias');
+    assert.equal(resAutenticado.status, 403);
+
+    const loginRechazado = await postJson(baseUrl, '/api/auth/login', { email: cliAdminEmail, password: CLI_PASSWORD });
+    assert.equal(loginRechazado.status, 403);
+  });
+
+  await check('reactiva el club nuevo: vuelve a responder 200, y repetir la reactivación es un no-op', async () => {
+    const activar = await runAsPlatform(() => cambiarEstadoClub(depsOperativos, cliSlug, 'ACTIVE'));
+    assert.equal(activar.ok, true);
+    if (!activar.ok) return;
+    assert.equal(activar.body.estadoAnterior, 'SUSPENDED');
+    assert.equal(activar.body.estadoNuevo, 'ACTIVE');
+    assert.equal(activar.body.sinCambios, false);
+
+    const resReactivado = await getJson(baseUrl, cliAdminToken, '/api/eventos/categorias');
+    assert.equal(resReactivado.status, 200);
+
+    const activarDeNuevo = await runAsPlatform(() => cambiarEstadoClub(depsOperativos, cliSlug, 'ACTIVE'));
+    assert.equal(activarDeNuevo.ok, true);
+    if (!activarDeNuevo.ok) return;
+    assert.equal(activarDeNuevo.body.sinCambios, true);
+  });
+
+  await check(
+    'invitarAdminClub reemite el link: el primer token deja de servir y el segundo queda vigente',
+    async () => {
+      const primera = await runAsPlatform(() => invitarAdminClub(depsOperativos, cliSlug, cliReinviteEmail));
+      assert.equal(primera.ok, true);
+      if (!primera.ok) return;
+      const primerToken = primera.body.inviteUrl.split('#invite=')[1] ?? '';
+
+      const segunda = await runAsPlatform(() => invitarAdminClub(depsOperativos, cliSlug, cliReinviteEmail));
+      assert.equal(segunda.ok, true);
+      if (!segunda.ok) return;
+      const segundoToken = segunda.body.inviteUrl.split('#invite=')[1] ?? '';
+
+      const consultaPrimero = await postJson(baseUrl, '/api/auth/invitaciones/consultar', { token: primerToken });
+      assert.equal(consultaPrimero.status, 410);
+
+      const consultaSegundo = await postJson(baseUrl, '/api/auth/invitaciones/consultar', { token: segundoToken });
+      assert.equal(consultaSegundo.status, 200);
+    },
+  );
+
+  await check('listarClubes incluye el club nuevo con los conteos correctos', async () => {
+    const listado = await runAsPlatform(() => listarClubes(depsOperativos));
+    const fila = listado.find((c) => c.slug === cliSlug);
+    assert.ok(fila);
+    assert.equal(fila?.status, 'ACTIVE');
+    assert.equal(fila?.membresiaPropia, MEMBRESIA_A);
+    // El admin (aceptó) cuenta; el SOCIO invitado (nunca aceptó) no crea usuario.
+    assert.equal(fila?.userCount, 1);
+    // Pendientes: la invitación del SOCIO + el segundo token de la reemisión
+    // (el primero quedó revocado, la del ADMIN original ya fue aceptada).
+    assert.equal(fila?.pendingInvitationCount, 2);
+  });
+}
+
 // ─── Orquestación ──────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -1249,6 +1532,7 @@ async function main(): Promise<void> {
     server = started.server;
     await runHttpChecks(started.baseUrl, seedA, seedB);
     await runFileDownloadChecks(started.baseUrl, seedA, seedB);
+    await runTenantCliChecks(started.baseUrl, seedA, seedB);
   } catch (err) {
     results.push({
       label: 'ejecución general del script (fuera de un check individual)',

@@ -1,9 +1,8 @@
 import { parseArgs } from 'node:util';
 import { emailField, nameField } from '../lib/auth-fields.js';
 const ROL_VALUES = ['SOCIO', 'LIDER', 'ADMIN'];
-// Slug de la organización por defecto: el único club antes de multi-club.
-const DEFAULT_ORG_SLUG = 'pamir';
-const USAGE_ERROR = 'Argumentos inválidos. Flags permitidos: --email <email>, --name "<nombre>", --rol <SOCIO|LIDER|ADMIN>, --org <slug>, --force';
+const USAGE_ERROR = 'Argumentos inválidos. Flags permitidos: --email <email>, --name "<nombre>", --rol <SOCIO|LIDER|ADMIN>, ' +
+    '--org <slug>, --force. --org es requerido: ejecuta "npm run tenant:list" para ver los slugs disponibles.';
 export function parseCreateUserArgs(argv) {
     let rawValues;
     try {
@@ -56,11 +55,11 @@ export function parseCreateUserArgs(argv) {
     if (!rol) {
         errors.push('El rol debe ser SOCIO, LIDER o ADMIN');
     }
-    const org = (rawValues.org ?? DEFAULT_ORG_SLUG).trim();
+    const org = (rawValues.org ?? '').trim();
     if (org === '') {
-        errors.push('El slug de la organización (--org) no puede estar vacío');
+        errors.push('El slug de la organización (--org) es requerido. Ejecuta "npm run tenant:list" para ver los slugs disponibles.');
     }
-    if (errors.length > 0 || !email || !name || !rol) {
+    if (errors.length > 0 || !email || !name || !rol || !org) {
         return { success: false, errors };
     }
     return {

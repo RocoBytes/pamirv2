@@ -5,6 +5,7 @@ import { buildSaludSalidaEmail, brandingFor } from '../lib/email-templates.js';
 import { subjectSaludSalida } from '../lib/email/subjects.js';
 import { puedeCambiarRol } from '../lib/invitaciones.js';
 import { requireOrganizationId } from '../lib/tenant-context.js';
+import { MEMBRESIA_CLUBS } from '../lib/membresias.js';
 // GET /api/admin/stats
 export async function getStats(_req, res) {
     try {
@@ -82,15 +83,6 @@ const SALIDA_STATUSES = [
 const PENDING_CLOSE_STATUSES = new Set(['CONFIRMADA', 'EN_CURSO', 'INCIDENTE', 'COMPLETADA']);
 // Average of the three 1-5 notas below this counts as a low-rated salida.
 const LOW_RATING_THRESHOLD = 3;
-// Allowed club membership values (mirrors the MembresiaClub enum on the
-// frontend). The dashboard club filter validates against this whitelist.
-const MEMBRESIA_CLUBS = [
-    'SOCIO_ANDINO_PAMIR',
-    'SOCIO_EL_MONTANISTA',
-    'SOCIO_OTRO_CLUB',
-    'POSTULANTE_CLUB',
-    'NO_PERTENECE',
-];
 function pickString(v) {
     if (typeof v === 'string' && v.trim() !== '')
         return v.trim();

@@ -8,9 +8,6 @@ export type Rol = 'SOCIO' | 'LIDER' | 'ADMIN';
 
 const ROL_VALUES: readonly Rol[] = ['SOCIO', 'LIDER', 'ADMIN'];
 
-// Slug de la organización por defecto: el único club antes de multi-club.
-const DEFAULT_ORG_SLUG = 'pamir';
-
 export interface CreateUserArgs {
   email: string;
   name: string;
@@ -24,7 +21,8 @@ export type ParseCreateUserArgsResult =
   | { success: false; errors: string[] };
 
 const USAGE_ERROR =
-  'Argumentos inválidos. Flags permitidos: --email <email>, --name "<nombre>", --rol <SOCIO|LIDER|ADMIN>, --org <slug>, --force';
+  'Argumentos inválidos. Flags permitidos: --email <email>, --name "<nombre>", --rol <SOCIO|LIDER|ADMIN>, ' +
+  '--org <slug>, --force. --org es requerido: ejecuta "npm run tenant:list" para ver los slugs disponibles.';
 
 export function parseCreateUserArgs(argv: string[]): ParseCreateUserArgsResult {
   let rawValues: { email?: string; name?: string; rol?: string; org?: string; force?: boolean };
@@ -78,12 +76,14 @@ export function parseCreateUserArgs(argv: string[]): ParseCreateUserArgsResult {
     errors.push('El rol debe ser SOCIO, LIDER o ADMIN');
   }
 
-  const org = (rawValues.org ?? DEFAULT_ORG_SLUG).trim();
+  const org = (rawValues.org ?? '').trim();
   if (org === '') {
-    errors.push('El slug de la organización (--org) no puede estar vacío');
+    errors.push(
+      'El slug de la organización (--org) es requerido. Ejecuta "npm run tenant:list" para ver los slugs disponibles.',
+    );
   }
 
-  if (errors.length > 0 || !email || !name || !rol) {
+  if (errors.length > 0 || !email || !name || !rol || !org) {
     return { success: false, errors };
   }
 

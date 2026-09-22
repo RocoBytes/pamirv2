@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { parseCreateUserArgs } from './create-user-args.js';
 
 describe('parseCreateUserArgs', () => {
-  it('parses valid args with defaults (rol SOCIO, force false, org pamir)', () => {
-    const result = parseCreateUserArgs(['--email', 'foo@bar.com', '--name', 'Foo Bar']);
+  it('parses valid args with defaults (rol SOCIO, force false) exigiendo --org', () => {
+    const result = parseCreateUserArgs(['--email', 'foo@bar.com', '--name', 'Foo Bar', '--org', 'pamir']);
     assert.equal(result.success, true);
     if (result.success) {
       assert.deepEqual(result.data, {
@@ -17,11 +17,19 @@ describe('parseCreateUserArgs', () => {
     }
   });
 
-  it('parses --org con un slug distinto del default', () => {
+  it('parses --org con cualquier slug', () => {
     const result = parseCreateUserArgs(['--email', 'foo@bar.com', '--name', 'Foo Bar', '--org', 'otro-club']);
     assert.equal(result.success, true);
     if (result.success) {
       assert.equal(result.data.org, 'otro-club');
+    }
+  });
+
+  it('rechaza la ausencia de --org (ya no tiene valor por defecto)', () => {
+    const result = parseCreateUserArgs(['--email', 'foo@bar.com', '--name', 'Foo Bar']);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.ok(result.errors.some((e) => e.includes('--org') && e.includes('requerido')));
     }
   });
 
@@ -34,7 +42,7 @@ describe('parseCreateUserArgs', () => {
   });
 
   it('parses --rol ADMIN and --force', () => {
-    const result = parseCreateUserArgs(['--email', 'a@b.com', '--name', 'Ada', '--rol', 'ADMIN', '--force']);
+    const result = parseCreateUserArgs(['--email', 'a@b.com', '--name', 'Ada', '--rol', 'ADMIN', '--force', '--org', 'pamir']);
     assert.equal(result.success, true);
     if (result.success) {
       assert.equal(result.data.rol, 'ADMIN');
@@ -43,7 +51,7 @@ describe('parseCreateUserArgs', () => {
   });
 
   it('parses --rol LIDER', () => {
-    const result = parseCreateUserArgs(['--email', 'a@b.com', '--name', 'Ada', '--rol', 'LIDER']);
+    const result = parseCreateUserArgs(['--email', 'a@b.com', '--name', 'Ada', '--rol', 'LIDER', '--org', 'pamir']);
     assert.equal(result.success, true);
     if (result.success) {
       assert.equal(result.data.rol, 'LIDER');
@@ -51,7 +59,7 @@ describe('parseCreateUserArgs', () => {
   });
 
   it('trims and lowercases the email', () => {
-    const result = parseCreateUserArgs(['--email', '  Foo@BAR.com  ', '--name', 'Foo']);
+    const result = parseCreateUserArgs(['--email', '  Foo@BAR.com  ', '--name', 'Foo', '--org', 'pamir']);
     assert.equal(result.success, true);
     if (result.success) {
       assert.equal(result.data.email, 'foo@bar.com');

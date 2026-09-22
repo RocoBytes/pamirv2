@@ -7,6 +7,7 @@ import { buildSaludSalidaEmail, brandingFor, type ParticipanteSaludEmailData } f
 import { subjectSaludSalida } from '../lib/email/subjects.js';
 import { puedeCambiarRol } from '../lib/invitaciones.js';
 import { requireOrganizationId } from '../lib/tenant-context.js';
+import { MEMBRESIA_CLUBS } from '../lib/membresias.js';
 
 interface MesRow {
   // DATE_TRUNC returns timestamp-without-tz; some driver versions deliver
@@ -117,16 +118,6 @@ interface DashboardParticipante {
   esExpress?: boolean;
   membresiaClub?: string;
 }
-
-// Allowed club membership values (mirrors the MembresiaClub enum on the
-// frontend). The dashboard club filter validates against this whitelist.
-const MEMBRESIA_CLUBS = [
-  'SOCIO_ANDINO_PAMIR',
-  'SOCIO_EL_MONTANISTA',
-  'SOCIO_OTRO_CLUB',
-  'POSTULANTE_CLUB',
-  'NO_PERTENECE',
-] as const;
 
 function pickString(v: unknown): string | undefined {
   if (typeof v === 'string' && v.trim() !== '') return v.trim();
