@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { sendEmail } from '../lib/google-gmail.js';
-import { buildSaludSalidaEmail } from '../lib/email-templates.js';
+import { sendClubEmail } from '../lib/email/club-email.js';
+import { buildSaludSalidaEmail, brandingFor } from '../lib/email-templates.js';
+import { subjectSaludSalida } from '../lib/email/subjects.js';
 import { puedeCambiarRol } from '../lib/invitaciones.js';
 import { getEstadoCredencial, guardarRefreshToken, probarRefreshToken, } from '../lib/google-credentials.js';
 import { requireOrganizationId } from '../lib/tenant-context.js';
@@ -598,10 +599,10 @@ export async function enviarSaludSalida(req, res) {
             res.status(422).json({ error: 'La salida no tiene un correo de responsable' });
             return;
         }
-        const subject = `Resumen de fichas de salud — ${result.salida.nombreActividad}`;
-        const htmlBody = buildSaludSalidaEmail(result.salida.nombreActividad, result.salida.liderCordada, result.participantes);
+        const subject = subjectSaludSalida(result.salida.nombreActividad);
+        const htmlBody = buildSaludSalidaEmail(result.salida.nombreActividad, result.salida.liderCordada, result.participantes, brandingFor(req.user.organization));
         try {
-            await sendEmail(targetEmail, subject, htmlBody);
+            await sendClubEmail(req.user.organization, { to: targetEmail, subject, html: htmlBody, kind: 'notificacion' });
         }
         catch (sendError) {
             console.error('[enviarSaludSalida] sendEmail failed', sendError);

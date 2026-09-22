@@ -2,8 +2,9 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { Prisma, SalidaStatus } from '../generated/prisma/client.js';
-import { sendEmail } from '../lib/google-gmail.js';
-import { buildSaludSalidaEmail, type ParticipanteSaludEmailData } from '../lib/email-templates.js';
+import { sendClubEmail } from '../lib/email/club-email.js';
+import { buildSaludSalidaEmail, brandingFor, type ParticipanteSaludEmailData } from '../lib/email-templates.js';
+import { subjectSaludSalida } from '../lib/email/subjects.js';
 import { puedeCambiarRol } from '../lib/invitaciones.js';
 import {
   getEstadoCredencial,
@@ -696,15 +697,16 @@ export async function enviarSaludSalida(req: Request, res: Response): Promise<vo
       return;
     }
 
-    const subject = `Resumen de fichas de salud — ${result.salida.nombreActividad}`;
+    const subject = subjectSaludSalida(result.salida.nombreActividad);
     const htmlBody = buildSaludSalidaEmail(
       result.salida.nombreActividad,
       result.salida.liderCordada,
       result.participantes,
+      brandingFor(req.user!.organization),
     );
 
     try {
-      await sendEmail(targetEmail, subject, htmlBody);
+      await sendClubEmail(req.user!.organization, { to: targetEmail, subject, html: htmlBody, kind: 'notificacion' });
     } catch (sendError) {
       console.error('[enviarSaludSalida] sendEmail failed', sendError);
       res.status(502).json({ error: 'No se pudo enviar el correo. Intenta nuevamente más tarde.' });

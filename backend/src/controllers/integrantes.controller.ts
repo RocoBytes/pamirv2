@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { sendEmail } from '../lib/google-gmail.js';
-import { buildConfirmationEmail } from '../lib/email-templates.js';
+import { sendClubEmail } from '../lib/email/club-email.js';
+import { buildConfirmationEmail, brandingFor } from '../lib/email-templates.js';
+import { subjectConfirmacionRegistro } from '../lib/email/subjects.js';
 import { isAdmin } from '../lib/authz.js';
 
 interface CreateIntegranteBody {
@@ -102,11 +103,13 @@ export async function createIntegrante(req: Request, res: Response): Promise<voi
       },
     });
 
-    sendEmail(
-      data.email,
-      'Confirmación de registro — Pamir',
-      buildConfirmationEmail(data),
-    ).catch((err) => console.error('[email] Error al enviar confirmación:', err));
+    const branding = brandingFor(req.user!.organization);
+    sendClubEmail(req.user!.organization, {
+      to: data.email,
+      subject: subjectConfirmacionRegistro(branding),
+      html: buildConfirmationEmail(data, branding),
+      kind: 'notificacion',
+    }).catch((err) => console.error('[email] Error al enviar confirmación:', err));
 
     res.status(201).json(integrante);
   } catch (error) {

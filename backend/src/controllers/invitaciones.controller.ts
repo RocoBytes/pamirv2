@@ -13,24 +13,49 @@ import {
   type ServiceResult,
 } from '../services/invitaciones.service.js';
 import { invitacionesRepoPrisma } from '../services/invitaciones.repo.prisma.js';
-import { sendEmail as enviarCorreoGmail } from '../lib/google-gmail.js';
-import { buildInvitationEmail } from '../lib/email-templates.js';
+import { sendClubEmail } from '../lib/email/club-email.js';
+import { buildInvitationEmail, brandingFor } from '../lib/email-templates.js';
+import { subjectInvitacion } from '../lib/email/subjects.js';
 import { SALT_ROUNDS } from '../lib/auth-fields.js';
+import { FRONTEND_URL } from '../lib/config.js';
 import { runAsPlatform } from '../lib/tenant-context.js';
+import type { OrganizationSummary } from '../types/index.js';
 
-const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+// Cableado real: repositorio Prisma, bcrypt y reloj real. El envío de correo
+// se arma por request (ver buildDeps) porque necesita el club de quien invita
+// — nunca un club fijo a nivel de módulo.
+function buildDeps(organization: OrganizationSummary): InvitacionesDeps {
+  return {
+    repo: invitacionesRepoPrisma,
+    sendEmail: async (params) => {
+      const branding = brandingFor(organization);
+      await sendClubEmail(organization, {
+        to: params.to,
+        subject: subjectInvitacion(branding),
+        html: buildInvitationEmail(params, branding),
+        kind: 'notificacion',
+      });
+    },
+    hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
+    now: () => new Date(),
+    frontendUrl: FRONTEND_URL,
+  };
+}
 
-// Cableado real: repositorio Prisma, envío de correo (HTML construido acá,
-// fuera del servicio), bcrypt y reloj real.
-const deps: InvitacionesDeps = {
-  repo: invitacionesRepoPrisma,
-  sendEmail: async (params) => {
-    await enviarCorreoGmail(params.to, 'Te invitaron a Pamir', buildInvitationEmail(params));
-  },
-  hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
-  now: () => new Date(),
-  frontendUrl: FRONTEND_URL,
-};
+// Deps para los flujos públicos (sin req.user) que nunca invocan sendEmail:
+// un stub ruidoso evita que un cambio futuro en el servicio termine enviando
+// un correo sin saber a nombre de qué club.
+function buildPublicDeps(): InvitacionesDeps {
+  return {
+    repo: invitacionesRepoPrisma,
+    sendEmail: async () => {
+      throw new Error('[invitaciones] sendEmail no debe invocarse en un flujo público sin club conocido');
+    },
+    hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
+    now: () => new Date(),
+    frontendUrl: FRONTEND_URL,
+  };
+}
 
 function toRequester(req: Request): Requester {
   const { id, organizationId, name, rol } = req.user!;
@@ -54,7 +79,7 @@ const tokenField = z.string().trim().min(1, 'El token es requerido').max(200, 'T
 // POST /api/invitaciones
 export async function crearInvitacion(req: Request, res: Response): Promise<void> {
   try {
-    const result = await crearInvitacionService(deps, toRequester(req), {
+    const result = await crearInvitacionService(buildDeps(req.user!.organization), toRequester(req), {
       email: req.body?.email,
       rol: req.body?.rol,
     });
@@ -68,7 +93,7 @@ export async function crearInvitacion(req: Request, res: Response): Promise<void
 // GET /api/invitaciones
 export async function listarInvitaciones(req: Request, res: Response): Promise<void> {
   try {
-    const result = await listarInvitacionesService(deps, toRequester(req));
+    const result = await listarInvitacionesService(buildDeps(req.user!.organization), toRequester(req));
     respond(res, result);
   } catch (error) {
     console.error('[listarInvitaciones]', error);
@@ -80,7 +105,7 @@ export async function listarInvitaciones(req: Request, res: Response): Promise<v
 export async function revocarInvitacion(req: Request, res: Response): Promise<void> {
   try {
     const id = req.params['id'] as string;
-    const result = await revocarInvitacionService(deps, toRequester(req), id);
+    const result = await revocarInvitacionService(buildDeps(req.user!.organization), toRequester(req), id);
     respond(res, result);
   } catch (error) {
     console.error('[revocarInvitacion]', error);
@@ -92,7 +117,7 @@ export async function revocarInvitacion(req: Request, res: Response): Promise<vo
 export async function reenviarInvitacion(req: Request, res: Response): Promise<void> {
   try {
     const id = req.params['id'] as string;
-    const result = await reenviarInvitacionService(deps, toRequester(req), id);
+    const result = await reenviarInvitacionService(buildDeps(req.user!.organization), toRequester(req), id);
     respond(res, result);
   } catch (error) {
     console.error('[reenviarInvitacion]', error);
@@ -114,7 +139,7 @@ export async function consultarInvitacion(req: Request, res: Response): Promise<
   try {
     // Público: el token identifica la invitación (y su club) por sí solo, sin
     // sesión ni contexto de club previo — corre en contexto de plataforma.
-    const result = await runAsPlatform(() => consultarInvitacionService(deps, parsed.data));
+    const result = await runAsPlatform(() => consultarInvitacionService(buildPublicDeps(), parsed.data));
     respond(res, result);
   } catch (error) {
     console.error('[consultarInvitacion]', error);
@@ -133,7 +158,7 @@ export async function aceptarInvitacion(req: Request, res: Response): Promise<vo
     // Público: el usuario nuevo hereda el organizationId de la invitación, no
     // de ningún contexto previo — corre en contexto de plataforma.
     const result = await runAsPlatform(() =>
-      aceptarInvitacionService(deps, parsedToken.data, {
+      aceptarInvitacionService(buildPublicDeps(), parsedToken.data, {
         name: req.body?.name,
         password: req.body?.password,
       }),

@@ -7,6 +7,7 @@ import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { prisma } from '../lib/prisma.js';
+import { verifyDbTargetOrExit } from '../lib/db-target-guard.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 import { signToken } from '../lib/jwt.js';
 import { crearInvitacionPlataforma } from '../services/invitaciones.service.js';
@@ -692,6 +693,14 @@ async function runHttpChecks(baseUrl, seedA, seedB) {
 }
 // ─── Orquestación ──────────────────────────────────────────────────────────────
 async function main() {
+    // Guardia real (no solo el pre-hook npm db:guard): correr este archivo
+    // directamente con node/tsx ya no puede saltarse la verificación de destino.
+    verifyDbTargetOrExit({
+        prefix: '[test-isolation]',
+        onMissingTarget: () => console.log('[test-isolation] DATABASE_URL no está definido o no se pudo interpretar como una URL válida.'),
+        failureMessage: '[test-isolation] Comando abortado: DATABASE_URL no coincide con la base de datos de v2 declarada en ' +
+            'backend/db-target.json. Ejecuta este script solo a través de "npm run test:isolation" o corrige DATABASE_URL.',
+    });
     console.log('[test-isolation] Limpiando restos de una corrida anterior (si los hay)...');
     await purgeAllIsoTestOrganizations();
     let server;

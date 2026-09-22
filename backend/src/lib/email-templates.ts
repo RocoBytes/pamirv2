@@ -1,3 +1,6 @@
+import { FRONTEND_URL } from './config.js';
+import type { OrganizationSummary } from '../types/index.js';
+
 interface IntegranteEmailData {
   nombreCompleto: string;
   rut: string;
@@ -30,14 +33,34 @@ interface IntegranteEmailData {
   derechoImagen: boolean;
 }
 
-const CONTACT_NAME = process.env.CONTACT_NAME ?? 'el equipo de Pamir';
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL ?? '';
+// ─── Branding por club ──────────────────────────────────────────────────────
 
-function contactLine(): string {
-  if (CONTACT_EMAIL) {
-    return `comunícate con <strong>${escapeHtml(CONTACT_NAME)}</strong> al correo <a href="mailto:${CONTACT_EMAIL}" style="color:${GREEN};">${CONTACT_EMAIL}</a>`;
+// Datos del club que personalizan cada correo (remitente, encabezados, pie de
+// página, textos que antes tenían la marca fija del sistema). Cada builder
+// recibe uno de estos en vez de leer variables de entorno globales.
+export interface OrgBranding {
+  name: string;
+  shortName: string;
+  contactName: string;
+  contactEmail: string;
+  frontendUrl: string;
+}
+
+export function brandingFor(org: OrganizationSummary): OrgBranding {
+  return {
+    name: org.name,
+    shortName: org.shortName ?? org.name,
+    contactName: org.contactName,
+    contactEmail: org.contactEmail,
+    frontendUrl: FRONTEND_URL,
+  };
+}
+
+function contactLine(branding: OrgBranding): string {
+  if (branding.contactEmail) {
+    return `comunícate con <strong>${escapeHtml(branding.contactName)}</strong> al correo <a href="mailto:${branding.contactEmail}" style="color:${GREEN};">${branding.contactEmail}</a>`;
   }
-  return `comunícate con <strong>${escapeHtml(CONTACT_NAME)}</strong>`;
+  return `comunícate con <strong>${escapeHtml(branding.contactName)}</strong>`;
 }
 
 const GREEN = '#264c99';
@@ -322,7 +345,14 @@ function pronosticoRow(score: number): string {
 
 // ─── Email shell ──────────────────────────────────────────────────────────────
 
-function emailShell(subtitle: string, introHtml: string, tableHtml: string, footerNote: string, afterTableHtml = ''): string {
+function emailShell(
+  subtitle: string,
+  introHtml: string,
+  tableHtml: string,
+  footerNote: string,
+  afterTableHtml: string,
+  branding: OrgBranding,
+): string {
   return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -332,7 +362,7 @@ function emailShell(subtitle: string, introHtml: string, tableHtml: string, foot
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);max-width:600px;width:100%;">
         <tr>
           <td style="background:${GREEN};padding:28px 32px;">
-            <p style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">Pamir</p>
+            <p style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">${escapeHtml(branding.shortName)}</p>
             <p style="margin:6px 0 0;color:#c8dccb;font-size:14px;">${subtitle}</p>
           </td>
         </tr>
@@ -349,7 +379,7 @@ function emailShell(subtitle: string, introHtml: string, tableHtml: string, foot
           <td style="background:#f9fafb;padding:20px 32px;border-top:1px solid ${BORDER};">
             <p style="margin:0;color:${GRAY};font-size:12px;line-height:1.6;">
               ${footerNote}<br>
-              Si tienes dudas, ${contactLine()}
+              Si tienes dudas, ${contactLine(branding)}
             </p>
           </td>
         </tr>
@@ -383,9 +413,9 @@ function evaluacionCtaBlock(evaluacionUrl: string): string {
         </tr>`;
 }
 
-function feedbackCierreBlock(): string {
-  const replyHint = CONTACT_EMAIL
-    ? `escríbenos a <a href="mailto:${CONTACT_EMAIL}" style="color:${GREEN};font-weight:600;">${CONTACT_EMAIL}</a> o responde directamente este correo`
+function feedbackCierreBlock(branding: OrgBranding): string {
+  const replyHint = branding.contactEmail
+    ? `escríbenos a <a href="mailto:${branding.contactEmail}" style="color:${GREEN};font-weight:600;">${branding.contactEmail}</a> o responde directamente este correo`
     : 'responde directamente este correo';
   return `
         <tr>
@@ -408,7 +438,7 @@ function feedbackCierreBlock(): string {
 
 // ─── Salida notification ──────────────────────────────────────────────────────
 
-export function buildSalidaNotificationEmail(nombreCompleto: string, salida: SalidaEmailData): string {
+export function buildSalidaNotificationEmail(nombreCompleto: string, salida: SalidaEmailData, branding: OrgBranding): string {
   const avisosArr = safeStringArray(salida.avisosExternos);
   const participantesArr = safeParticipantNames(salida.participantes);
   const mediosArr = safeStringArray(salida.mediosComunicacion);
@@ -460,13 +490,21 @@ export function buildSalidaNotificationEmail(nombreCompleto: string, salida: Sal
     'Registro en salida de montaña',
     intro,
     tabla,
-    'Este correo es una notificación automática del sistema PAMIR.',
+    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}.`,
+    '',
+    branding,
   );
 }
 
 // ─── Cierre notification ──────────────────────────────────────────────────────
 
-export function buildCierreNotificationEmail(nombreCompleto: string, salida: SalidaEmailData, cierre: CierreEmailData, evaluacionUrl?: string): string {
+export function buildCierreNotificationEmail(
+  nombreCompleto: string,
+  salida: SalidaEmailData,
+  cierre: CierreEmailData,
+  branding: OrgBranding,
+  evaluacionUrl?: string,
+): string {
   const hayIncidente = cierre.ocurrioIncidente === 'SI';
   const hayAccidente = cierre.ocurrioAccidente === 'SI';
   const abortada = cierre.estadoCierre === 'ABORTADA_INCOMPLETA';
@@ -523,12 +561,13 @@ export function buildCierreNotificationEmail(nombreCompleto: string, salida: Sal
     'Cierre de salida de montaña',
     intro,
     tabla,
-    'Este correo es una notificación automática del sistema PAMIR.',
-    (evaluacionUrl ? evaluacionCtaBlock(evaluacionUrl) : '') + feedbackCierreBlock(),
+    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}.`,
+    (evaluacionUrl ? evaluacionCtaBlock(evaluacionUrl) : '') + feedbackCierreBlock(branding),
+    branding,
   );
 }
 
-export function buildConfirmationEmail(data: IntegranteEmailData): string {
+export function buildConfirmationEmail(data: IntegranteEmailData, branding: OrgBranding): string {
   return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -540,7 +579,7 @@ export function buildConfirmationEmail(data: IntegranteEmailData): string {
         <!-- Header -->
         <tr>
           <td style="background:${GREEN};padding:28px 32px;">
-            <p style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">Pamir</p>
+            <p style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">${escapeHtml(branding.shortName)}</p>
             <p style="margin:6px 0 0;color:#c8dccb;font-size:14px;">Confirmación de registro de integrante</p>
           </td>
         </tr>
@@ -549,7 +588,7 @@ export function buildConfirmationEmail(data: IntegranteEmailData): string {
         <tr>
           <td style="padding:24px 32px 16px;">
             <p style="margin:0;color:#1f2937;font-size:15px;">
-              Hola <strong>${escapeHtml(data.nombreCompleto)}</strong>, tu registro en el sistema Pamir se completó exitosamente.
+              Hola <strong>${escapeHtml(data.nombreCompleto)}</strong>, tu registro en el sistema ${escapeHtml(branding.shortName)} se completó exitosamente.
               A continuación encontrarás el resumen de los datos ingresados.
             </p>
           </td>
@@ -615,8 +654,8 @@ export function buildConfirmationEmail(data: IntegranteEmailData): string {
         <tr>
           <td style="background:#f9fafb;padding:20px 32px;border-top:1px solid ${BORDER};">
             <p style="margin:0;color:${GRAY};font-size:12px;line-height:1.6;">
-              Este correo es un comprobante automático de tu registro en la aplicación de PAMIR.<br>
-              Si no realizaste este registro o tienes dudas, ${contactLine()}
+              Este correo es un comprobante automático de tu registro en la aplicación de ${escapeHtml(branding.shortName)}.<br>
+              Si no realizaste este registro o tienes dudas, ${contactLine(branding)}
             </p>
           </td>
         </tr>
@@ -648,7 +687,7 @@ function toIsoString(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
 }
 
-export function buildAlertaSalidaEmail(salida: AlertaSalidaEmailData): string {
+export function buildAlertaSalidaEmail(salida: AlertaSalidaEmailData, branding: OrgBranding): string {
   const participantesArr: Array<{ nombre?: string; rut?: string }> = Array.isArray(salida.participantes)
     ? (salida.participantes as Array<{ nombre?: string; rut?: string }>)
     : [];
@@ -671,7 +710,7 @@ export function buildAlertaSalidaEmail(salida: AlertaSalidaEmailData): string {
         <td style="padding:14px 16px;">
           <p style="margin:0;font-size:13px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:0.05em;">⚠ Acción requerida</p>
           <p style="margin:6px 0 0;font-size:13px;color:#7f1d1d;line-height:1.6;">
-            Verifica el estado de la cordada. Si el grupo ya retornó, registra el cierre en el sistema PAMIR.
+            Verifica el estado de la cordada. Si el grupo ya retornó, registra el cierre en el sistema ${escapeHtml(branding.shortName)}.
             Si no has recibido noticias, activa el protocolo de búsqueda y rescate.
           </p>
         </td>
@@ -703,13 +742,15 @@ export function buildAlertaSalidaEmail(salida: AlertaSalidaEmailData): string {
     'ALERTA — Salida sin cierre registrado',
     intro,
     tabla,
-    'Esta alerta fue generada automáticamente por el sistema PAMIR. Hora de la alerta superada sin cierre.',
+    `Esta alerta fue generada automáticamente por el sistema ${escapeHtml(branding.shortName)}. Hora de la alerta superada sin cierre.`,
+    '',
+    branding,
   );
 }
 
 // ─── Recordatorio de cierre (1h antes de la alerta → líder) ───────────────────
 
-export function buildRecordatorioCierreEmail(salida: AlertaSalidaEmailData): string {
+export function buildRecordatorioCierreEmail(salida: AlertaSalidaEmailData, branding: OrgBranding): string {
   const participantesArr: Array<{ nombre?: string; rut?: string }> = Array.isArray(salida.participantes)
     ? (salida.participantes as Array<{ nombre?: string; rut?: string }>)
     : [];
@@ -732,7 +773,7 @@ export function buildRecordatorioCierreEmail(salida: AlertaSalidaEmailData): str
         <td style="padding:14px 16px;">
           <p style="margin:0;font-size:13px;font-weight:700;color:#92600a;text-transform:uppercase;letter-spacing:0.05em;">⏰ Cierra tu salida</p>
           <p style="margin:6px 0 0;font-size:13px;color:#78350f;line-height:1.6;">
-            Si tu grupo ya retornó, registra el <strong>formulario de cierre</strong> en el sistema PAMIR antes
+            Si tu grupo ya retornó, registra el <strong>formulario de cierre</strong> en el sistema ${escapeHtml(branding.shortName)} antes
             de la hora de alerta. Si no se completa el cierre a esa hora, se activará automáticamente la
             <strong>ALERTA: Salida sin cierre</strong> hacia el equipo de seguridad.
           </p>
@@ -764,7 +805,9 @@ export function buildRecordatorioCierreEmail(salida: AlertaSalidaEmailData): str
     'Recordatorio — Cierra tu salida',
     intro,
     tabla,
-    'Este recordatorio fue generado automáticamente por el sistema PAMIR antes de la hora de alerta.',
+    `Este recordatorio fue generado automáticamente por el sistema ${escapeHtml(branding.shortName)} antes de la hora de alerta.`,
+    '',
+    branding,
   );
 }
 
@@ -797,6 +840,7 @@ export function buildSaludSalidaEmail(
   nombreActividad: string,
   liderCordada: string,
   participantes: ParticipanteSaludEmailData[],
+  branding: OrgBranding,
 ): string {
   const conFicha = participantes.filter((p) => p.fichaEncontrada);
   const sinFicha = participantes.filter((p) => !p.fichaEncontrada);
@@ -849,7 +893,7 @@ export function buildSaludSalidaEmail(
     Este correo contiene información médica confidencial de los participantes de la salida.
     Por favor, trátela con la debida reserva y utilícela exclusivamente para la gestión de
     seguridad en montaña. Esta información fue validada y enviada por la administración del
-    club en cumplimiento con los protocolos de seguridad de Andino Club Pamir.
+    club en cumplimiento con los protocolos de seguridad de ${escapeHtml(branding.name)}.
     No comparta este correo con terceros.
   `;
 
@@ -858,10 +902,12 @@ export function buildSaludSalidaEmail(
     intro,
     tabla,
     footerNote,
+    '',
+    branding,
   );
 }
 
-export function buildVerificationEmail(name: string, verificationUrl: string): string {
+export function buildVerificationEmail(name: string, verificationUrl: string, branding: OrgBranding): string {
   return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
@@ -870,11 +916,11 @@ export function buildVerificationEmail(name: string, verificationUrl: string): s
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:${GREEN};padding:28px 32px;">
-          <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">Pamir — Confirma tu cuenta</h1>
+          <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${escapeHtml(branding.shortName)} — Confirma tu cuenta</h1>
         </td></tr>
         <tr><td style="padding:32px;">
           <p style="color:#374151;font-size:15px;margin:0 0 16px;">Hola <strong>${escapeHtml(name)}</strong>,</p>
-          <p style="color:#374151;font-size:15px;margin:0 0 24px;">Gracias por registrarte en Pamir. Para activar tu cuenta haz clic en el botón de abajo:</p>
+          <p style="color:#374151;font-size:15px;margin:0 0 24px;">Gracias por registrarte en ${escapeHtml(branding.shortName)}. Para activar tu cuenta haz clic en el botón de abajo:</p>
           <div style="text-align:center;margin:0 0 24px;">
             <a href="${verificationUrl}" style="display:inline-block;background:${GREEN};color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 32px;border-radius:8px;">Verificar mi cuenta</a>
           </div>
@@ -883,7 +929,7 @@ export function buildVerificationEmail(name: string, verificationUrl: string): s
           <p style="color:#9ca3af;font-size:12px;margin:0;">Este enlace es de un solo uso. Si no creaste esta cuenta, ignora este correo.</p>
         </td></tr>
         <tr><td style="background:${LIGHT_GREEN};padding:16px 32px;text-align:center;">
-          <p style="margin:0;color:${GRAY};font-size:12px;">Sistema de registro alpino — Pamir Andino Club</p>
+          <p style="margin:0;color:${GRAY};font-size:12px;">Sistema de registro alpino — ${escapeHtml(branding.name)}</p>
         </td></tr>
       </table>
     </td></tr>
@@ -892,7 +938,7 @@ export function buildVerificationEmail(name: string, verificationUrl: string): s
 </html>`;
 }
 
-export function buildPasswordResetEmail(name: string, resetUrl: string): string {
+export function buildPasswordResetEmail(name: string, resetUrl: string, branding: OrgBranding): string {
   return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
@@ -901,7 +947,7 @@ export function buildPasswordResetEmail(name: string, resetUrl: string): string 
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:${GREEN};padding:28px 32px;">
-          <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">Pamir — Restablece tu contraseña</h1>
+          <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${escapeHtml(branding.shortName)} — Restablece tu contraseña</h1>
         </td></tr>
         <tr><td style="padding:32px;">
           <p style="color:#374151;font-size:15px;margin:0 0 16px;">Hola <strong>${escapeHtml(name)}</strong>,</p>
@@ -915,7 +961,7 @@ export function buildPasswordResetEmail(name: string, resetUrl: string): string 
           <p style="color:#9ca3af;font-size:12px;margin:0;">Si no solicitaste restablecer tu contraseña, ignora este correo. Tu contraseña no cambiará.</p>
         </td></tr>
         <tr><td style="background:${LIGHT_GREEN};padding:16px 32px;text-align:center;">
-          <p style="margin:0;color:${GRAY};font-size:12px;">Sistema de registro alpino — Pamir Andino Club</p>
+          <p style="margin:0;color:${GRAY};font-size:12px;">Sistema de registro alpino — ${escapeHtml(branding.name)}</p>
         </td></tr>
       </table>
     </td></tr>
@@ -933,11 +979,11 @@ export interface InvitationEmailData {
   expiraEnDias: number;
 }
 
-export function buildInvitationEmail(data: InvitationEmailData): string {
+export function buildInvitationEmail(data: InvitationEmailData, branding: OrgBranding): string {
   const inviteUrlSafe = escapeHtml(data.inviteUrl);
 
   const intro = `<p style="margin:0;color:#1f2937;font-size:15px;">
-    <strong>${escapeHtml(data.invitadoPorNombre)}</strong> te invitó a crear una cuenta en el sistema Pamir de Andino Club Pamir.
+    <strong>${escapeHtml(data.invitadoPorNombre)}</strong> te invitó a crear una cuenta en el sistema de ${escapeHtml(branding.name)}.
   </p>`;
 
   const tabla = `${row('Rol asignado', data.rolLabel)}`;
@@ -955,17 +1001,16 @@ export function buildInvitationEmail(data: InvitationEmailData): string {
         </tr>`;
 
   return emailShell(
-    'Invitación a Pamir',
+    `Invitación a ${escapeHtml(branding.shortName)}`,
     intro,
     tabla,
-    'Este correo es una notificación automática del sistema PAMIR. Si no esperabas esta invitación, puedes ignorar este mensaje.',
+    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}. Si no esperabas esta invitación, puedes ignorar este mensaje.`,
     cta,
+    branding,
   );
 }
 
 // ─── Eventos del club ─────────────────────────────────────────────────────────
-
-const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
 interface EventoEmailData {
   titulo: string;
@@ -1020,11 +1065,11 @@ function fechaHoraSantiago(d: Date): string {
   return `${texto} hrs (hora de Santiago)`;
 }
 
-function eventoCtaBlock(): string {
+function eventoCtaBlock(branding: OrgBranding): string {
   return `
         <tr>
           <td style="padding:0 32px 28px;text-align:center;">
-            <a href="${FRONTEND_URL}" style="display:inline-block;background:${GREEN};color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 28px;border-radius:8px;">Ingresar a la aplicación</a>
+            <a href="${branding.frontendUrl}" style="display:inline-block;background:${GREEN};color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 28px;border-radius:8px;">Ingresar a la aplicación</a>
           </td>
         </tr>`;
 }
@@ -1033,6 +1078,7 @@ export function buildEventoInscripcionConfirmadaEmail(
   nombre: string,
   evento: EventoEmailData,
   inscripcion: InscripcionEmailData,
+  branding: OrgBranding,
 ): string {
   const intro = `<p style="margin:0;color:#1f2937;font-size:15px;">
     Hola <strong>${escapeHtml(nombre)}</strong>, recibimos tu postulación a la siguiente actividad del club.
@@ -1059,18 +1105,19 @@ export function buildEventoInscripcionConfirmadaEmail(
             </p>
           </td>
         </tr>
-        ${eventoCtaBlock()}`;
+        ${eventoCtaBlock(branding)}`;
 
   return emailShell(
     'Postulación recibida',
     intro,
     tabla,
-    'Este correo es una notificación automática del sistema PAMIR.',
+    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}.`,
     nota,
+    branding,
   );
 }
 
-export function buildEventoSeleccionadoEmail(nombre: string, evento: EventoLifecycleEmailData): string {
+export function buildEventoSeleccionadoEmail(nombre: string, evento: EventoLifecycleEmailData, branding: OrgBranding): string {
   const intro = `<p style="margin:0;color:#1f2937;font-size:15px;">
     Hola <strong>${escapeHtml(nombre)}</strong>, ¡buenas noticias!
     Quedaste <strong>seleccionado/a</strong> para participar en la siguiente actividad del club.
@@ -1100,14 +1147,15 @@ export function buildEventoSeleccionadoEmail(nombre: string, evento: EventoLifec
             </p>
           </td>
         </tr>
-        ${eventoCtaBlock()}`;
+        ${eventoCtaBlock(branding)}`;
 
   return emailShell(
     'Selección confirmada',
     intro,
     tabla,
-    'Este correo es una notificación automática del sistema PAMIR.',
+    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}.`,
     nota,
+    branding,
   );
 }
 
@@ -1115,6 +1163,7 @@ export function buildEventoNoSeleccionadoEmail(
   nombre: string,
   evento: EventoLifecycleEmailData,
   resumen: { cupos: number | null; postulantes: number },
+  branding: OrgBranding,
 ): string {
   const cuposTexto = resumen.cupos != null ? `${resumen.cupos} cupos` : 'cupos limitados';
 
@@ -1137,18 +1186,19 @@ export function buildEventoNoSeleccionadoEmail(
             </p>
           </td>
         </tr>
-        ${eventoCtaBlock()}`;
+        ${eventoCtaBlock(branding)}`;
 
   return emailShell(
     'Resultado de tu postulación',
     intro,
     tabla,
-    'Este correo es una notificación automática del sistema PAMIR.',
+    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}.`,
     nota,
+    branding,
   );
 }
 
-export function buildEventoCanceladoEmail(nombre: string, evento: EventoLifecycleEmailData): string {
+export function buildEventoCanceladoEmail(nombre: string, evento: EventoLifecycleEmailData, branding: OrgBranding): string {
   const intro = `<p style="margin:0;color:#1f2937;font-size:15px;">
     Hola <strong>${escapeHtml(nombre)}</strong>, lamentamos informarte que la siguiente
     actividad fue <strong>cancelada</strong>.
@@ -1169,13 +1219,14 @@ export function buildEventoCanceladoEmail(nombre: string, evento: EventoLifecycl
             </p>
           </td>
         </tr>
-        ${eventoCtaBlock()}`;
+        ${eventoCtaBlock(branding)}`;
 
   return emailShell(
     'Evento cancelado',
     intro,
     tabla,
-    'Este correo es una notificación automática del sistema PAMIR.',
+    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}.`,
     nota,
+    branding,
   );
 }

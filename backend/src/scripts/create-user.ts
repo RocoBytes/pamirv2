@@ -3,52 +3,31 @@
 // flag: siempre se pide de forma interactiva para no dejarla en el
 // historial de la shell ni en los logs del proceso.
 import 'dotenv/config';
-import { readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.js';
-import { describeTarget, isAllowedTarget } from '../lib/db-target.js';
+import { verifyDbTargetOrExit as guardVerifyDbTargetOrExit } from '../lib/db-target-guard.js';
 import { passwordField, SALT_ROUNDS } from '../lib/auth-fields.js';
 import { parseCreateUserArgs } from './create-user-args.js';
 import { runAsPlatform } from '../lib/tenant-context.js';
-
-interface DbTargetConfig {
-  allowedHostFragment: string;
-}
 
 const CTRL_C = String.fromCharCode(3);
 const CTRL_D = String.fromCharCode(4);
 const BACKSPACE = '\b';
 const DELETE = String.fromCharCode(127);
 
-function loadDbTargetConfig(): DbTargetConfig {
-  const raw = readFileSync(new URL('../../db-target.json', import.meta.url), 'utf8');
-  return JSON.parse(raw) as DbTargetConfig;
-}
-
 // Defensa en profundidad: npm run db:create-user ya ejecuta el guard como
 // pre-hook, pero este script también puede invocarse directamente con tsx.
 // ALLOW_ANY_DB_TARGET=1 lo desactiva para el contenedor de producción, donde
 // backend/db-target.json no aplica (ahí la protección es el propio entorno).
 function verifyDbTargetOrExit(): void {
-  if (process.env.ALLOW_ANY_DB_TARGET === '1') {
-    return;
-  }
-
-  const databaseUrl = process.env.DATABASE_URL;
-  const config = loadDbTargetConfig();
-  const target = describeTarget(databaseUrl ?? '');
-  if (target) {
-    console.log(`[create-user] DATABASE_URL apunta a host="${target.host}" database="${target.database}"`);
-  }
-
-  if (!isAllowedTarget(databaseUrl, config.allowedHostFragment)) {
-    console.error(
+  guardVerifyDbTargetOrExit({
+    prefix: '[create-user]',
+    honorAllowAny: true,
+    failureMessage:
       '[create-user] Comando abortado: DATABASE_URL no coincide con la base de datos de v2 declarada en ' +
-        'backend/db-target.json. Si esto corre en el contenedor de producción, define ALLOW_ANY_DB_TARGET=1.',
-    );
-    process.exit(1);
-  }
+      'backend/db-target.json. Si esto corre en el contenedor de producción, define ALLOW_ANY_DB_TARGET=1.',
+  });
 }
 
 // Pide una línea con el eco desactivado (para no mostrar la contraseña en

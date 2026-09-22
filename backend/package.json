@@ -41,6 +41,7 @@
     "googleapis": "^171.4.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^10.0.10",
     "pg": "^8.20.0",
     "prisma": "^7.7.0",
     "zod": "^4.3.6"
@@ -53,6 +54,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.0.0",
+    "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.20.0",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",

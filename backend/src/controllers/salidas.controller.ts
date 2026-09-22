@@ -1,11 +1,13 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { Prisma, SalidaStatus, Salida } from '../generated/prisma/client.js';
-import { sendEmail } from '../lib/google-gmail.js';
-import { buildSalidaNotificationEmail } from '../lib/email-templates.js';
+import { sendClubEmail } from '../lib/email/club-email.js';
+import { buildSalidaNotificationEmail, brandingFor } from '../lib/email-templates.js';
+import { subjectRegistroSalida } from '../lib/email/subjects.js';
 import { isAdmin, puedeGestionarSalida } from '../lib/authz.js';
 import { instanteSantiago } from '../lib/santiago-time.js';
 import { errorFechaCalendario } from '../lib/fecha-calendario.js';
+import type { OrganizationSummary } from '../types/index.js';
 
 const asJson = (v: unknown): Prisma.InputJsonValue => v as Prisma.InputJsonValue;
 
@@ -20,7 +22,11 @@ interface ParticipanteInput {
   agregadoEn?: string;
 }
 
-async function sendSalidaParticipantEmails(participantObjs: unknown[], salida: Salida): Promise<void> {
+async function sendSalidaParticipantEmails(
+  participantObjs: unknown[],
+  salida: Salida,
+  organization: OrganizationSummary,
+): Promise<void> {
   const participants = participantObjs as ParticipanteInput[];
 
   const recipients: { email: string; nombre: string }[] = [];
@@ -48,12 +54,14 @@ async function sendSalidaParticipantEmails(participantObjs: unknown[], salida: S
 
   if (recipients.length === 0) return;
 
+  const branding = brandingFor(organization);
   for (const r of recipients) {
-    await sendEmail(
-      r.email,
-      `Has sido registrado en la salida "${salida.nombreActividad}" — Pamir`,
-      buildSalidaNotificationEmail(r.nombre, salida),
-    ).catch((err) => console.error(`[salida-email] Fallo al enviar a ${r.email}:`, err));
+    await sendClubEmail(organization, {
+      to: r.email,
+      subject: subjectRegistroSalida(branding, salida.nombreActividad),
+      html: buildSalidaNotificationEmail(r.nombre, salida, branding),
+      kind: 'notificacion',
+    }).catch((err) => console.error(`[salida-email] Fallo al enviar a ${r.email}:`, err));
     await new Promise((resolve) => setTimeout(resolve, 350));
   }
 }
@@ -286,6 +294,7 @@ export async function createSalida(req: Request, res: Response): Promise<void> {
       sendSalidaParticipantEmails(
         participantesNormalizados as unknown[],
         salida,
+        req.user!.organization,
       ).catch((err) => console.error('[salida-email]', err));
     }
   } catch (error) {
@@ -546,7 +555,7 @@ export async function updateSalidaIntegrantes(req: Request, res: Response): Prom
     );
     const added = nextParticipantes.filter((p) => p?.rut && !prevRuts.has(p.rut as string));
     if (added.length > 0) {
-      sendSalidaParticipantEmails(added as unknown[], salida).catch((err) =>
+      sendSalidaParticipantEmails(added as unknown[], salida, req.user!.organization).catch((err) =>
         console.error('[salida-email]', err),
       );
     }

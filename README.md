@@ -272,6 +272,67 @@ ahí en vez de volver a consultar `Organization`.
   agregarlo como participante express o pedirle que complete su propia ficha
   en ese club. Los datos médicos nunca se comparten entre clubes.
 
+### Correo por club
+
+Cada club envía sus propios correos con su propio nombre visible, no un
+remitente único de la plataforma: `backend/src/lib/email/club-email.ts` arma
+el remitente como `"<Organization.name>" <dirección>` (el nombre se sanea
+para que no pueda inyectar cabeceras) y usa `Organization.contactEmail` como
+`Reply-To` (se omite si no es un email válido). `backend/src/lib/email-
+templates.ts` recibe ese branding (`brandingFor(org)`) y lo aplica a todos los
+correos (encabezado, pie de página, asuntos) — ningún texto queda fijo a
+"Pamir".
+
+La DIRECCIÓN remitente, en cambio, no depende del club: es una de dos
+direcciones fijas según el tipo de correo (`kind`, obligatorio en cada llamada
+a `sendClubEmail` — ver `EmailKind` en `backend/src/lib/config.ts`):
+
+- **`notificaciones@riala.cl`**: todo lo rutinario — invitaciones, registro de
+  salidas, cierres, eventos, recuperación de contraseña, confirmación de
+  ficha, formularios de salud.
+- **`alertas@riala.cl`**: solo seguridad — la escalación de "salida sin
+  cierre" y el recordatorio de cierre, ambos enviados por el cron.
+
+Ambas direcciones deben existir como casilla o alias en el servidor de correo
+(ahí llegan los rebotes) y la cuenta SMTP debe estar autorizada a enviar como
+cada una. El dominio `riala.cl` debe tener SPF, DKIM y DMARC configurados —
+sin eso el correo cae en spam o se rechaza directamente.
+
+El envío real pasa por un puerto (`EmailProvider`,
+`backend/src/lib/email/email-provider.ts`) con dos adaptadores:
+
+- **`smtp`**: producción. Envía por el servidor de correo propio (autenticado,
+  nunca un proveedor externo) usando el puerto 587 con STARTTLS obligatorio o
+  el 465 con TLS implícito. Requiere `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` y
+  `SMTP_PASS`.
+- **`console`**: desarrollo/tests. Nunca abre una conexión de red; solo
+  registra un resumen (remitente, destinatario, asunto — nunca el HTML) y
+  devuelve un id sintético. **Nunca** está permitido con `NODE_ENV=production`
+  (falla al arrancar): un servidor que solo loguea las alarmas de seguridad en
+  vez de enviarlas es inaceptable.
+
+`EMAIL_PROVIDER` en `backend/.env.example` elige el adaptador explícitamente;
+si se omite, se usa `smtp` cuando hay `SMTP_HOST` y `console` en caso
+contrario. `MAIL_FROM_NOTIFICACIONES` y `MAIL_FROM_ALERTAS` permiten
+sobrescribir cada dirección remitente sin tocar código: un valor vacío o en
+blanco cae al valor por defecto, y uno presente pero inválido detiene el
+arranque del proceso.
+
+Cada envío puede llevar un `idempotencyKey`, que el adaptador `smtp` reenvía
+como cabecera `X-Entity-Ref-ID` — solo trazabilidad, ya que SMTP no garantiza
+deduplicar el envío: la cola de notificaciones de eventos usa el id de la
+propia fila, y el cron de alarmas usa `alerta:<salidaId>` /
+`recordatorio-cierre:<salidaId>`.
+
+**Regla del cron de alarmas**: `alertaEnviadaAt` y `recordatorioCierreEnviadoAt`
+se marcan **después** de que el proveedor acepta el envío, nunca antes. Si el
+envío falla, la columna queda sin marcar y la corrida siguiente reintenta — un
+reintento del cron puede DUPLICAR una alarma, pero nunca la PIERDE.
+
+**Agregar un tipo de correo nuevo** (p. ej. `invitacion`): una sola entrada en
+`MAIL_SENDER_DEFS` (`backend/src/lib/config.ts`), con su propia variable de
+entorno y su valor por defecto. Ningún llamador ni `club-email.ts` cambian.
+
 ### Verificarlo
 
 ```bash

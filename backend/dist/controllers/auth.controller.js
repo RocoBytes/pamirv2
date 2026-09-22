@@ -3,12 +3,13 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { signToken } from '../lib/jwt.js';
-import { sendEmail } from '../lib/google-gmail.js';
-import { buildPasswordResetEmail } from '../lib/email-templates.js';
+import { sendClubEmail } from '../lib/email/club-email.js';
+import { buildPasswordResetEmail, brandingFor } from '../lib/email-templates.js';
+import { subjectPasswordReset } from '../lib/email/subjects.js';
 import { emailField, passwordField, SALT_ROUNDS } from '../lib/auth-fields.js';
+import { FRONTEND_URL } from '../lib/config.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 import { isOrganizationSuspended, CLUB_SUSPENDIDO_MENSAJE } from '../lib/organization-status.js';
-const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 const loginSchema = z.object({ email: emailField, password: z.string().min(1, 'Contraseña requerida') });
 const forgotSchema = z.object({ email: emailField });
 const resetSchema = z.object({ token: z.string().uuid('Token inválido'), password: passwordField });
@@ -125,13 +126,27 @@ export async function forgotPassword(req, res) {
     const normalizedEmail = email.toLowerCase();
     try {
         // El email es único en toda la plataforma, así que este flujo corre en
-        // contexto de plataforma. El envío del correo también se dispara ACÁ
-        // adentro (aunque sea fire-and-forget): sendEmail termina leyendo la
-        // credencial de Google (AppSecret) por debajo, y esa lectura también
-        // exige un contexto de tenant activo — si se disparara después de salir
-        // de runAsPlatform, en una ruta pública como esta no quedaría ninguno.
+        // contexto de plataforma. El correo se envía "como" el club del usuario
+        // encontrado (se carga en la misma búsqueda) usando el proveedor
+        // transaccional — ya no depende de ningún contexto de tenant ambiente.
         await runAsPlatform(async () => {
-            const found = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+            const found = await prisma.user.findUnique({
+                where: { email: normalizedEmail },
+                include: {
+                    organization: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            name: true,
+                            shortName: true,
+                            membresiaPropia: true,
+                            alertEmail: true,
+                            contactName: true,
+                            contactEmail: true,
+                        },
+                    },
+                },
+            });
             if (!found)
                 return;
             const resetToken = randomUUID();
@@ -141,7 +156,13 @@ export async function forgotPassword(req, res) {
                 data: { resetToken, resetTokenExpiry },
             });
             const resetUrl = `${FRONTEND_URL}?reset=${resetToken}`;
-            sendEmail(normalizedEmail, 'Restablece tu contraseña — Pamir', buildPasswordResetEmail(found.name, resetUrl)).catch((err) => console.error('[forgotPassword] email error:', err));
+            const branding = brandingFor(found.organization);
+            sendClubEmail(found.organization, {
+                to: normalizedEmail,
+                subject: subjectPasswordReset(branding),
+                html: buildPasswordResetEmail(found.name, resetUrl, branding),
+                kind: 'notificacion',
+            }).catch((err) => console.error('[forgotPassword] email error:', err));
         });
         // Siempre responder 200 para no revelar si el email existe
         res.json({ message: 'Si el email está registrado, recibirás un enlace para restablecer tu contraseña.' });

@@ -1,11 +1,12 @@
 import { prisma } from '../lib/prisma.js';
-import { sendEmail } from '../lib/google-gmail.js';
-import { buildSalidaNotificationEmail } from '../lib/email-templates.js';
+import { sendClubEmail } from '../lib/email/club-email.js';
+import { buildSalidaNotificationEmail, brandingFor } from '../lib/email-templates.js';
+import { subjectRegistroSalida } from '../lib/email/subjects.js';
 import { isAdmin, puedeGestionarSalida } from '../lib/authz.js';
 import { instanteSantiago } from '../lib/santiago-time.js';
 import { errorFechaCalendario } from '../lib/fecha-calendario.js';
 const asJson = (v) => v;
-async function sendSalidaParticipantEmails(participantObjs, salida) {
+async function sendSalidaParticipantEmails(participantObjs, salida, organization) {
     const participants = participantObjs;
     const recipients = [];
     // Registered integrantes: resolve their email by RUT (express entries excluded).
@@ -29,8 +30,14 @@ async function sendSalidaParticipantEmails(participantObjs, salida) {
     }
     if (recipients.length === 0)
         return;
+    const branding = brandingFor(organization);
     for (const r of recipients) {
-        await sendEmail(r.email, `Has sido registrado en la salida "${salida.nombreActividad}" — Pamir`, buildSalidaNotificationEmail(r.nombre, salida)).catch((err) => console.error(`[salida-email] Fallo al enviar a ${r.email}:`, err));
+        await sendClubEmail(organization, {
+            to: r.email,
+            subject: subjectRegistroSalida(branding, salida.nombreActividad),
+            html: buildSalidaNotificationEmail(r.nombre, salida, branding),
+            kind: 'notificacion',
+        }).catch((err) => console.error(`[salida-email] Fallo al enviar a ${r.email}:`, err));
         await new Promise((resolve) => setTimeout(resolve, 350));
     }
 }
@@ -185,7 +192,7 @@ export async function createSalida(req, res) {
         res.status(201).json(salida);
         // Los registros históricos del admin no notifican a los integrantes.
         if (!esRegistroHistorico) {
-            sendSalidaParticipantEmails(participantesNormalizados, salida).catch((err) => console.error('[salida-email]', err));
+            sendSalidaParticipantEmails(participantesNormalizados, salida, req.user.organization).catch((err) => console.error('[salida-email]', err));
         }
     }
     catch (error) {
@@ -415,7 +422,7 @@ export async function updateSalidaIntegrantes(req, res) {
         const prevRuts = new Set(prevParticipantes.filter((p) => p?.rut).map((p) => p.rut));
         const added = nextParticipantes.filter((p) => p?.rut && !prevRuts.has(p.rut));
         if (added.length > 0) {
-            sendSalidaParticipantEmails(added, salida).catch((err) => console.error('[salida-email]', err));
+            sendSalidaParticipantEmails(added, salida, req.user.organization).catch((err) => console.error('[salida-email]', err));
         }
     }
     catch (error) {

@@ -1,13 +1,20 @@
 import { prisma } from './prisma.js';
-import { sendEmail } from './google-gmail.js';
+import { sendClubEmail } from './email/club-email.js';
 import {
   buildEventoInscripcionConfirmadaEmail,
   buildEventoSeleccionadoEmail,
   buildEventoNoSeleccionadoEmail,
   buildEventoCanceladoEmail,
-  rangoFechasEvento,
+  brandingFor,
 } from './email-templates.js';
-import { TipoNotificacion, Notificacion, Inscripcion, User, Evento } from '../generated/prisma/client.js';
+import {
+  subjectEventoInscripcionConfirmada,
+  subjectEventoSeleccionado,
+  subjectEventoNoSeleccionado,
+  subjectEventoCancelado,
+} from './email/subjects.js';
+import { TipoNotificacion, Notificacion, Inscripcion, User, Evento, Organization } from '../generated/prisma/client.js';
+import type { OrganizationSummary } from '../types/index.js';
 
 // Cola idempotente de correos de eventos: el unique (inscripcionId, tipo)
 // garantiza una fila por correo; encolar dos veces no duplica nada.
@@ -30,8 +37,22 @@ export async function encolarNotificacion(
   });
 }
 
+function toOrgSummary(org: Organization): OrganizationSummary {
+  return {
+    id: org.id,
+    slug: org.slug,
+    name: org.name,
+    shortName: org.shortName,
+    membresiaPropia: org.membresiaPropia,
+    alertEmail: org.alertEmail,
+    contactName: org.contactName,
+    contactEmail: org.contactEmail,
+  };
+}
+
 type NotificacionConContexto = Notificacion & {
   inscripcion: Inscripcion & { usuario: User; evento: Evento };
+  organization: Organization;
 };
 
 function buildEmailPorTipo(
@@ -39,29 +60,32 @@ function buildEmailPorTipo(
   extra: { postulantesResueltos: number | null },
 ): { asunto: string; html: string } {
   const { usuario, evento } = notif.inscripcion;
+  const branding = brandingFor(toOrgSummary(notif.organization));
   switch (notif.tipo) {
     case 'INSCRIPCION_CONFIRMADA':
       return {
-        asunto: `Recibimos tu postulación: ${evento.titulo}`,
-        html: buildEventoInscripcionConfirmadaEmail(usuario.name, evento, notif.inscripcion),
+        asunto: subjectEventoInscripcionConfirmada(evento),
+        html: buildEventoInscripcionConfirmadaEmail(usuario.name, evento, notif.inscripcion, branding),
       };
     case 'SELECCIONADO':
       return {
-        asunto: `Quedaste seleccionado/a: ${evento.titulo} · ${rangoFechasEvento(evento)}`,
-        html: buildEventoSeleccionadoEmail(usuario.name, evento),
+        asunto: subjectEventoSeleccionado(evento),
+        html: buildEventoSeleccionadoEmail(usuario.name, evento, branding),
       };
     case 'NO_SELECCIONADO':
       return {
-        asunto: `Resultado de tu postulación: ${evento.titulo}`,
-        html: buildEventoNoSeleccionadoEmail(usuario.name, evento, {
-          cupos: evento.cupos,
-          postulantes: extra.postulantesResueltos ?? 0,
-        }),
+        asunto: subjectEventoNoSeleccionado(evento),
+        html: buildEventoNoSeleccionadoEmail(
+          usuario.name,
+          evento,
+          { cupos: evento.cupos, postulantes: extra.postulantesResueltos ?? 0 },
+          branding,
+        ),
       };
     case 'EVENTO_CANCELADO':
       return {
-        asunto: `Evento cancelado: ${evento.titulo}`,
-        html: buildEventoCanceladoEmail(usuario.name, evento),
+        asunto: subjectEventoCancelado(evento),
+        html: buildEventoCanceladoEmail(usuario.name, evento, branding),
       };
   }
 }
@@ -83,7 +107,10 @@ export async function despacharNotificacionesPendientes(
         intentos: { lt: 5 },
         inscripcion: { eventoId },
       },
-      include: { inscripcion: { include: { usuario: true, evento: true } } },
+      // El club dueño de la notificación (no necesariamente el del llamador
+      // actual: este despacho corre en background, sin request asociado) se
+      // trae acá para poder enviar el correo "como" ese club.
+      include: { inscripcion: { include: { usuario: true, evento: true } }, organization: true },
       orderBy: { creadaAt: 'asc' },
     });
 
@@ -102,7 +129,16 @@ export async function despacharNotificacionesPendientes(
     for (const notif of pendientes) {
       try {
         const { asunto, html } = buildEmailPorTipo(notif, { postulantesResueltos });
-        const proveedorId = await sendEmail(notif.inscripcion.usuario.email, asunto, html);
+        // idempotencyKey = id de la propia notificación: un reintento de esta
+        // misma fila (p.ej. tras un error de red ya registrado) nunca duplica
+        // el correo en el proveedor.
+        const proveedorId = await sendClubEmail(toOrgSummary(notif.organization), {
+          to: notif.inscripcion.usuario.email,
+          subject: asunto,
+          html,
+          kind: 'notificacion',
+          idempotencyKey: notif.id,
+        });
         await prisma.notificacion.update({
           where: { id: notif.id },
           data: {

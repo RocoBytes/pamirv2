@@ -2,15 +2,16 @@ import { Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { Prisma, Cierre } from '../generated/prisma/client.js';
-import { sendEmail } from '../lib/google-gmail.js';
-import { buildCierreNotificationEmail } from '../lib/email-templates.js';
+import { sendClubEmail } from '../lib/email/club-email.js';
+import { buildCierreNotificationEmail, brandingFor } from '../lib/email-templates.js';
+import { subjectCierre } from '../lib/email/subjects.js';
 import { isAdmin, puedeGestionarSalida } from '../lib/authz.js';
-
-const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+import { FRONTEND_URL } from '../lib/config.js';
+import type { OrganizationSummary } from '../types/index.js';
 
 const asJson = (v: unknown): Prisma.InputJsonValue => v as Prisma.InputJsonValue;
 
-async function sendCierreParticipantEmails(salidaId: string, cierre: Cierre): Promise<void> {
+async function sendCierreParticipantEmails(salidaId: string, cierre: Cierre, organization: OrganizationSummary): Promise<void> {
   const salida = await prisma.salida.findUnique({ where: { id: salidaId } });
   if (!salida) return;
 
@@ -24,6 +25,7 @@ async function sendCierreParticipantEmails(salidaId: string, cierre: Cierre): Pr
     select: { email: true, nombreCompleto: true },
   });
 
+  const branding = brandingFor(organization);
   for (const i of integrantes) {
     let evaluacionUrl: string | undefined;
     try {
@@ -35,11 +37,12 @@ async function sendCierreParticipantEmails(salidaId: string, cierre: Cierre): Pr
       console.error(`[cierre-email] No se pudo crear token de evaluación para ${i.email}:`, err);
     }
 
-    await sendEmail(
-      i.email,
-      `Cierre de la salida "${salida.nombreActividad}" — Pamir`,
-      buildCierreNotificationEmail(i.nombreCompleto, salida, cierre, evaluacionUrl),
-    ).catch((err) => console.error(`[cierre-email] Fallo al enviar a ${i.email}:`, err));
+    await sendClubEmail(organization, {
+      to: i.email,
+      subject: subjectCierre(branding, salida.nombreActividad),
+      html: buildCierreNotificationEmail(i.nombreCompleto, salida, cierre, branding, evaluacionUrl),
+      kind: 'notificacion',
+    }).catch((err) => console.error(`[cierre-email] Fallo al enviar a ${i.email}:`, err));
     await new Promise((r) => setTimeout(r, 350));
   }
 }
@@ -141,7 +144,7 @@ export async function createCierre(req: Request, res: Response): Promise<void> {
     const silenciarCierre = isAdmin(req.user) && (salida.esRegistroHistorico || retornoStr < cutoffStr);
 
     if (!silenciarCierre) {
-      sendCierreParticipantEmails(data.salidaId, cierre)
+      sendCierreParticipantEmails(data.salidaId, cierre, req.user!.organization)
         .catch((err) => console.error('[cierre-email]', err));
     }
   } catch (error) {

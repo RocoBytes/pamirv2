@@ -2,11 +2,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 // integrantes.route.ts importa el controlador, que a su vez importa
-// src/lib/prisma.ts y src/lib/google-gmail.ts: prisma.ts lanza al importarse
-// si DATABASE_URL no está definida (estos tests no cargan dotenv). No se abre
-// ninguna conexión real: prisma.ts solo construye el adaptador de pg
-// (perezoso hasta la primera query), y estos tests nunca ejecutan una. El
-// import dinámico evita que el módulo se cargue antes de fijar esta variable.
+// src/lib/prisma.ts: prisma.ts lanza al importarse si DATABASE_URL no está
+// definida (estos tests no cargan dotenv). No se abre ninguna conexión real:
+// prisma.ts solo construye el adaptador de pg (perezoso hasta la primera
+// query), y estos tests nunca ejecutan una. El import dinámico evita que el
+// módulo se cargue antes de fijar esta variable.
 process.env.DATABASE_URL ??= 'postgresql://user:pass@localhost:5432/test';
 process.env.JWT_SECRET ??= 'test-secret-not-used-for-real-auth-0000';
 
