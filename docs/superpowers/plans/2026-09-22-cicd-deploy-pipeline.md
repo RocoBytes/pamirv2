@@ -19,7 +19,11 @@
 - `prisma generate` must run before `npm run build` in the backend.
 - The frontend image is built **without** `VITE_API_URL`.
 - Commit messages follow Conventional Commits. No `Co-Authored-By` trailers.
-- All generated artifacts (code, comments, YAML, docs) are written in English.
+- **Comment language (Ruling 1):** brand-new files (`.github/workflows/deploy.yml`,
+  `.nvmrc`) are written in English. Edits inside an existing file match that file's
+  established comment language — every infra file in this repo comments in Spanish
+  (`nginx/default.conf`, `docker-compose.yml`, `.env.example`, `check-alertas.sh`),
+  in neutral professional Spanish with no regional forms.
 
 ---
 
@@ -81,11 +85,12 @@ Leave the container running; the same probes are reused in Step 5.
 Insert these two blocks at the top of `frontend/nginx/default.conf`, immediately after the existing header comments and before the current `server { listen 80; ... }` block.
 
 ```nginx
-# Default server on port 80: absorbs every unrecognised Host so this
-# container never serves a domain that is not ours. /healthz lives here
-# because Docker's HEALTHCHECK calls http://127.0.0.1/healthz, whose Host
-# matches no server_name; without this the container reports unhealthy and
-# backend's depends_on: service_healthy takes the whole stack down.
+# Servidor por defecto en el puerto 80: absorbe todo Host que no sea el
+# nuestro, para que este contenedor nunca sirva un dominio ajeno.
+# /healthz vive aquí porque el HEALTHCHECK de Docker entra por
+# http://127.0.0.1/healthz, cuyo Host no coincide con ningún server_name;
+# sin esto el contenedor queda unhealthy y el depends_on: service_healthy
+# del backend se lleva abajo todo el stack.
 server {
     listen 80 default_server;
     server_name _;
@@ -99,8 +104,9 @@ server {
     }
 }
 
-# Default server on port 443: refuse the TLS handshake for any SNI that is
-# not ours, rather than presenting a certificate issued for another domain.
+# Servidor por defecto en el puerto 443: rechaza el handshake TLS de
+# cualquier SNI que no sea el nuestro, en vez de presentar un certificado
+# emitido para otro dominio.
 server {
     listen 443 ssl default_server;
     ssl_reject_handshake on;
