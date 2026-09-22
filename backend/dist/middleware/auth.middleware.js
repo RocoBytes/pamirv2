@@ -11,7 +11,9 @@ export async function authMiddleware(req, _res, next) {
     try {
         const { userId } = verifyToken(token);
         const user = await prisma.user.findUnique({ where: { id: userId } });
-        req.user = user ? { id: user.id, email: user.email, name: user.name, rol: user.rol } : null;
+        req.user = user
+            ? { id: user.id, organizationId: user.organizationId, email: user.email, name: user.name, rol: user.rol }
+            : null;
     }
     catch {
         req.user = null;

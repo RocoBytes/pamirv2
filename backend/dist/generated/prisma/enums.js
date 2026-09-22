@@ -43,3 +43,7 @@ export const EstadoNotificacion = {
     ENVIADA: 'ENVIADA',
     ERROR: 'ERROR'
 };
+export const OrganizationStatus = {
+    ACTIVE: 'ACTIVE',
+    SUSPENDED: 'SUSPENDED'
+};

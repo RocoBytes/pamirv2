@@ -80,6 +80,10 @@ export async function submitEvaluacion(req: Request, res: Response): Promise<voi
       }
       await tx.evaluacionRespuesta.create({
         data: {
+          // La respuesta hereda el club de su token de evaluación, que ya es
+          // el mismo club de la salida (copiado al crear el token) — no hay
+          // req.user en este flujo público.
+          organizationId: evalToken.organizationId,
           salidaId: evalToken.salidaId,
           notaObjetivos: body.notaObjetivos,
           notaItinerario: body.notaItinerario,

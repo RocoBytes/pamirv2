@@ -48,7 +48,11 @@ export async function createIntegrante(req: Request, res: Response): Promise<voi
       return;
     }
 
-    const existing = await prisma.integrante.findUnique({ where: { rut: data.rut } });
+    const organizationId = req.user!.organizationId;
+
+    const existing = await prisma.integrante.findUnique({
+      where: { organizationId_rut: { organizationId, rut: data.rut } },
+    });
     if (existing) {
       res.status(409).json({ error: 'Ya existe un integrante registrado con ese RUT' });
       return;
@@ -56,6 +60,7 @@ export async function createIntegrante(req: Request, res: Response): Promise<voi
 
     const integrante = await prisma.integrante.create({
       data: {
+        organizationId,
         nombreCompleto: data.nombreCompleto,
         rut: data.rut,
         nacionalidad: data.nacionalidad,
@@ -133,9 +138,10 @@ export async function getMyIntegrante(req: Request, res: Response): Promise<void
 export async function getIntegranteByRut(req: Request, res: Response): Promise<void> {
   try {
     const rut = decodeURIComponent(req.params.rut as string);
+    const organizationId = req.user!.organizationId;
 
     const integrante = await prisma.integrante.findUnique({
-      where: { rut },
+      where: { organizationId_rut: { organizationId, rut } },
       select: {
         id: true,
         nombreCompleto: true,

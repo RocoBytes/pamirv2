@@ -64,6 +64,7 @@ export async function crearInvitacion(deps, requester, body) {
     const { token, tokenHash } = generateInviteToken();
     const expiresAt = new Date(now.getTime() + INVITE_TTL_MS);
     const invitacion = await deps.repo.createInvitacion({
+        organizationId: requester.organizationId,
         email,
         rol,
         tokenHash,
@@ -153,6 +154,7 @@ export async function reenviarInvitacion(deps, requester, id) {
     const { token, tokenHash } = generateInviteToken();
     const expiresAt = new Date(now.getTime() + INVITE_TTL_MS);
     const nueva = await deps.repo.createInvitacion({
+        organizationId: requester.organizationId,
         email: inv.email,
         rol: inv.rol,
         tokenHash,
@@ -238,6 +240,7 @@ export async function aceptarInvitacion(deps, token, body) {
     const passwordHash = await deps.hashPassword(passwordParsed.data);
     const user = await deps.repo.acceptInvitacion({
         invitacionId: inv.id,
+        organizationId: inv.organizationId,
         email: inv.email,
         name: nameParsed.data,
         passwordHash,

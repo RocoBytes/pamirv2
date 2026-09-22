@@ -30,6 +30,7 @@ export interface UsuarioBasico {
 
 export interface InvitacionRow {
   id: string;
+  organizationId: string;
   email: string;
   rol: RolUsuario;
   tokenHash: string;
@@ -46,6 +47,7 @@ export interface InvitacionConInvitador extends InvitacionRow {
 }
 
 export interface CrearInvitacionData {
+  organizationId: string;
   email: string;
   rol: RolUsuario;
   tokenHash: string;
@@ -55,6 +57,9 @@ export interface CrearInvitacionData {
 
 export interface AceptarInvitacionInput {
   invitacionId: string;
+  // Club de la invitación, nunca del body: el usuario nuevo siempre nace en
+  // el mismo club que quien lo invitó.
+  organizationId: string;
   email: string;
   name: string;
   passwordHash: string;
@@ -102,6 +107,7 @@ export interface InvitacionesDeps {
 
 export interface Requester {
   id: string;
+  organizationId: string;
   name: string;
   rol: RolUsuario;
 }
@@ -217,6 +223,7 @@ export async function crearInvitacion(
   const { token, tokenHash } = generateInviteToken();
   const expiresAt = new Date(now.getTime() + INVITE_TTL_MS);
   const invitacion = await deps.repo.createInvitacion({
+    organizationId: requester.organizationId,
     email,
     rol,
     tokenHash,
@@ -349,6 +356,7 @@ export async function reenviarInvitacion(
   const { token, tokenHash } = generateInviteToken();
   const expiresAt = new Date(now.getTime() + INVITE_TTL_MS);
   const nueva = await deps.repo.createInvitacion({
+    organizationId: requester.organizationId,
     email: inv.email,
     rol: inv.rol,
     tokenHash,
@@ -481,6 +489,7 @@ export async function aceptarInvitacion(
 
   const user = await deps.repo.acceptInvitacion({
     invitacionId: inv.id,
+    organizationId: inv.organizationId,
     email: inv.email,
     name: nameParsed.data,
     passwordHash,

@@ -22,7 +22,7 @@ async function sendCierreParticipantEmails(salidaId, cierre) {
         let evaluacionUrl;
         try {
             const evalToken = await prisma.evaluacionToken.create({
-                data: { token: randomUUID(), salidaId, email: i.email },
+                data: { organizationId: salida.organizationId, token: randomUUID(), salidaId, email: i.email },
             });
             evaluacionUrl = `${FRONTEND_URL}?evaluacion=${evalToken.token}`;
         }
@@ -63,6 +63,7 @@ export async function createCierre(req, res) {
         const [cierre] = await prisma.$transaction([
             prisma.cierre.create({
                 data: {
+                    organizationId: salida.organizationId,
                     salidaId: data.salidaId,
                     userId,
                     fechaFinalizacionReal: new Date(data.fechaFinalizacionReal),

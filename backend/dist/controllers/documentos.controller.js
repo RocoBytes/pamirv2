@@ -144,6 +144,7 @@ export async function createDocumento(req, res) {
             const result = await uploadToGoogleDrive(fileStream, sanitizeDocFilename(rawFilename), mimeType || 'application/pdf', MAX_FILE_SIZE);
             const documento = await prisma.documento.create({
                 data: {
+                    organizationId: req.user.organizationId,
                     categoria,
                     nombre,
                     descripcion: descripcion || null,

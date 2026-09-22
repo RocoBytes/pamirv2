@@ -58,7 +58,15 @@ export async function login(req, res) {
         const gestorCategorias = await gestorCategoriasDe(user.id);
         res.json({
             token,
-            user: { id: user.id, email: user.email, name: user.name, picture: user.picture ?? undefined, rol: user.rol, gestorCategorias },
+            user: {
+                id: user.id,
+                organizationId: user.organizationId,
+                email: user.email,
+                name: user.name,
+                picture: user.picture ?? undefined,
+                rol: user.rol,
+                gestorCategorias,
+            },
         });
     }
     catch (error) {
@@ -80,9 +88,9 @@ async function gestorCategoriasDe(userId) {
 // de datos, por lo que rol siempre refleja el valor vigente.
 export async function getMe(req, res) {
     try {
-        const { id, email, name, rol } = req.user;
+        const { id, organizationId, email, name, rol } = req.user;
         const gestorCategorias = await gestorCategoriasDe(id);
-        res.json({ user: { id, email, name, rol, gestorCategorias } });
+        res.json({ user: { id, organizationId, email, name, rol, gestorCategorias } });
     }
     catch (error) {
         console.error('[getMe]', error);

@@ -18,8 +18,8 @@ const deps = {
     frontendUrl: FRONTEND_URL,
 };
 function toRequester(req) {
-    const { id, name, rol } = req.user;
-    return { id, name, rol };
+    const { id, organizationId, name, rol } = req.user;
+    return { id, organizationId, name, rol };
 }
 // Los controladores solo mapean el resultado discriminado del servicio a la
 // respuesta HTTP; toda la lógica vive en invitaciones.service.ts.

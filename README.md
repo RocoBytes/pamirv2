@@ -152,6 +152,26 @@ Gestión de usuarios (solo `ADMIN`, bajo `/api/admin`):
 
 ---
 
+## Clubes (multi-tenant)
+
+La app nació para un solo club (Andino Club Pamir) y está migrando a servir
+varios. Cada tabla de negocio lleva una columna `organization_id` (modelo
+`Organization` en `backend/prisma/schema.prisma`, tabla `organizations`), y
+una prueba estática (`backend/src/lib/schema-organization.test.ts`) falla si
+se agrega un modelo nuevo sin ella. Una cuenta (`User.email`) pertenece a
+exactamente un club — no hay cuentas compartidas entre clubes. `numeroSalida`
+es un correlativo por club (no una secuencia global de Postgres): se asigna
+dentro de una transacción que incrementa `organizations.ultimo_numero_salida`.
+El CLI `db:create-user` acepta `--org <slug>` (por defecto `pamir`) para
+elegir el club del usuario a crear.
+
+Esta fase solo agrega el modelo de datos y hace viajar `organizationId` en
+cada escritura. El aislamiento real entre clubes (derivar la organización
+vigente de la sesión o, en flujos públicos por token, de la fila padre, y
+filtrar cada lectura) llega en la fase siguiente.
+
+---
+
 ## Despliegue
 
 Arquitectura: un stack de Docker Compose en el VPS. El contenedor `nginx`

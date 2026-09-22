@@ -168,6 +168,7 @@ export async function createDocumento(req: Request, res: Response): Promise<void
 
       const documento = await prisma.documento.create({
         data: {
+          organizationId: req.user!.organizationId,
           categoria,
           nombre,
           descripcion: descripcion || null,

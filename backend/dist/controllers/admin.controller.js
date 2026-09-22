@@ -746,6 +746,7 @@ export async function saveDashboardLayout(req, res) {
         const saved = await prisma.dashboardLayout.upsert({
             where: { userId_dashboardKey: { userId, dashboardKey: ADMIN_DASHBOARD_KEY } },
             create: {
+                organizationId: req.user.organizationId,
                 userId,
                 dashboardKey: ADMIN_DASHBOARD_KEY,
                 layout: sanitized,

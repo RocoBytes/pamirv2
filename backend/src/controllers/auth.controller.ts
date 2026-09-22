@@ -74,7 +74,15 @@ export async function login(req: Request, res: Response): Promise<void> {
 
     res.json({
       token,
-      user: { id: user.id, email: user.email, name: user.name, picture: user.picture ?? undefined, rol: user.rol, gestorCategorias },
+      user: {
+        id: user.id,
+        organizationId: user.organizationId,
+        email: user.email,
+        name: user.name,
+        picture: user.picture ?? undefined,
+        rol: user.rol,
+        gestorCategorias,
+      },
     });
   } catch (error) {
     console.error('[login]', error);
@@ -98,9 +106,9 @@ async function gestorCategoriasDe(userId: string): Promise<{ categoriaId: number
 // de datos, por lo que rol siempre refleja el valor vigente.
 export async function getMe(req: Request, res: Response): Promise<void> {
   try {
-    const { id, email, name, rol } = req.user!;
+    const { id, organizationId, email, name, rol } = req.user!;
     const gestorCategorias = await gestorCategoriasDe(id);
-    res.json({ user: { id, email, name, rol, gestorCategorias } });
+    res.json({ user: { id, organizationId, email, name, rol, gestorCategorias } });
   } catch (error) {
     console.error('[getMe]', error);
     res.status(500).json({ error: 'Error al obtener el usuario' });

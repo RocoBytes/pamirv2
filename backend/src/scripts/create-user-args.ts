@@ -8,11 +8,15 @@ export type Rol = 'SOCIO' | 'LIDER' | 'ADMIN';
 
 const ROL_VALUES: readonly Rol[] = ['SOCIO', 'LIDER', 'ADMIN'];
 
+// Slug de la organización por defecto: el único club antes de multi-club.
+const DEFAULT_ORG_SLUG = 'pamir';
+
 export interface CreateUserArgs {
   email: string;
   name: string;
   rol: Rol;
   force: boolean;
+  org: string;
 }
 
 export type ParseCreateUserArgsResult =
@@ -20,10 +24,10 @@ export type ParseCreateUserArgsResult =
   | { success: false; errors: string[] };
 
 const USAGE_ERROR =
-  'Argumentos inválidos. Flags permitidos: --email <email>, --name "<nombre>", --rol <SOCIO|LIDER|ADMIN>, --force';
+  'Argumentos inválidos. Flags permitidos: --email <email>, --name "<nombre>", --rol <SOCIO|LIDER|ADMIN>, --org <slug>, --force';
 
 export function parseCreateUserArgs(argv: string[]): ParseCreateUserArgsResult {
-  let rawValues: { email?: string; name?: string; rol?: string; force?: boolean };
+  let rawValues: { email?: string; name?: string; rol?: string; org?: string; force?: boolean };
   try {
     const parsed = parseArgs({
       args: argv,
@@ -31,6 +35,7 @@ export function parseCreateUserArgs(argv: string[]): ParseCreateUserArgsResult {
         email: { type: 'string' },
         name: { type: 'string' },
         rol: { type: 'string' },
+        org: { type: 'string' },
         force: { type: 'boolean', default: false },
       },
       strict: true,
@@ -73,12 +78,17 @@ export function parseCreateUserArgs(argv: string[]): ParseCreateUserArgsResult {
     errors.push('El rol debe ser SOCIO, LIDER o ADMIN');
   }
 
+  const org = (rawValues.org ?? DEFAULT_ORG_SLUG).trim();
+  if (org === '') {
+    errors.push('El slug de la organización (--org) no puede estar vacío');
+  }
+
   if (errors.length > 0 || !email || !name || !rol) {
     return { success: false, errors };
   }
 
   return {
     success: true,
-    data: { email: email.toLowerCase(), name, rol, force: rawValues.force ?? false },
+    data: { email: email.toLowerCase(), name, rol, force: rawValues.force ?? false, org },
   };
 }

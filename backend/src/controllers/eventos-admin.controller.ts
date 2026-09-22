@@ -194,6 +194,7 @@ export async function createEvento(req: Request, res: Response): Promise<void> {
       data: {
         ...(toEventoData(parsed.data) as Prisma.EventoUncheckedCreateInput),
         titulo: parsed.data.titulo,
+        organizationId: req.user!.organizationId,
         creadoPor: req.user!.id,
       },
       include: { categoria: true },
@@ -669,7 +670,11 @@ export async function cancelarEvento(req: Request, res: Response): Promise<void>
       });
       if (destinatarios.length > 0) {
         await prisma.notificacion.createMany({
-          data: destinatarios.map((d) => ({ inscripcionId: d.id, tipo: 'EVENTO_CANCELADO' as const })),
+          data: destinatarios.map((d) => ({
+            organizationId: evento.organizationId,
+            inscripcionId: d.id,
+            tipo: 'EVENTO_CANCELADO' as const,
+          })),
           skipDuplicates: true,
         });
         hayAvisos = true;
@@ -779,7 +784,7 @@ export async function finalizarEvento(req: Request, res: Response): Promise<void
     // Alcance por categoría antes de abrir la transacción
     const eventoPrevio = await prisma.evento.findUnique({
       where: { id },
-      select: { categoriaId: true },
+      select: { categoriaId: true, organizationId: true },
     });
     if (!eventoPrevio) {
       res.status(404).json({ error: 'Evento no encontrado' });
@@ -839,6 +844,7 @@ export async function finalizarEvento(req: Request, res: Response): Promise<void
         });
         await tx.notificacion.createMany({
           data: resueltas.map((i) => ({
+            organizationId: eventoPrevio.organizationId,
             inscripcionId: i.id,
             tipo: i.estado === 'SELECCIONADO' ? ('SELECCIONADO' as const) : ('NO_SELECCIONADO' as const),
           })),

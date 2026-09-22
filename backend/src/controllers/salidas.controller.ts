@@ -221,43 +221,62 @@ export async function createSalida(req: Request, res: Response): Promise<void> {
       req.user!.email ?? data.liderCordada ?? null,
     );
 
-    const salida = await prisma.salida.create({
-      data: {
-        userId,
-        creatorEmail: req.user!.email,
-        tipoSalida: data.tipoSalida,
-        disciplina: data.disciplina,
-        temporada: data.temporada,
-        nombreActividad: data.nombreActividad,
-        ubicacionGeografica: data.ubicacionGeografica,
-        fechaInicio: new Date(data.fechaInicio),
-        horaInicio: data.horaInicio || null,
-        fechaRetornoEstimada: new Date(data.fechaRetornoEstimada),
-        horaRetornoEstimada: data.horaRetornoEstimada,
-        horaAlerta: data.horaAlerta,
-        avisosExternos: asJson(data.avisosExternos ?? []),
-        retenCarabineros: data.retenCarabineros || null,
-        nombreFamiliar: data.nombreFamiliar || null,
-        telefonoFamiliar: data.telefonoFamiliar || null,
-        liderCordada: data.liderCordada,
-        participantes: asJson(participantesNormalizados),
-        coordinacionGrupal: data.coordinacionGrupal ?? false,
-        matrizRiesgos: data.matrizRiesgos ?? false,
-        mediosComunicacion: asJson(data.mediosComunicacion ?? []),
-        idDispositivoFrecuencia: data.idDispositivoFrecuencia,
-        equipoColectivo: asJson(data.equipoColectivo ?? []),
-        equipoColectivoOtro: data.equipoColectivoOtro,
-        pronosticoMeteorologico: data.pronosticoMeteorologico,
-        riesgosIdentificados: asJson(data.riesgosIdentificados ?? []),
-        riesgosOtro: data.riesgosOtro,
-        planEvacuacion: data.planEvacuacion,
-        // gpxFileUrl/gpxFileId/gpxFileName nunca se aceptan aquí: solo los
-        // escribe el endpoint dedicado de subida (POST /:id/gpx), después de
-        // crear la salida.
-        status: data.status ?? 'EN_CURSO',
-        incidentReport: data.incidentReport,
-        esRegistroHistorico,
-      },
+    const organizationId = req.user!.organizationId;
+
+    // numeroSalida es un correlativo por club, no una secuencia global de
+    // Postgres: se asigna dentro de una transacción interactiva que primero
+    // incrementa organizations.ultimo_numero_salida. El UPDATE toma un lock de
+    // fila sobre esa organización (row lock implícito de Postgres), así que
+    // dos creaciones concurrentes del mismo club se serializan y ninguna ve el
+    // mismo valor; clubes distintos no se bloquean entre sí porque bloquean
+    // filas distintas.
+    const salida = await prisma.$transaction(async (tx) => {
+      const organization = await tx.organization.update({
+        where: { id: organizationId },
+        data: { ultimoNumeroSalida: { increment: 1 } },
+        select: { ultimoNumeroSalida: true },
+      });
+
+      return tx.salida.create({
+        data: {
+          organizationId,
+          numeroSalida: organization.ultimoNumeroSalida,
+          userId,
+          creatorEmail: req.user!.email,
+          tipoSalida: data.tipoSalida,
+          disciplina: data.disciplina,
+          temporada: data.temporada,
+          nombreActividad: data.nombreActividad,
+          ubicacionGeografica: data.ubicacionGeografica,
+          fechaInicio: new Date(data.fechaInicio),
+          horaInicio: data.horaInicio || null,
+          fechaRetornoEstimada: new Date(data.fechaRetornoEstimada),
+          horaRetornoEstimada: data.horaRetornoEstimada,
+          horaAlerta: data.horaAlerta,
+          avisosExternos: asJson(data.avisosExternos ?? []),
+          retenCarabineros: data.retenCarabineros || null,
+          nombreFamiliar: data.nombreFamiliar || null,
+          telefonoFamiliar: data.telefonoFamiliar || null,
+          liderCordada: data.liderCordada,
+          participantes: asJson(participantesNormalizados),
+          coordinacionGrupal: data.coordinacionGrupal ?? false,
+          matrizRiesgos: data.matrizRiesgos ?? false,
+          mediosComunicacion: asJson(data.mediosComunicacion ?? []),
+          idDispositivoFrecuencia: data.idDispositivoFrecuencia,
+          equipoColectivo: asJson(data.equipoColectivo ?? []),
+          equipoColectivoOtro: data.equipoColectivoOtro,
+          pronosticoMeteorologico: data.pronosticoMeteorologico,
+          riesgosIdentificados: asJson(data.riesgosIdentificados ?? []),
+          riesgosOtro: data.riesgosOtro,
+          planEvacuacion: data.planEvacuacion,
+          // gpxFileUrl/gpxFileId/gpxFileName nunca se aceptan aquí: solo los
+          // escribe el endpoint dedicado de subida (POST /:id/gpx), después de
+          // crear la salida.
+          status: data.status ?? 'EN_CURSO',
+          incidentReport: data.incidentReport,
+          esRegistroHistorico,
+        },
+      });
     });
 
     res.status(201).json(salida);

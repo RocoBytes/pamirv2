@@ -3,11 +3,33 @@ import assert from 'node:assert/strict';
 import { parseCreateUserArgs } from './create-user-args.js';
 
 describe('parseCreateUserArgs', () => {
-  it('parses valid args with defaults (rol SOCIO, force false)', () => {
+  it('parses valid args with defaults (rol SOCIO, force false, org pamir)', () => {
     const result = parseCreateUserArgs(['--email', 'foo@bar.com', '--name', 'Foo Bar']);
     assert.equal(result.success, true);
     if (result.success) {
-      assert.deepEqual(result.data, { email: 'foo@bar.com', name: 'Foo Bar', rol: 'SOCIO', force: false });
+      assert.deepEqual(result.data, {
+        email: 'foo@bar.com',
+        name: 'Foo Bar',
+        rol: 'SOCIO',
+        force: false,
+        org: 'pamir',
+      });
+    }
+  });
+
+  it('parses --org con un slug distinto del default', () => {
+    const result = parseCreateUserArgs(['--email', 'foo@bar.com', '--name', 'Foo Bar', '--org', 'otro-club']);
+    assert.equal(result.success, true);
+    if (result.success) {
+      assert.equal(result.data.org, 'otro-club');
+    }
+  });
+
+  it('rechaza --org vacío', () => {
+    const result = parseCreateUserArgs(['--email', 'foo@bar.com', '--name', 'Foo Bar', '--org', '   ']);
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.ok(result.errors.some((e) => e.includes('organización')));
     }
   });
 

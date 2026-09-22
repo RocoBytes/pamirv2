@@ -58,7 +58,7 @@ export const invitacionesRepoPrisma: InvitacionesRepo = {
     await prisma.invitacion.update({ where: { id }, data: { revocadaAt: now } });
   },
 
-  async acceptInvitacion({ invitacionId, email, name, passwordHash, rol, now }) {
+  async acceptInvitacion({ invitacionId, organizationId, email, name, passwordHash, rol, now }) {
     try {
       return await prisma.$transaction(async (tx) => {
         // Update condicional: solo avanza si la invitación sigue pendiente y
@@ -72,8 +72,10 @@ export const invitacionesRepoPrisma: InvitacionesRepo = {
           return null;
         }
 
+        // El club del usuario nuevo es siempre el de la invitación, nunca el
+        // del body de la request (que aceptarInvitacion ya ignora).
         const user = await tx.user.create({
-          data: { email, name, passwordHash, rol, emailVerified: true },
+          data: { organizationId, email, name, passwordHash, rol, emailVerified: true },
           select: { id: true, email: true, name: true, rol: true },
         });
         await tx.invitacion.update({ where: { id: invitacionId }, data: { usuarioId: user.id } });

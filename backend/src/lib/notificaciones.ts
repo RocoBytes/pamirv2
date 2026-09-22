@@ -20,11 +20,12 @@ export class DispatchEnCursoError extends Error {
 }
 
 export async function encolarNotificacion(
+  organizationId: string,
   inscripcionId: string,
   tipo: TipoNotificacion,
 ): Promise<void> {
   await prisma.notificacion.createMany({
-    data: [{ inscripcionId, tipo }],
+    data: [{ organizationId, inscripcionId, tipo }],
     skipDuplicates: true,
   });
 }

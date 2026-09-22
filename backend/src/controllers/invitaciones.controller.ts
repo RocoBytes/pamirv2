@@ -32,8 +32,8 @@ const deps: InvitacionesDeps = {
 };
 
 function toRequester(req: Request): Requester {
-  const { id, name, rol } = req.user!;
-  return { id, name, rol };
+  const { id, organizationId, name, rol } = req.user!;
+  return { id, organizationId, name, rol };
 }
 
 // Los controladores solo mapean el resultado discriminado del servicio a la

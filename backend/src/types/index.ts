@@ -2,6 +2,7 @@ import type { RolUsuario } from '../generated/prisma/client.js';
 
 export interface AuthUser {
   id: string;
+  organizationId: string;
   email: string;
   name: string;
   rol: RolUsuario;

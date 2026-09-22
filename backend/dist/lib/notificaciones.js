@@ -9,9 +9,9 @@ export class DispatchEnCursoError extends Error {
         this.name = 'DispatchEnCursoError';
     }
 }
-export async function encolarNotificacion(inscripcionId, tipo) {
+export async function encolarNotificacion(organizationId, inscripcionId, tipo) {
     await prisma.notificacion.createMany({
-        data: [{ inscripcionId, tipo }],
+        data: [{ organizationId, inscripcionId, tipo }],
         skipDuplicates: true,
     });
 }

@@ -17,6 +17,7 @@ import {
 
 interface FakeUser {
   id: string;
+  organizationId: string;
   email: string;
   name: string;
   rol: RolUsuario;
@@ -52,6 +53,7 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
     async createInvitacion(data) {
       const row: InvitacionRow = {
         id: nextId('inv'),
+        organizationId: data.organizationId,
         email: data.email,
         rol: data.rol,
         tokenHash: data.tokenHash,
@@ -85,14 +87,14 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
       const inv = invitaciones.find((i) => i.id === id);
       if (inv) inv.revocadaAt = now;
     },
-    async acceptInvitacion({ invitacionId, email, name, passwordHash, rol, now }) {
+    async acceptInvitacion({ invitacionId, organizationId, email, name, passwordHash, rol, now }) {
       void passwordHash;
       const inv = invitaciones.find((i) => i.id === invitacionId);
       if (!inv || inv.aceptadaAt !== null || inv.revocadaAt !== null || inv.expiresAt <= now) {
         return null;
       }
       inv.aceptadaAt = now;
-      const user: FakeUser = { id: nextId('user'), email, name, rol, emailVerified: true };
+      const user: FakeUser = { id: nextId('user'), organizationId, email, name, rol, emailVerified: true };
       users.push(user);
       inv.usuarioId = user.id;
       return { id: user.id, email: user.email, name: user.name, rol: user.rol };
@@ -107,9 +109,9 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
 // (findUserById), no la que tenía en el momento de invitar.
 function createDeps(overrides: Partial<InvitacionesDeps> = {}, extraUsers: FakeUser[] = []) {
   const seedUsers: FakeUser[] = [
-    { id: ADMIN.id, email: 'admin@club.cl', name: ADMIN.name, rol: 'ADMIN', emailVerified: true },
-    { id: LIDER.id, email: 'lider@club.cl', name: LIDER.name, rol: 'LIDER', emailVerified: true },
-    { id: SOCIO.id, email: 'socio@club.cl', name: SOCIO.name, rol: 'SOCIO', emailVerified: true },
+    { id: ADMIN.id, organizationId: ADMIN.organizationId, email: 'admin@club.cl', name: ADMIN.name, rol: 'ADMIN', emailVerified: true },
+    { id: LIDER.id, organizationId: LIDER.organizationId, email: 'lider@club.cl', name: LIDER.name, rol: 'LIDER', emailVerified: true },
+    { id: SOCIO.id, organizationId: SOCIO.organizationId, email: 'socio@club.cl', name: SOCIO.name, rol: 'SOCIO', emailVerified: true },
     ...extraUsers,
   ];
   const { repo, users, invitaciones } = createFakeRepo(seedUsers);
@@ -127,9 +129,9 @@ function createDeps(overrides: Partial<InvitacionesDeps> = {}, extraUsers: FakeU
   return { deps, users, invitaciones, sentEmails };
 }
 
-const ADMIN = { id: 'admin-1', name: 'Ada Admin', rol: 'ADMIN' as RolUsuario };
-const LIDER = { id: 'lider-1', name: 'Leo Lider', rol: 'LIDER' as RolUsuario };
-const SOCIO = { id: 'socio-1', name: 'Sam Socio', rol: 'SOCIO' as RolUsuario };
+const ADMIN = { id: 'admin-1', organizationId: 'org-1', name: 'Ada Admin', rol: 'ADMIN' as RolUsuario };
+const LIDER = { id: 'lider-1', organizationId: 'org-1', name: 'Leo Lider', rol: 'LIDER' as RolUsuario };
+const SOCIO = { id: 'socio-1', organizationId: 'org-1', name: 'Sam Socio', rol: 'SOCIO' as RolUsuario };
 
 // ─── crearInvitacion ────────────────────────────────────────────────────────────
 
@@ -173,7 +175,9 @@ describe('crearInvitacion', () => {
   });
 
   it('rechaza con 409 si ya existe una cuenta con ese email', async () => {
-    const { deps } = createDeps({}, [{ id: 'u1', email: 'ya@club.cl', name: 'Ya', rol: 'SOCIO', emailVerified: true }]);
+    const { deps } = createDeps({}, [
+      { id: 'u1', organizationId: 'org-1', email: 'ya@club.cl', name: 'Ya', rol: 'SOCIO', emailVerified: true },
+    ]);
     const result = await crearInvitacion(deps, ADMIN, { email: 'ya@club.cl' });
     assert.equal(result.ok, false);
     if (!result.ok) {
@@ -242,6 +246,13 @@ describe('crearInvitacion', () => {
     const result = await crearInvitacion(deps, ADMIN, { email: '  Mayus@Club.cl  ' });
     assert.equal(result.ok, true);
     assert.equal(invitaciones[0]?.email, 'mayus@club.cl');
+  });
+
+  it('la invitación creada guarda el organizationId de quien invita', async () => {
+    const { deps, invitaciones } = createDeps();
+    const result = await crearInvitacion(deps, ADMIN, { email: 'org@club.cl' });
+    assert.equal(result.ok, true);
+    assert.equal(invitaciones[0]?.organizationId, ADMIN.organizationId);
   });
 });
 
@@ -354,6 +365,20 @@ describe('reenviarInvitacion', () => {
     }
   });
 
+  it('el reenvío conserva el organizationId de la invitación', async () => {
+    const { deps, invitaciones } = createDeps();
+    const creada = await crearInvitacion(deps, ADMIN, { email: 'x@club.cl' });
+    assert.equal(creada.ok, true);
+    if (!creada.ok) return;
+
+    const result = await reenviarInvitacion(deps, ADMIN, creada.body.invitacion.id);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+
+    const nueva = invitaciones.find((i) => i.id === result.body.invitacion.id);
+    assert.equal(nueva?.organizationId, ADMIN.organizationId);
+  });
+
   it('reenvía una invitación expirada', async () => {
     const { deps } = createDeps({ now: () => new Date('2026-02-01T00:00:00.000Z') });
     const creada = await crearInvitacion(deps, ADMIN, { email: 'x@club.cl' });
@@ -372,7 +397,7 @@ describe('reenviarInvitacion', () => {
     assert.equal(creada.ok, true);
     if (!creada.ok) return;
 
-    const otroLider = { id: 'lider-2', name: 'Otro Lider', rol: 'LIDER' as RolUsuario };
+    const otroLider = { id: 'lider-2', organizationId: 'org-1', name: 'Otro Lider', rol: 'LIDER' as RolUsuario };
     const result = await reenviarInvitacion(deps, otroLider, creada.body.invitacion.id);
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.status, 404);
@@ -553,6 +578,25 @@ describe('aceptarInvitacion', () => {
     assert.equal(creado?.rol, 'SOCIO');
   });
 
+  it('el usuario aceptado hereda el organizationId de la invitación aunque el body envíe otro', async () => {
+    const { deps, users } = createDeps();
+    const creada = await crearInvitacion(deps, ADMIN, { email: 'club@club.cl' });
+    assert.equal(creada.ok, true);
+    if (!creada.ok) return;
+    const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
+
+    const result = await aceptarInvitacion(deps, token, {
+      name: 'Alguien',
+      password: 'password123',
+      // No forma parte del contrato de entrada: debe ignorarse igual que email/rol.
+      organizationId: 'org-intrusa',
+    } as unknown as { name: unknown; password: unknown });
+    assert.equal(result.ok, true);
+
+    const creado = users.find((u) => u.email === 'club@club.cl');
+    assert.equal(creado?.organizationId, ADMIN.organizationId);
+  });
+
   it('un segundo intento de aceptación falla', async () => {
     const { deps } = createDeps();
     const creada = await crearInvitacion(deps, ADMIN, { email: 'x@club.cl' });
@@ -608,7 +652,7 @@ describe('aceptarInvitacion', () => {
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-    users.push({ id: 'raced', email: 'x@club.cl', name: 'Otro', rol: 'SOCIO', emailVerified: true });
+    users.push({ id: 'raced', organizationId: 'org-1', email: 'x@club.cl', name: 'Otro', rol: 'SOCIO', emailVerified: true });
 
     const result = await aceptarInvitacion(deps, token, { name: 'Alguien', password: 'password123' });
     assert.equal(result.ok, false);

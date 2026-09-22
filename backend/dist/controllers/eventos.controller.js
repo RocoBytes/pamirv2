@@ -254,6 +254,7 @@ export async function inscribirse(req, res) {
             try {
                 inscripcion = await prisma.inscripcion.create({
                     data: {
+                        organizationId: evento.organizationId,
                         eventoId: id,
                         usuarioId: req.user.id,
                         tieneVehiculo,
@@ -276,7 +277,7 @@ export async function inscribirse(req, res) {
         }
         // La cola es idempotente: una re-postulación ya tiene su fila de
         // confirmación enviada y no genera un segundo correo.
-        await encolarNotificacion(inscripcion.id, 'INSCRIPCION_CONFIRMADA');
+        await encolarNotificacion(evento.organizationId, inscripcion.id, 'INSCRIPCION_CONFIRMADA');
         res.status(201).json({ inscripcion });
         despacharNotificacionesPendientes(id).catch((err) => console.error('[inscribirse] dispatch:', err));
     }

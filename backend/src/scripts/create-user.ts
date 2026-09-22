@@ -138,12 +138,29 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const { email, name, rol, force } = parsed.data;
+  const { email, name, rol, force, org } = parsed.data;
+
+  const organization = await prisma.organization.findUnique({ where: { slug: org } });
+  if (!organization) {
+    console.error(`[create-user] No existe ninguna organización con slug="${org}".`);
+    process.exitCode = 1;
+    return;
+  }
 
   // Se comprueba antes de pedir la contraseña para no hacerla teclear en vano.
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing && !force) {
     console.error(`[create-user] Ya existe un usuario con email="${email}". Usa --force para actualizarlo.`);
+    process.exitCode = 1;
+    return;
+  }
+  // --force nunca traslada un usuario existente a otro club: solo actualiza
+  // su perfil dentro del club al que ya pertenece.
+  if (existing && existing.organizationId !== organization.id) {
+    console.error(
+      `[create-user] El usuario con email="${email}" pertenece a otra organización. ` +
+        '--force no puede cambiarlo de club.',
+    );
     process.exitCode = 1;
     return;
   }
@@ -165,9 +182,9 @@ async function main(): Promise<void> {
 
   if (!existing) {
     await prisma.user.create({
-      data: { email, name, passwordHash, rol, emailVerified: true },
+      data: { organizationId: organization.id, email, name, passwordHash, rol, emailVerified: true },
     });
-    console.log(`[create-user] Usuario creado: email="${email}" rol="${rol}"`);
+    console.log(`[create-user] Usuario creado: email="${email}" rol="${rol}" org="${org}"`);
     return;
   }
 
