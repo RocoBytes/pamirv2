@@ -6,13 +6,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Deployments touch a single production database. Never run two at once,
-# and never cancel one midway: an interrupted migration is worse than a
-# slow queue.
-concurrency:
-  group: deploy-production
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
