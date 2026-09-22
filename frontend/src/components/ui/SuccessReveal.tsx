@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { Check, Loader2 } from 'lucide-react'
+import { ArrowLeft, Check, Loader2 } from 'lucide-react'
 
 import { DURATION, EASE_IN, EASE_OUT, EASE_REVEAL } from './motion'
 import { coverScale, REVEAL_SEED_DIAMETER, type RevealOrigin } from '../../lib/reveal-geometry'
@@ -23,6 +23,28 @@ const CHECK_GATE_MS = DURATION.reveal * 1000 - 80
 
 /** Cuánto queda "¡Listo!" en pantalla antes de avisar que se puede navegar. */
 const HOLD_MS = 650
+
+/**
+ * Cuánto se espera antes de ofrecer la salida manual, medido desde el montaje.
+ *
+ * Es un bote salvavidas, no un botón del diseño: la onda tapa la pantalla
+ * entera, así que si algo se traba —una animación que nunca termina, un
+ * `onAnimationComplete` que no llega, una petición colgada— el usuario queda
+ * encerrado sin forma de ir a ningún lado. En el camino feliz este botón NO
+ * llega a aparecer nunca: el componente se desmonta solo cerca de los 970ms.
+ */
+const ESCAPE_AFTER_MOUNT_MS = 1500
+
+/**
+ * Margen extra cuando la confirmación ya está en pantalla.
+ *
+ * Sin esto, un servidor que responde entre los 850ms y los 1500ms hacía
+ * aparecer el botón un instante antes de que el componente se fuera solo: un
+ * parpadeo de "algo salió mal" en un flujo que estaba saliendo bien. Al
+ * reiniciar la cuenta cuando llega la confirmación, el botón solo aparece si
+ * el desmontaje de verdad no ocurrió.
+ */
+const ESCAPE_GRACE_MS = 600
 
 interface SuccessRevealProps {
   /** Centro del botón que disparó el envío, en coordenadas de viewport. */
@@ -137,6 +159,17 @@ export function SuccessReveal({
     return () => clearTimeout(id)
   }, [showSuccess])
 
+  // La cuenta se reinicia al llegar la confirmación (ver ESCAPE_GRACE_MS), así
+  // que el botón solo aparece si el desmontaje automático no ocurrió cuando
+  // debía. Si está retrocediendo no hace falta: el formulario ya vuelve solo.
+  const [escapeVisible, setEscapeVisible] = useState(false)
+  useEffect(() => {
+    if (retracting) return
+    const delay = showSuccess ? HOLD_MS + ESCAPE_GRACE_MS : ESCAPE_AFTER_MOUNT_MS
+    const id = setTimeout(() => setEscapeVisible(true), delay)
+    return () => clearTimeout(id)
+  }, [showSuccess, retracting])
+
   // La onda tapa el formulario entero: sin mover el foco, el teclado seguiría
   // recorriendo campos invisibles. Al desmontarse por un error, el foco vuelve
   // al botón que lo disparó.
@@ -241,6 +274,33 @@ export function SuccessReveal({
         )}
       </AnimatePresence>
       </div>
+
+      {/* Salida de emergencia. Va FUERA de la región viva de arriba: no es
+          parte de la confirmación y no tiene por qué anunciarse junto con
+          ella. Hace exactamente lo mismo que haría el desmontaje automático
+          —llama al mismo callback— así que no puede llevar a un lugar distinto
+          del que lleva el flujo normal, por más raro que sea el estado en el
+          que aparezca.
+
+          Deliberadamente discreto: si se ve, algo ya salió mal, pero sigue sin
+          ser la acción principal de la pantalla. */}
+      <AnimatePresence>
+        {escapeVisible && !retracting && (
+          <motion.button
+            key="escape"
+            type="button"
+            onClick={() => onFinishedRef.current()}
+            className="absolute bottom-12 inline-flex items-center gap-2 rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-pine hover:bg-white/10 transition-colors"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: DURATION.surface, ease: EASE_OUT }}
+          >
+            <ArrowLeft size={16} aria-hidden="true" />
+            Volver al inicio
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>,
     document.body,
   )
