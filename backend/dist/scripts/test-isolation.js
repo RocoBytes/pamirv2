@@ -1320,6 +1320,12 @@ async function main() {
     // llamada; assertMemoryStorage() lo vuelve a comprobar sobre la instancia
     // realmente resuelta.
     process.env.STORAGE_PROVIDER = 'memory';
+    // Por la misma razón, jamás debe enviar correo real: la suite crea
+    // invitaciones por HTTP cuyos destinatarios son direcciones ficticias
+    // (@iso-test.local). Con un .env de desarrollo que ya trae SMTP_*, cada
+    // invitación intentaría una entrega real contra un dominio inexistente y
+    // ensuciaría la reputación del servidor de correo.
+    process.env.EMAIL_PROVIDER = 'console';
     console.log('[test-isolation] Limpiando restos de una corrida anterior (si los hay)...');
     await purgeAllIsoTestOrganizations();
     let server;

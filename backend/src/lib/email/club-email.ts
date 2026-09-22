@@ -60,7 +60,7 @@ export interface SendClubEmailParams {
 export async function sendClubEmail(
   org: OrganizationSummary,
   params: SendClubEmailParams,
-  provider: EmailProvider = getEmailProvider(),
+  provider: EmailProvider = getEmailProvider(params.kind),
 ): Promise<string | undefined> {
   const { from } = buildClubSender(org, MAIL_FROM[params.kind]);
   const contactParsed = emailField.safeParse(org.contactEmail);

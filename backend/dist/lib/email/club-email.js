@@ -33,7 +33,7 @@ export function buildClubSender(org, address) {
 // siempre de la organización, nunca del llamador; la dirección remitente
 // depende solo de `kind`, nunca del club ni de la actividad. provider es
 // inyectable para que los tests no dependan del entorno ni de la red.
-export async function sendClubEmail(org, params, provider = getEmailProvider()) {
+export async function sendClubEmail(org, params, provider = getEmailProvider(params.kind)) {
     const { from } = buildClubSender(org, MAIL_FROM[params.kind]);
     const contactParsed = emailField.safeParse(org.contactEmail);
     const replyTo = contactParsed.success ? contactParsed.data : undefined;

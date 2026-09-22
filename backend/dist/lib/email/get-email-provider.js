@@ -1,5 +1,6 @@
 import { createSmtpProvider } from './smtp.provider.js';
 import { createConsoleProvider } from './console.provider.js';
+import { MAIL_ACCOUNTS } from '../config.js';
 // El error solo nombra las variables faltantes o inválidas, nunca sus
 // valores, para que un log de arranque no filtre credenciales.
 function assertSmtpEnv(params) {
@@ -40,22 +41,67 @@ export function selectEmailProvider(params) {
     }
     return resolved;
 }
-let cachedProvider;
-// Memoizado a propósito: una sola instancia por proceso basta (los
-// adaptadores no guardan estado mutable propio) y evita releer el entorno en
-// cada envío.
-export function getEmailProvider() {
-    if (cachedProvider)
-        return cachedProvider;
-    const params = {
+export function createProviderConnectionCache() {
+    return { byConnection: new Map() };
+}
+const defaultFactories = { smtp: createSmtpProvider, console: createConsoleProvider };
+// Identifica una conexión SMTP por host+puerto+usuario: dos tipos de correo
+// que resuelven a la misma cuenta (p. ej. porque ninguno define su par propio
+// y ambos caen al SMTP_USER/SMTP_PASS global) comparten la MISMA conexión en
+// vez de abrir un segundo pool para exactamente la misma cuenta.
+function connectionKey(params) {
+    return `${params.host}:${params.port}:${params.user}`;
+}
+// Pura salvo por la caché y las fábricas, ambas inyectables (los tests nunca
+// abren una conexión real): decide y crea (o reutiliza) el proveedor para una
+// cuenta ya resuelta. Separada de getEmailProvider para poder probar la
+// reutilización de conexión sin depender de process.env ni de memoización a
+// nivel de módulo.
+export function resolveEmailProvider(params, cache, factories = defaultFactories) {
+    const name = selectEmailProvider(params);
+    if (name === 'console')
+        return factories.console();
+    const parsed = assertSmtpEnv(params);
+    const key = connectionKey(parsed);
+    const existing = cache.byConnection.get(key);
+    if (existing)
+        return existing;
+    const created = factories.smtp(parsed);
+    cache.byConnection.set(key, created);
+    return created;
+}
+// Arma los parámetros de selección para UN tipo de correo, a partir de la
+// cuenta ya resuelta por tipo (ver MAIL_ACCOUNTS en lib/config.ts): el
+// usuario/clave propios del tipo si están completos, si no el global — la
+// resolución del fallback ya ocurrió ahí, acá solo se lee el resultado.
+function buildParamsForKind(kind) {
+    const account = MAIL_ACCOUNTS[kind];
+    return {
         emailProvider: process.env.EMAIL_PROVIDER,
         smtpHost: process.env.SMTP_HOST,
         smtpPort: process.env.SMTP_PORT,
-        smtpUser: process.env.SMTP_USER,
-        smtpPass: process.env.SMTP_PASS,
+        smtpUser: account.user || undefined,
+        smtpPass: account.pass || undefined,
         nodeEnv: process.env.NODE_ENV,
     };
-    const name = selectEmailProvider(params);
-    cachedProvider = name === 'smtp' ? createSmtpProvider(assertSmtpEnv(params)) : createConsoleProvider();
-    return cachedProvider;
+}
+// Nombre resuelto para UN tipo de correo, sin crear ni cachear ninguna
+// instancia. Usado por el script de verificación manual (test:email) para
+// negarse a correr si algún tipo caería en "console" en vez de "smtp".
+export function resolveEmailProviderName(kind) {
+    return selectEmailProvider(buildParamsForKind(kind));
+}
+const connectionCache = createProviderConnectionCache();
+const providersByKind = new Map();
+// Memoizado POR TIPO de correo a propósito: cada tipo puede autenticar con
+// una cuenta SMTP distinta (ver MAIL_ACCOUNTS), pero cuando dos tipos
+// resuelven a la misma cuenta comparten la misma conexión (ver
+// resolveEmailProvider) en vez de abrir un pool por tipo.
+export function getEmailProvider(kind) {
+    const cached = providersByKind.get(kind);
+    if (cached)
+        return cached;
+    const provider = resolveEmailProvider(buildParamsForKind(kind), connectionCache);
+    providersByKind.set(kind, provider);
+    return provider;
 }

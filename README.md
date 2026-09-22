@@ -438,17 +438,41 @@ a `sendClubEmail` — ver `EmailKind` en `backend/src/lib/config.ts`):
   cierre" y el recordatorio de cierre, ambos enviados por el cron.
 
 Ambas direcciones deben existir como casilla o alias en el servidor de correo
-(ahí llegan los rebotes) y la cuenta SMTP debe estar autorizada a enviar como
-cada una. El dominio `riala.cl` debe tener SPF, DKIM y DMARC configurados —
-sin eso el correo cae en spam o se rechaza directamente.
+(ahí llegan los rebotes). El dominio `riala.cl` debe tener SPF, DKIM y DMARC
+configurados — sin eso el correo cae en spam o se rechaza directamente.
+
+**Una cuenta SMTP por dirección remitente**: el servidor de correo real (mailcow
+de por medio) impone "sender ownership" — rechaza en RCPT TO cualquier envío
+autenticado con una cuenta que no es dueña de la dirección remitente usada, en
+vez de dejar que cualquier cuenta envíe como cualquier dirección. Un intento
+real de enviar una `alerta` autenticado como `notificaciones@riala.cl` lo
+confirmó con este rechazo:
+
+```
+553 5.7.1 <alertas@riala.cl>: Sender address rejected: not owned by user notificaciones@riala.cl
+```
+
+Por eso `notificaciones@riala.cl` y `alertas@riala.cl` se autentican cada una
+con SU PROPIA cuenta (`SMTP_USER_NOTIFICACIONES`/`SMTP_PASS_NOTIFICACIONES` y
+`SMTP_USER_ALERTAS`/`SMTP_PASS_ALERTAS` en `backend/.env.example`) en vez de
+compartir la cuenta global `SMTP_USER`/`SMTP_PASS`. Un tipo sin su propio par
+cae al par global — útil mientras solo hay una cuenta real, pero en producción
+las alertas son correo de SEGURIDAD ("salida sin cierre"), así que un rechazo
+permanente por sender ownership es el peor modo de falla posible: mejor
+configurar el par propio de cada tipo desde el día uno. Ambas variables de un
+mismo par deben definirse juntas — definir solo una mitad detiene el arranque
+del proceso nombrando la que falta (ver `resolveMailAccounts` en
+`backend/src/lib/config.ts`). Dos tipos que terminan resolviendo la misma
+cuenta (mismo host+puerto+usuario) comparten una sola conexión SMTP en vez de
+abrir un pool por tipo.
 
 El envío real pasa por un puerto (`EmailProvider`,
 `backend/src/lib/email/email-provider.ts`) con dos adaptadores:
 
 - **`smtp`**: producción. Envía por el servidor de correo propio (autenticado,
   nunca un proveedor externo) usando el puerto 587 con STARTTLS obligatorio o
-  el 465 con TLS implícito. Requiere `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` y
-  `SMTP_PASS`.
+  el 465 con TLS implícito. Requiere `SMTP_HOST`, `SMTP_PORT` y, para cada tipo
+  de correo, una cuenta resuelta (propia o global — ver arriba).
 - **`console`**: desarrollo/tests. Nunca abre una conexión de red; solo
   registra un resumen (remitente, destinatario, asunto — nunca el HTML) y
   devuelve un id sintético. **Nunca** está permitido con `NODE_ENV=production`
@@ -461,6 +485,14 @@ contrario. `MAIL_FROM_NOTIFICACIONES` y `MAIL_FROM_ALERTAS` permiten
 sobrescribir cada dirección remitente sin tocar código: un valor vacío o en
 blanco cae al valor por defecto, y uno presente pero inválido detiene el
 arranque del proceso.
+
+**Verificación manual**: `npm run test:email -- <destino@ejemplo.com>` (desde
+`backend/`) envía un correo real por cada tipo (`notificacion` y `alerta`)
+usando la configuración real del entorno, e imprime un `✓`/`✗` por tipo con el
+remitente usado — es el chequeo repetible de "cada dirección puede realmente
+enviar como sí misma". Se niega a correr si algún tipo resolvería al
+adaptador `console` en vez de `smtp`. Nunca imprime contraseñas ni el cuerpo
+del correo.
 
 Cada envío puede llevar un `idempotencyKey`, que el adaptador `smtp` reenvía
 como cabecera `X-Entity-Ref-ID` — solo trazabilidad, ya que SMTP no garantiza
@@ -475,7 +507,8 @@ reintento del cron puede DUPLICAR una alarma, pero nunca la PIERDE.
 
 **Agregar un tipo de correo nuevo** (p. ej. `invitacion`): una sola entrada en
 `MAIL_SENDER_DEFS` (`backend/src/lib/config.ts`), con su propia variable de
-entorno y su valor por defecto. Ningún llamador ni `club-email.ts` cambian.
+dirección, su propio par de credenciales (`userEnvVar`/`passEnvVar`) y su
+valor por defecto. Ningún llamador ni `club-email.ts` cambian.
 
 ### Archivos en Google Cloud Storage
 
