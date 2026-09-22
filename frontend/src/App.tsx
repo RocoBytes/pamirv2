@@ -8,6 +8,7 @@ import { WizardLayout } from './components/wizard/WizardLayout'
 import { RegistroIntegrante } from './components/RegistroIntegrante'
 import { FichaCierre } from './components/FichaCierre'
 import { EvaluacionExpress } from './components/EvaluacionExpress'
+import type { ShellContext } from './components/shell/AppShell'
 import { DocumentosPage } from './components/DocumentosPage'
 import { ContactosPage } from './components/ContactosPage'
 import { EventosPage } from './components/EventosPage'
@@ -29,7 +30,7 @@ function getQueryParam(name: string): string | null {
 }
 
 const Spinner = () => (
-  <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+  <div className="min-h-screen bg-alpine-canvas flex items-center justify-center">
     <div className="flex flex-col items-center gap-3 text-slate-500">
       <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
       <p className="text-sm">Cargando...</p>
@@ -75,6 +76,16 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout }: Re
   const esSocioClubActual = esSocioDelClub(integrante, user?.organization ?? null)
   // Sistema cerrado por invitación: solo ADMIN y LIDER pueden invitar.
   const puedeInvitarUsuario = puedeInvitar(user?.rol)
+
+  // Contexto del chrome compartido (header, barra inferior, pie). Se arma una
+  // sola vez acá y cada pantalla que usa AppShell lo recibe entero, para que
+  // agregar un destino no obligue a cambiar la firma de cada componente.
+  const shell: ShellContext = {
+    userName: user?.name ?? '',
+    canSeeDocumentos: esSocioClubActual || isAdmin,
+    onLogout: logout,
+    onNavigate: (key) => setRoute(key === 'inicio' ? 'dashboard' : key),
+  }
 
   // document.title sigue al club de la sesión; sin sesión (o mientras /me no
   // resolvió el club) queda en el título genérico — nunca el de otro club.
@@ -144,8 +155,8 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout }: Re
   // silencio, se ofrece cerrar sesión para aceptarla o seguir con la actual.
   if (inviteToken) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-[#4a6fad]/15 p-6 text-center">
+      <div className="min-h-screen bg-alpine-canvas flex items-center justify-center px-4">
+        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-secondary/15 p-6 text-center">
           <p className="text-sm text-slate-700 mb-5">
             Ya iniciaste sesión como <span className="font-semibold">{user?.email}</span>. Para
             aceptar esta invitación debes cerrar sesión.
@@ -195,12 +206,12 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout }: Re
   }
 
   if (route === 'documentos' && (esSocioClubActual || isAdmin)) {
-    return <DocumentosPage onBack={() => setRoute('dashboard')} />
+    return <DocumentosPage onBack={() => setRoute('dashboard')} shell={shell} />
   }
 
   // Contactos de emergencia: visible para todos los usuarios logueados (sin gate).
   if (route === 'contactos') {
-    return <ContactosPage onBack={() => setRoute('dashboard')} />
+    return <ContactosPage onBack={() => setRoute('dashboard')} shell={shell} />
   }
 
   // Eventos del club: visible para todos los usuarios logueados (sin gate).
@@ -213,6 +224,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout }: Re
         onBack={() => setRoute('dashboard')}
         onCrearEvento={() => setRoute('crear-evento')}
         onGestionarEvento={(id) => { setActionEventoId(id); setRoute('gestionar-evento') }}
+        shell={shell}
       />
     )
   }
@@ -220,6 +232,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout }: Re
   if (route === 'crear-evento' && puedeGestionarEventos) {
     return (
       <EventoAdminPage
+        shell={shell}
         eventoId={null}
         esAdminEventos={esAdminEventos}
         gestorCategoriaIds={gestorCategoriaIds}
@@ -232,6 +245,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout }: Re
   if (route === 'gestionar-evento' && puedeGestionarEventos && actionEventoId) {
     return (
       <EventoAdminPage
+        shell={shell}
         eventoId={actionEventoId}
         esAdminEventos={esAdminEventos}
         gestorCategoriaIds={gestorCategoriaIds}
@@ -244,6 +258,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout }: Re
   if (route === 'admin-panel' && isAdmin && user) {
     return (
       <AdminPanel
+        shell={shell}
         onBack={() => setRoute('dashboard')}
         onDashboard={() => setRoute('admin-dashboard')}
         currentUserId={user.id}
@@ -252,18 +267,21 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout }: Re
   }
 
   if (route === 'admin-dashboard' && isAdmin) {
-    return <AdminDashboard onBack={() => setRoute('admin-panel')} />
+    return <AdminDashboard
+        shell={shell} onBack={() => setRoute('admin-panel')} />
   }
 
   if (route === 'invitar' && user && puedeInvitarUsuario) {
     // Rol garantizado LIDER o ADMIN por puedeInvitarUsuario; el `?? 'SOCIO'`
     // solo satisface el tipo (User.rol es opcional por sesiones antiguas).
-    return <InvitarPage rolActual={user.rol ?? 'SOCIO'} onBack={() => setRoute('dashboard')} />
+    return <InvitarPage
+        shell={shell} rolActual={user.rol ?? 'SOCIO'} onBack={() => setRoute('dashboard')} />
   }
 
   if (route === 'editar-salida' && isAdmin && actionSalidaId) {
     return (
       <SalidaEditForm
+        shell={shell}
         salidaId={actionSalidaId}
         onDone={() => { setActionSalidaId(null); setRoute('dashboard') }}
         onCancel={() => { setActionSalidaId(null); setRoute('dashboard') }}
@@ -286,6 +304,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout }: Re
   return (
     <Dashboard
       user={user!}
+      shell={shell}
       locked={!hasIntegrante}
       isAdmin={isAdmin}
       esSocioDelClub={esSocioClubActual}
@@ -298,7 +317,6 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout }: Re
       onAdminPanel={() => setRoute('admin-panel')}
       onEditSalida={(id) => { setActionSalidaId(id); setRoute('editar-salida') }}
       onCloseSalida={(id) => { setActionSalidaId(id); setRoute('nueva-cierre') }}
-      onLogout={logout}
       puedeInvitar={puedeInvitarUsuario}
       onInvitar={() => setRoute('invitar')}
     />

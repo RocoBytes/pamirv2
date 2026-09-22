@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ChevronLeft, Save, Loader2, AlertCircle, Pencil } from 'lucide-react'
+import { Save, Loader2, AlertCircle, Pencil } from 'lucide-react'
+import { AppShell, type ShellContext } from './shell/AppShell'
 import { Input } from './ui/Input'
 import { TimeInput24 } from './ui/TimeInput24'
 import { Button } from './ui/Button'
@@ -132,7 +133,7 @@ function ChipSingle<T extends string>({
 }) {
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-semibold text-[#264c99]">{label}</legend>
+      <legend className="text-sm font-semibold text-primary">{label}</legend>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
           const selected = value === opt
@@ -144,10 +145,10 @@ function ChipSingle<T extends string>({
               aria-pressed={selected}
               className={[
                 'px-4 py-2 rounded-xl text-sm font-medium border transition-all duration-150',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] focus-visible:ring-offset-1',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
                 selected
-                  ? 'bg-[#264c99] text-white border-[#264c99] shadow-sm'
-                  : 'bg-white text-slate-700 border-[#4a6fad]/40 hover:border-[#264c99] hover:text-[#264c99]',
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : 'bg-white text-slate-700 border-secondary/40 hover:border-primary hover:text-primary',
               ].join(' ')}
             >
               {labels[opt]}
@@ -155,7 +156,7 @@ function ChipSingle<T extends string>({
           )
         })}
       </div>
-      {error && <p className="text-xs text-[#A4636E]" role="alert">{error}</p>}
+      {error && <p className="text-xs text-error" role="alert">{error}</p>}
     </fieldset>
   )
 }
@@ -176,7 +177,7 @@ function ChipMulti<T extends string>({
   }
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-semibold text-[#264c99]">{label}</legend>
+      <legend className="text-sm font-semibold text-primary">{label}</legend>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
           const selected = value.includes(opt)
@@ -188,10 +189,10 @@ function ChipMulti<T extends string>({
               aria-pressed={selected}
               className={[
                 'px-4 py-2 rounded-xl text-sm font-medium border transition-all duration-150',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] focus-visible:ring-offset-1',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
                 selected
-                  ? 'bg-[#264c99] text-white border-[#264c99] shadow-sm'
-                  : 'bg-white text-slate-700 border-[#4a6fad]/40 hover:border-[#264c99] hover:text-[#264c99]',
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : 'bg-white text-slate-700 border-secondary/40 hover:border-primary hover:text-primary',
               ].join(' ')}
             >
               {labels[opt]}
@@ -199,7 +200,7 @@ function ChipMulti<T extends string>({
           )
         })}
       </div>
-      {error && <p className="text-xs text-[#A4636E]" role="alert">{error}</p>}
+      {error && <p className="text-xs text-error" role="alert">{error}</p>}
     </fieldset>
   )
 }
@@ -207,7 +208,7 @@ function ChipMulti<T extends string>({
 function BoolChips({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-semibold text-[#264c99]">{label}</legend>
+      <legend className="text-sm font-semibold text-primary">{label}</legend>
       <div className="flex gap-2">
         {[{ v: true, l: 'Sí' }, { v: false, l: 'No' }].map(({ v, l }) => {
           const selected = value === v
@@ -220,8 +221,8 @@ function BoolChips({ label, value, onChange }: { label: string; value: boolean; 
               className={[
                 'px-5 py-2 rounded-xl text-sm font-medium border transition-all duration-150',
                 selected
-                  ? 'bg-[#264c99] text-white border-[#264c99] shadow-sm'
-                  : 'bg-white text-slate-700 border-[#4a6fad]/40 hover:border-[#264c99] hover:text-[#264c99]',
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : 'bg-white text-slate-700 border-secondary/40 hover:border-primary hover:text-primary',
               ].join(' ')}
             >
               {l}
@@ -235,8 +236,8 @@ function BoolChips({ label, value, onChange }: { label: string; value: boolean; 
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="bg-white rounded-2xl border border-[#4a6fad]/15 p-5 shadow-sm flex flex-col gap-5">
-      <h3 className="text-sm font-bold text-[#264c99]">{title}</h3>
+    <section className="bg-white rounded-2xl border border-secondary/15 p-5 shadow-sm flex flex-col gap-5">
+      <h3 className="text-sm font-bold text-primary">{title}</h3>
       {children}
     </section>
   )
@@ -278,11 +279,12 @@ interface SalidaEditFormProps {
   salidaId: string
   onDone: () => void
   onCancel: () => void
+  shell: ShellContext
 }
 
 // ─── Componente ──────────────────────────────────────────────────────────────
 
-export function SalidaEditForm({ salidaId, onDone, onCancel }: SalidaEditFormProps) {
+export function SalidaEditForm({ salidaId, onDone, onCancel, shell }: SalidaEditFormProps) {
   const [salida, setSalida] = useState<SalidaRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -338,35 +340,37 @@ export function SalidaEditForm({ salidaId, onDone, onCancel }: SalidaEditFormPro
   }
 
   return (
-    <div className="min-h-screen bg-[#f0f4fb] flex flex-col">
-      {/* Header */}
-      <header className="bg-white border-b border-[#4a6fad]/15 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
-          <button onClick={onCancel} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors" aria-label="Volver">
-            <ChevronLeft size={18} />
-          </button>
-          <div className="flex items-center gap-2 min-w-0">
-            <Pencil size={18} className="text-[#264c99] shrink-0" />
-            <span className="font-semibold text-slate-900 truncate">Editar salida</span>
-            {typeof salida?.numeroSalida === 'number' && (
-              <span className="shrink-0 text-[10px] font-bold text-[#4a6fad] bg-[#e8eef7] px-2 py-0.5 rounded-md">N° {salida.numeroSalida}</span>
-            )}
-          </div>
+    <AppShell
+      shell={shell}
+      active="none"
+      onBack={onCancel}
+      width="narrow"
+      chrome="focused"
+      title="Editar salida"
+    >
+        {/* Identidad de la salida editada: el header compartido solo lleva el
+            título genérico, así que el N° va acá, junto al formulario. */}
+        <div className="mb-5 flex items-center gap-2 min-w-0">
+          <Pencil size={18} className="text-primary shrink-0" aria-hidden="true" />
+          <h1 className="text-headline-md font-bold text-on-surface truncate">Editar salida</h1>
+          {typeof salida?.numeroSalida === 'number' && (
+            <span className="shrink-0 text-label-caps font-bold text-primary bg-primary-fixed px-2 py-0.5 rounded-md tabular-nums">
+              N° {salida.numeroSalida}
+            </span>
+          )}
         </div>
-      </header>
 
-      <main className="flex-1 max-w-2xl w-full mx-auto px-4 sm:px-6 py-6">
         {loading && (
-          <div className="flex flex-col items-center justify-center py-20 gap-3 text-[#757874]">
-            <Loader2 className="animate-spin text-[#264c99]" size={28} />
+          <div className="flex flex-col items-center justify-center py-20 gap-3 text-on-surface-variant">
+            <Loader2 className="animate-spin text-primary" size={28} />
             <p className="text-sm">Cargando salida...</p>
           </div>
         )}
 
         {!loading && loadError && (
           <div className="flex flex-col items-center py-16 gap-4 text-center">
-            <AlertCircle size={32} className="text-[#A4636E]" />
-            <p className="text-sm text-[#757874]">{loadError}</p>
+            <AlertCircle size={32} className="text-error" />
+            <p className="text-sm text-on-surface-variant">{loadError}</p>
             <Button variant="secondary" size="sm" onClick={onCancel}>Volver</Button>
           </div>
         )}
@@ -374,7 +378,7 @@ export function SalidaEditForm({ salidaId, onDone, onCancel }: SalidaEditFormPro
         {!loading && !loadError && salida && (
           <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
             {/* Contexto no editable: grupo humano */}
-            <div className="bg-[#e8eef7] border border-[#264c99]/15 rounded-2xl px-4 py-3 text-xs text-[#1e3c7a]">
+            <div className="bg-primary-fixed border border-primary/15 rounded-2xl px-4 py-3 text-xs text-primary-hover">
               Líder de cordada e integrantes <strong>no son editables</strong> desde aquí.
               Líder: <strong>{salida.liderCordada}</strong> · {salida.participantes.length} participante(s).
             </div>
@@ -449,8 +453,8 @@ export function SalidaEditForm({ salidaId, onDone, onCancel }: SalidaEditFormPro
                 <Input label="Especifica el otro riesgo" error={errors.riesgosOtro?.message} {...register('riesgosOtro')} />
               )}
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="pronosticoMeteorologico" className="text-sm font-semibold text-[#264c99]">
-                  Pronóstico meteorológico<span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+                <label htmlFor="pronosticoMeteorologico" className="text-sm font-semibold text-primary">
+                  Pronóstico meteorológico<span className="text-error ml-1" aria-hidden="true">*</span>
                 </label>
                 <textarea
                   id="pronosticoMeteorologico"
@@ -459,17 +463,17 @@ export function SalidaEditForm({ salidaId, onDone, onCancel }: SalidaEditFormPro
                   {...register('pronosticoMeteorologico')}
                   className={[
                     'w-full px-3 py-2.5 rounded-xl border bg-white text-sm text-slate-800 resize-y',
-                    'placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
-                    errors.pronosticoMeteorologico ? 'border-[#A4636E]' : 'border-[#4a6fad]/30',
+                    'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                    errors.pronosticoMeteorologico ? 'border-error' : 'border-secondary/30',
                   ].join(' ')}
                 />
                 {errors.pronosticoMeteorologico && (
-                  <p className="text-xs text-[#A4636E]" role="alert">{errors.pronosticoMeteorologico.message}</p>
+                  <p className="text-xs text-error" role="alert">{errors.pronosticoMeteorologico.message}</p>
                 )}
               </div>
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="planEvacuacion" className="text-sm font-semibold text-[#264c99]">
-                  Plan de evacuación <span className="text-[#757874] font-normal">(opcional)</span>
+                <label htmlFor="planEvacuacion" className="text-sm font-semibold text-primary">
+                  Plan de evacuación <span className="text-on-surface-variant font-normal">(opcional)</span>
                 </label>
                 <textarea
                   id="planEvacuacion"
@@ -478,18 +482,18 @@ export function SalidaEditForm({ salidaId, onDone, onCancel }: SalidaEditFormPro
                   {...register('planEvacuacion')}
                   className={[
                     'w-full px-3 py-2.5 rounded-xl border bg-white text-sm text-slate-800 resize-y',
-                    'placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
-                    errors.planEvacuacion ? 'border-[#A4636E]' : 'border-[#4a6fad]/30',
+                    'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                    errors.planEvacuacion ? 'border-error' : 'border-secondary/30',
                   ].join(' ')}
                 />
                 {errors.planEvacuacion && (
-                  <p className="text-xs text-[#A4636E]" role="alert">{errors.planEvacuacion.message}</p>
+                  <p className="text-xs text-error" role="alert">{errors.planEvacuacion.message}</p>
                 )}
               </div>
             </Section>
 
             {submitError && (
-              <div className="flex items-start gap-2 bg-[#f5e8ea] border border-[#A4636E]/30 rounded-xl px-4 py-3 text-sm text-[#A4636E]">
+              <div className="flex items-start gap-2 bg-error-container border border-error/30 rounded-xl px-4 py-3 text-sm text-error">
                 <AlertCircle size={18} className="shrink-0 mt-0.5" />
                 <span>{submitError}</span>
               </div>
@@ -506,7 +510,6 @@ export function SalidaEditForm({ salidaId, onDone, onCancel }: SalidaEditFormPro
             </div>
           </form>
         )}
-      </main>
-    </div>
+    </AppShell>
   )
 }

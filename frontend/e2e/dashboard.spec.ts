@@ -81,7 +81,7 @@ test.describe('Dashboard – estado desbloqueado (tiene integrante)', () => {
 
   test('muestra sección Mis Salidas vacía', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByText('Sin salidas aun')).toBeVisible()
+    await expect(page.getByText('Sin salidas activas en curso')).toBeVisible()
   })
 
   test('muestra lista de salidas cuando existen', async ({ page }) => {

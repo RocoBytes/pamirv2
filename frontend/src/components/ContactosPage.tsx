@@ -1,7 +1,5 @@
-import { ArrowLeft, Siren, Phone, AlertCircle } from 'lucide-react'
-import { useOrganization } from '../hooks/useOrganization'
-import { Button } from './ui/Button'
-import { ClubLogo } from './ClubLogo'
+import { Siren, Phone, AlertCircle } from 'lucide-react'
+import { AppShell, type ShellContext } from './shell/AppShell'
 
 // Contactos de emergencia y rescate de Chile. Contenido estático: son números
 // nacionales fijos, no requieren backend ni base de datos.
@@ -112,16 +110,16 @@ const SECCIONES: Seccion[] = [
 function ContactoCard({ contacto }: { contacto: Contacto }) {
   const tagStyle =
     contacto.tag === 'GOPE'
-      ? 'bg-[#f5e8ea] text-[#8b3a44]'
-      : 'bg-[#e8eef7] text-[#264c99]'
+      ? 'bg-error-container text-on-error-container'
+      : 'bg-primary-fixed text-primary'
 
   return (
     <a
       href={`tel:${contacto.tel}`}
-      className="flex items-center gap-4 bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 transition-shadow duration-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]"
+      className="flex items-center gap-4 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 transition-shadow duration-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       <div className="shrink-0 w-14 text-center">
-        <span className="block text-xl font-bold text-[#264c99] leading-tight tabular-nums">
+        <span className="block text-xl font-bold text-primary leading-tight tabular-nums">
           {contacto.numero}
         </span>
       </div>
@@ -136,42 +134,28 @@ function ContactoCard({ contacto }: { contacto: Contacto }) {
             </span>
           )}
         </div>
-        <p className="text-xs text-[#757874] mt-0.5">{contacto.descripcion}</p>
+        <p className="text-xs text-on-surface-variant mt-0.5">{contacto.descripcion}</p>
       </div>
-      <Phone size={16} className="shrink-0 text-[#4a6fad]" aria-hidden="true" />
+      <Phone size={16} className="shrink-0 text-secondary" aria-hidden="true" />
     </a>
   )
 }
 
 interface ContactosPageProps {
   onBack: () => void
+  shell: ShellContext
 }
 
-export function ContactosPage({ onBack }: ContactosPageProps) {
-  const { shortName } = useOrganization()
+export function ContactosPage({ onBack, shell }: ContactosPageProps) {
   return (
-    <div className="min-h-screen bg-[#f0f4fb]">
-      <header className="bg-white border-b border-[#4a6fad]/10 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <ClubLogo alt="" className="w-11 h-11 object-contain" />
-            <span className="font-bold text-slate-900 text-lg">{shortName}</span>
-          </div>
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft size={16} />
-            Volver
-          </Button>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
+    <AppShell shell={shell} active="contactos" onBack={onBack} width="narrow">
         <div className="mb-6">
-          <div className="flex items-center gap-2 text-[#4a6fad] text-xs font-semibold uppercase tracking-widest mb-1">
+          <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
             <Siren size={14} />
             Información de seguridad
           </div>
           <h1 className="text-xl font-bold text-slate-900">Contactos esenciales</h1>
-          <p className="text-sm text-[#757874] mt-0.5">
+          <p className="text-sm text-on-surface-variant mt-0.5">
             Números de emergencia y rescate en Chile. Toca un número para llamar.
           </p>
         </div>
@@ -179,7 +163,7 @@ export function ContactosPage({ onBack }: ContactosPageProps) {
         <div className="flex flex-col gap-6">
           {SECCIONES.map((seccion) => (
             <section key={seccion.titulo}>
-              <h2 className="text-sm font-bold text-[#264c99] uppercase tracking-wide mb-2">
+              <h2 className="text-sm font-bold text-primary uppercase tracking-wide mb-2">
                 {seccion.titulo}
               </h2>
               <ul className="flex flex-col gap-2">
@@ -203,7 +187,6 @@ export function ContactosPage({ onBack }: ContactosPageProps) {
             no tiene línea directa pública.
           </p>
         </div>
-      </main>
-    </div>
+    </AppShell>
   )
 }

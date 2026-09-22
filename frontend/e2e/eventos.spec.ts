@@ -138,8 +138,8 @@ test.describe('Eventos del club – socio', () => {
     await page.goto('/')
     const card = page.getByRole('button', { name: 'Abrir eventos del club' })
     await expect(card).toBeVisible()
-    await expect(card).toContainText('Eventos del club')
-    await expect(card).toContainText('Calendario de actividades e inscripciones')
+    await expect(card).toContainText('Eventos & Salidas Club')
+    await expect(card).toContainText('Calendario y cupos abiertos')
   })
 
   test('abre Eventos y ve la tarjeta publicada con badge de categoría e inscripciones abiertas', async ({ page }) => {

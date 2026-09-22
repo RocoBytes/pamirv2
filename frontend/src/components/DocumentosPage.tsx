@@ -1,19 +1,10 @@
 import { useState, useEffect } from 'react'
-import {
-  ArrowLeft,
-  BookOpen,
-  Loader2,
-  AlertCircle,
-  FileText,
-  Download,
-  FolderOpen,
-} from 'lucide-react'
+import { BookOpen, Loader2, AlertCircle, FileText, Download, FolderOpen } from 'lucide-react'
 import { fetchDocumentos, fetchDocumentoUrl } from '../lib/api'
 import type { DocumentoRecord } from '../lib/api'
 import { CATEGORIA_LABELS, CATEGORIA_ORDEN } from '../lib/documentos'
 import { useOrganization } from '../hooks/useOrganization'
-import { Button } from './ui/Button'
-import { ClubLogo } from './ClubLogo'
+import { AppShell, type ShellContext } from './shell/AppShell'
 import { FileDownloadButton } from './FileDownloadButton'
 
 function agruparPorCategoria(docs: DocumentoRecord[]): [string, DocumentoRecord[]][] {
@@ -32,10 +23,11 @@ function agruparPorCategoria(docs: DocumentoRecord[]): [string, DocumentoRecord[
 
 interface DocumentosPageProps {
   onBack: () => void
+  shell: ShellContext
 }
 
-export function DocumentosPage({ onBack }: DocumentosPageProps) {
-  const { shortName, memberBadge } = useOrganization()
+export function DocumentosPage({ onBack, shell }: DocumentosPageProps) {
+  const { memberBadge } = useOrganization()
   const [documentos, setDocumentos] = useState<DocumentoRecord[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -50,41 +42,27 @@ export function DocumentosPage({ onBack }: DocumentosPageProps) {
   const grupos = documentos ? agruparPorCategoria(documentos) : []
 
   return (
-    <div className="min-h-screen bg-[#f0f4fb]">
-      <header className="bg-white border-b border-[#4a6fad]/10 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <ClubLogo alt="" className="w-11 h-11 object-contain" />
-            <span className="font-bold text-slate-900 text-lg">{shortName}</span>
-          </div>
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft size={16} />
-            Volver
-          </Button>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
+    <AppShell shell={shell} active="documentos" onBack={onBack} width="narrow">
         <div className="mb-6">
-          <div className="flex items-center gap-2 text-[#4a6fad] text-xs font-semibold uppercase tracking-widest mb-1">
+          <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
             <BookOpen size={14} />
             Exclusivo socios {memberBadge}
           </div>
           <h1 className="text-xl font-bold text-slate-900">Documentación del Club</h1>
-          <p className="text-sm text-[#757874] mt-0.5">
+          <p className="text-sm text-on-surface-variant mt-0.5">
             Formularios, check-lists y material de apoyo para tus salidas de montaña.
           </p>
         </div>
 
         {!documentos && !error && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-[#757874]">
-            <Loader2 className="animate-spin text-[#264c99]" size={28} />
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
+            <Loader2 className="animate-spin text-primary" size={28} />
             <p className="text-sm">Cargando documentos...</p>
           </div>
         )}
 
         {error && (
-          <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-sm text-[#8b3a44]">
+          <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container">
             <AlertCircle size={18} className="shrink-0 mt-0.5" />
             <p>{error}</p>
           </div>
@@ -92,12 +70,12 @@ export function DocumentosPage({ onBack }: DocumentosPageProps) {
 
         {documentos && documentos.length === 0 && (
           <div className="flex flex-col items-center py-12 gap-3 text-center">
-            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-[#e8eef7]">
-              <FolderOpen size={24} className="text-[#264c99]" />
+            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-fixed">
+              <FolderOpen size={24} className="text-primary" />
             </div>
             <div>
               <p className="font-semibold text-slate-700">Documentos en preparación</p>
-              <p className="text-sm text-[#757874] mt-0.5 max-w-sm">
+              <p className="text-sm text-on-surface-variant mt-0.5 max-w-sm">
                 Pronto encontrarás aquí los formularios de aviso de expedición de los retenes de
                 Carabineros, la matriz de riesgo 3x3, check-lists de salidas, glosario, libros y más.
               </p>
@@ -109,23 +87,23 @@ export function DocumentosPage({ onBack }: DocumentosPageProps) {
           <div className="flex flex-col gap-6">
             {grupos.map(([categoria, docs]) => (
               <section key={categoria}>
-                <h2 className="text-sm font-bold text-[#264c99] uppercase tracking-wide mb-2">
+                <h2 className="text-sm font-bold text-primary uppercase tracking-wide mb-2">
                   {CATEGORIA_LABELS[categoria] ?? categoria}
                 </h2>
                 <ul className="flex flex-col gap-2">
                   {docs.map((doc) => {
                     const contenido = (
                       <>
-                        <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#e8eef7] flex items-center justify-center">
-                          <FileText size={18} className="text-[#264c99]" />
+                        <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-primary-fixed flex items-center justify-center">
+                          <FileText size={18} className="text-primary" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-slate-900 text-sm truncate">{doc.nombre}</p>
                           {doc.descripcion && (
-                            <p className="text-xs text-[#757874] truncate">{doc.descripcion}</p>
+                            <p className="text-xs text-on-surface-variant truncate">{doc.descripcion}</p>
                           )}
                         </div>
-                        <Download size={16} className="shrink-0 text-[#4a6fad]" />
+                        <Download size={16} className="shrink-0 text-secondary" />
                       </>
                     )
                     return (
@@ -134,9 +112,9 @@ export function DocumentosPage({ onBack }: DocumentosPageProps) {
                           <FileDownloadButton
                             fetchUrl={() => fetchDocumentoUrl(doc.id)}
                             className={[
-                              'flex items-center gap-3 bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 w-full text-left',
+                              'flex items-center gap-3 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 w-full text-left',
                               'transition-shadow duration-200 hover:shadow-md',
-                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]',
+                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                               'disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-sm',
                             ].join(' ')}
                           >
@@ -147,7 +125,7 @@ export function DocumentosPage({ onBack }: DocumentosPageProps) {
                           <button
                             type="button"
                             disabled
-                            className="flex items-center gap-3 bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 w-full text-left opacity-60 cursor-not-allowed"
+                            className="flex items-center gap-3 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 w-full text-left opacity-60 cursor-not-allowed"
                           >
                             {contenido}
                           </button>
@@ -160,7 +138,6 @@ export function DocumentosPage({ onBack }: DocumentosPageProps) {
             ))}
           </div>
         )}
-      </main>
-    </div>
+    </AppShell>
   )
 }

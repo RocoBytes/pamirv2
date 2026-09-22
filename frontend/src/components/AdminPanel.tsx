@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react'
 import {
-  ArrowLeft,
   LayoutDashboard,
   Loader2,
   AlertCircle,
@@ -20,7 +19,7 @@ import {
   UserCog,
 } from 'lucide-react'
 import { useOrganization } from '../hooks/useOrganization'
-import { ClubLogo } from './ClubLogo'
+import { AppShell, type ShellContext } from './shell/AppShell'
 import {
   fetchSalidas,
   fetchAdminStats,
@@ -39,11 +38,11 @@ import type {
 import type { SalidaRecord } from '../types/salida'
 import { STATUS_LABELS, STATUS_COLORS, DISCIPLINA_LABELS } from '../types/salida'
 import { CATEGORIA_LABELS, CATEGORIA_ORDEN } from '../lib/documentos'
-import { Button } from './ui/Button'
 import { InvitacionesManager } from './invitaciones/InvitacionesManager'
 import { UsuariosManager } from './invitaciones/UsuariosManager'
 
 interface AdminPanelProps {
+  shell: ShellContext
   onBack: () => void
   onDashboard: () => void
   currentUserId: string
@@ -125,12 +124,12 @@ function MetricCard({
 }) {
   return (
     <div
-      className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4"
+      className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4"
       aria-label={ariaLabel}
     >
-      <p className="text-2xl font-bold text-[#264c99] leading-tight">{value}</p>
-      <p className="text-xs text-[#757874] mt-1">{label}</p>
-      {subtitle && <p className="text-[10px] text-[#757874]/70 mt-0.5">{subtitle}</p>}
+      <p className="text-2xl font-bold text-primary leading-tight">{value}</p>
+      <p className="text-xs text-on-surface-variant mt-1">{label}</p>
+      {subtitle && <p className="text-[10px] text-on-surface-variant/70 mt-0.5">{subtitle}</p>}
     </div>
   )
 }
@@ -139,10 +138,10 @@ function BarRow({ label, value, max }: { label: string; value: number; max: numb
   const pct = max > 0 ? Math.round((value / max) * 100) : 0
   return (
     <div className="flex items-center gap-3">
-      <span className="w-24 shrink-0 text-xs text-[#757874] truncate">{label}</span>
-      <div className="flex-1 bg-[#e8eef7] rounded-full h-2">
+      <span className="w-24 shrink-0 text-xs text-on-surface-variant truncate">{label}</span>
+      <div className="flex-1 bg-primary-fixed rounded-full h-2">
         <div
-          className="bg-[#264c99] rounded-full h-2"
+          className="bg-primary rounded-full h-2"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -186,7 +185,7 @@ function SaludFlags({ salud }: { salud: NonNullable<ParticipanteSalud['salud']> 
         </span>
       ))}
       {flags.length === 0 && (
-        <span className="text-[10px] text-[#757874]">Sin alertas médicas</span>
+        <span className="text-[10px] text-on-surface-variant">Sin alertas médicas</span>
       )}
     </div>
   )
@@ -284,10 +283,10 @@ function DocumentosAdminSection() {
   return (
     <section className="mb-8">
       <div className="flex items-center gap-2 mb-3">
-        <BookOpen size={16} className="text-[#264c99]" />
+        <BookOpen size={16} className="text-primary" />
         <h2 className="text-base font-bold text-slate-900">Documentación del Club</h2>
       </div>
-      <p className="text-xs text-[#757874] mb-3">
+      <p className="text-xs text-on-surface-variant mb-3">
         Sube formularios, check-lists y material de apoyo. Los archivos quedan visibles para los
         socios {memberBadge} en su sección "Documentación del Club".
       </p>
@@ -295,7 +294,7 @@ function DocumentosAdminSection() {
       {/* Formulario de subida */}
       <form
         onSubmit={(e) => void handleUpload(e)}
-        className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 mb-4 flex flex-col gap-3"
+        className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 mb-4 flex flex-col gap-3"
       >
         <div className="flex flex-col gap-1">
           <label htmlFor="doc-categoria" className="text-xs font-semibold text-slate-700">
@@ -306,7 +305,7 @@ function DocumentosAdminSection() {
             value={categoria}
             onChange={(e) => setCategoria(e.target.value)}
             disabled={uploading}
-            className="rounded-lg border border-[#4a6fad]/25 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#264c99] disabled:opacity-50"
+            className="rounded-lg border border-secondary/25 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
           >
             {CATEGORIA_ORDEN.map((cat) => (
               <option key={cat} value={cat}>
@@ -327,13 +326,13 @@ function DocumentosAdminSection() {
             onChange={(e) => setNombre(e.target.value)}
             disabled={uploading}
             placeholder="Ej: Aviso de expedición — Retén Río Blanco"
-            className="rounded-lg border border-[#4a6fad]/25 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#264c99] disabled:opacity-50"
+            className="rounded-lg border border-secondary/25 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
           />
         </div>
 
         <div className="flex flex-col gap-1">
           <label htmlFor="doc-descripcion" className="text-xs font-semibold text-slate-700">
-            Descripción <span className="font-normal text-[#757874]">(opcional)</span>
+            Descripción <span className="font-normal text-on-surface-variant">(opcional)</span>
           </label>
           <input
             id="doc-descripcion"
@@ -341,13 +340,13 @@ function DocumentosAdminSection() {
             value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
             disabled={uploading}
-            className="rounded-lg border border-[#4a6fad]/25 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#264c99] disabled:opacity-50"
+            className="rounded-lg border border-secondary/25 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
           />
         </div>
 
         <div className="flex flex-col gap-1">
           <label htmlFor="doc-file" className="text-xs font-semibold text-slate-700">
-            Archivo PDF <span className="font-normal text-[#757874]">(máx. 15 MB)</span>
+            Archivo PDF <span className="font-normal text-on-surface-variant">(máx. 15 MB)</span>
           </label>
           <input
             id="doc-file"
@@ -356,12 +355,12 @@ function DocumentosAdminSection() {
             accept=".pdf,application/pdf"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             disabled={uploading}
-            className="text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-[#e8eef7] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#264c99] disabled:opacity-50"
+            className="text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-fixed file:px-3 file:py-2 file:text-xs file:font-semibold file:text-primary disabled:opacity-50"
           />
         </div>
 
         {formError && (
-          <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-xs text-[#8b3a44]">
+          <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-xs text-on-error-container">
             <AlertCircle size={14} className="shrink-0 mt-0.5" />
             <p>{formError}</p>
           </div>
@@ -377,7 +376,7 @@ function DocumentosAdminSection() {
         <button
           type="submit"
           disabled={uploading}
-          className="inline-flex items-center justify-center gap-1.5 bg-[#264c99] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[#1e3d7d] disabled:opacity-50 transition-colors self-start"
+          className="inline-flex items-center justify-center gap-1.5 bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-primary-hover disabled:opacity-50 transition-colors self-start"
         >
           {uploading ? (
             <>
@@ -395,21 +394,21 @@ function DocumentosAdminSection() {
 
       {/* Lista de documentos existentes */}
       {loadError && (
-        <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-sm text-[#8b3a44] mb-3">
+        <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container mb-3">
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
           <p className="text-xs">{loadError}</p>
         </div>
       )}
 
       {!docs && !loadError && (
-        <div className="flex items-center gap-2 text-[#757874]">
-          <Loader2 className="animate-spin text-[#264c99]" size={16} />
+        <div className="flex items-center gap-2 text-on-surface-variant">
+          <Loader2 className="animate-spin text-primary" size={16} />
           <p className="text-xs">Cargando documentos...</p>
         </div>
       )}
 
       {docs && docs.length === 0 && (
-        <p className="text-sm text-[#757874] py-4 text-center">
+        <p className="text-sm text-on-surface-variant py-4 text-center">
           Aún no hay documentos cargados.
         </p>
       )}
@@ -422,14 +421,14 @@ function DocumentosAdminSection() {
             return (
               <li
                 key={doc.id}
-                className="flex items-center gap-3 bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-3"
+                className="flex items-center gap-3 bg-white rounded-2xl border border-secondary/15 shadow-sm p-3"
               >
-                <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-[#e8eef7] flex items-center justify-center">
-                  <FileText size={16} className="text-[#264c99]" />
+                <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-primary-fixed flex items-center justify-center">
+                  <FileText size={16} className="text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-900 text-sm truncate">{doc.nombre}</p>
-                  <p className="text-[11px] text-[#757874] truncate">
+                  <p className="text-[11px] text-on-surface-variant truncate">
                     {CATEGORIA_LABELS[doc.categoria] ?? doc.categoria}
                   </p>
                 </div>
@@ -461,7 +460,7 @@ function DocumentosAdminSection() {
                     type="button"
                     onClick={() => setConfirmDeleteId(doc.id)}
                     aria-label={`Eliminar ${doc.nombre}`}
-                    className="shrink-0 p-2 rounded-lg text-[#8b3a44] hover:bg-[#f5e8ea] transition-colors"
+                    className="shrink-0 p-2 rounded-lg text-on-error-container hover:bg-error-container transition-colors"
                   >
                     <Trash2 size={16} />
                   </button>
@@ -477,8 +476,8 @@ function DocumentosAdminSection() {
 
 // ─── AdminPanel component ─────────────────────────────────────────────────────
 
-export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelProps) {
-  const { displayName, shortName } = useOrganization()
+export function AdminPanel({ shell, onBack, onDashboard, currentUserId }: AdminPanelProps) {
+  const { displayName } = useOrganization()
   const [salidas, setSalidas] = useState<SalidaRecord[] | null>(null)
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
@@ -603,34 +602,20 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
   ]
 
   return (
-    <div className="min-h-screen bg-[#f0f4fb]">
-      <header className="bg-white border-b border-[#4a6fad]/10 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <ClubLogo alt="" className="w-11 h-11 object-contain" />
-            <span className="font-bold text-slate-900 text-lg">{shortName}</span>
-          </div>
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft size={16} />
-            Volver
-          </Button>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
+    <AppShell shell={shell} active="none" onBack={onBack} width="narrow">
         {/* Page title */}
         <div className="mb-6">
-          <div className="flex items-center gap-2 text-[#4a6fad] text-xs font-semibold uppercase tracking-widest mb-1">
+          <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
             <LayoutDashboard size={14} />
             Administración
           </div>
           <h1 className="text-xl font-bold text-slate-900">Panel de Administración</h1>
-          <p className="text-sm text-[#757874] mt-0.5">
+          <p className="text-sm text-on-surface-variant mt-0.5">
             Salidas abiertas, alarmas pendientes e historial completo de registros.
           </p>
           <button
             onClick={onDashboard}
-            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#264c99] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1e3d7d]"
+            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-hover"
           >
             <BarChart3 size={16} />
             Ver Dashboard analítico
@@ -639,21 +624,21 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
 
         {/* Loading state */}
         {isLoading && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-[#757874]">
-            <Loader2 className="animate-spin text-[#264c99]" size={28} />
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
+            <Loader2 className="animate-spin text-primary" size={28} />
             <p className="text-sm">Cargando datos...</p>
           </div>
         )}
 
         {/* Error state */}
         {error && (
-          <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-sm text-[#8b3a44] mb-6">
+          <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container mb-6">
             <AlertCircle size={18} className="shrink-0 mt-0.5" />
             <div className="flex-1">
               <p>{error}</p>
               <button
                 onClick={() => void loadSalidas()}
-                className="mt-2 text-[#8b3a44] font-semibold underline text-xs"
+                className="mt-2 text-on-error-container font-semibold underline text-xs"
               >
                 Reintentar
               </button>
@@ -665,25 +650,25 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
         {!isLoading && (
           <section className="mb-8">
             <div className="flex items-center gap-2 mb-3">
-              <BarChart3 size={16} className="text-[#264c99]" />
+              <BarChart3 size={16} className="text-primary" />
               <h2 className="text-base font-bold text-slate-900">Métricas</h2>
             </div>
 
             {statsLoading && (
-              <div className="flex items-center gap-2 bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 text-[#757874]">
-                <Loader2 className="animate-spin text-[#264c99]" size={16} />
+              <div className="flex items-center gap-2 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 text-on-surface-variant">
+                <Loader2 className="animate-spin text-primary" size={16} />
                 <p className="text-xs">Cargando métricas...</p>
               </div>
             )}
 
             {!statsLoading && statsError && (
-              <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-sm text-[#8b3a44]">
+              <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container">
                 <AlertCircle size={18} className="shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p>{statsError}</p>
                   <button
                     onClick={() => void loadStats()}
-                    className="mt-2 text-[#8b3a44] font-semibold underline text-xs"
+                    className="mt-2 text-on-error-container font-semibold underline text-xs"
                   >
                     Reintentar
                   </button>
@@ -709,12 +694,12 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
                 </div>
 
                 {/* Salidas por mes (last 6 months, chronological order) */}
-                <div className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 mb-3">
-                  <h3 className="text-xs font-bold text-[#264c99] uppercase tracking-wide mb-3">
+                <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 mb-3">
+                  <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-3">
                     Salidas por mes
                   </h3>
                   {meses.length === 0 ? (
-                    <p className="text-xs text-[#757874]">Sin datos de salidas en los últimos meses</p>
+                    <p className="text-xs text-on-surface-variant">Sin datos de salidas en los últimos meses</p>
                   ) : (
                     <div className="flex flex-col gap-2">
                       {meses.map((m) => (
@@ -730,12 +715,12 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
                 </div>
 
                 {/* Top disciplinas */}
-                <div className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4">
-                  <h3 className="text-xs font-bold text-[#264c99] uppercase tracking-wide mb-3">
+                <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4">
+                  <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-3">
                     Disciplinas más frecuentes
                   </h3>
                   {stats.topDisciplinas.length === 0 ? (
-                    <p className="text-xs text-[#757874]">Sin salidas registradas</p>
+                    <p className="text-xs text-on-surface-variant">Sin salidas registradas</p>
                   ) : (
                     <div className="flex flex-col gap-2">
                       {stats.topDisciplinas.map((d) => (
@@ -764,10 +749,10 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
         {!isLoading && (
           <section className="mb-8">
             <div className="flex items-center gap-2 mb-3">
-              <UserCog size={16} className="text-[#264c99]" />
+              <UserCog size={16} className="text-primary" />
               <h2 className="text-base font-bold text-slate-900">Usuarios e invitaciones</h2>
             </div>
-            <p className="text-xs text-[#757874] mb-3">
+            <p className="text-xs text-on-surface-variant mb-3">
               {displayName} es un sistema cerrado: las cuentas nuevas solo se crean por
               invitación. Gestiona quién puede unirse y qué rol tiene cada integrante.
             </p>
@@ -785,17 +770,17 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
             <section className="mb-8">
               <div className="flex items-center gap-2 mb-3">
                 <h2 className="text-base font-bold text-slate-900">Salidas abiertas</h2>
-                <span className="text-xs font-bold bg-[#e8eef7] text-[#264c99] px-2 py-0.5 rounded-full">
+                <span className="text-xs font-bold bg-primary-fixed text-primary px-2 py-0.5 rounded-full">
                   {openSalidas.length}
                 </span>
               </div>
 
               {openSalidas.length === 0 ? (
                 <div className="flex flex-col items-center py-10 gap-3 text-center">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-[#e8eef7]">
-                    <CheckCircle2 size={22} className="text-[#264c99]" />
+                  <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-primary-fixed">
+                    <CheckCircle2 size={22} className="text-primary" />
                   </div>
-                  <p className="text-sm text-[#757874]">No hay salidas abiertas sin cierre</p>
+                  <p className="text-sm text-on-surface-variant">No hay salidas abiertas sin cierre</p>
                 </div>
               ) : (
                 <ul className="flex flex-col gap-3">
@@ -809,19 +794,19 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
                     return (
                       <li
                         key={s.id}
-                        className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4"
+                        className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4"
                       >
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <div className="flex-1 min-w-0">
                             {typeof s.numeroSalida === 'number' && (
-                              <span className="inline-block text-[10px] font-bold text-[#4a6fad] bg-[#e8eef7] px-2 py-0.5 rounded-md mb-1">
+                              <span className="inline-block text-[10px] font-bold text-secondary bg-primary-fixed px-2 py-0.5 rounded-md mb-1">
                                 N° {s.numeroSalida}
                               </span>
                             )}
                             <p className="font-semibold text-slate-900 text-sm leading-tight">
                               {s.nombreActividad}
                             </p>
-                            <p className="text-xs text-[#757874] mt-0.5">{s.ubicacionGeografica}</p>
+                            <p className="text-xs text-on-surface-variant mt-0.5">{s.ubicacionGeografica}</p>
                           </div>
                           <div className="flex flex-col items-end gap-1 shrink-0">
                             {vencida && (
@@ -839,7 +824,7 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-[#757874] mt-2">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-on-surface-variant mt-2">
                           <span>
                             <span className="font-medium text-slate-600">Inicio:</span>{' '}
                             {formatDate(s.fechaInicio)}
@@ -873,22 +858,22 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
             {/* ── Section: Fichas de salud ────────────────────────────────── */}
             <section className="mb-8">
               <div className="flex items-center gap-2 mb-3">
-                <HeartPulse size={16} className="text-[#264c99]" />
+                <HeartPulse size={16} className="text-primary" />
                 <h2 className="text-base font-bold text-slate-900">Fichas de salud</h2>
-                <span className="text-xs font-bold bg-[#e8eef7] text-[#264c99] px-2 py-0.5 rounded-full">
+                <span className="text-xs font-bold bg-primary-fixed text-primary px-2 py-0.5 rounded-full">
                   {openSalidas.length}
                 </span>
               </div>
-              <p className="text-xs text-[#757874] mb-3">
+              <p className="text-xs text-on-surface-variant mb-3">
                 Consulta y envía al responsable de cada salida en curso el resumen de fichas de salud de sus participantes.
               </p>
 
               {openSalidas.length === 0 ? (
                 <div className="flex flex-col items-center py-10 gap-3 text-center">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-[#e8eef7]">
-                    <HeartPulse size={22} className="text-[#264c99]" />
+                  <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-primary-fixed">
+                    <HeartPulse size={22} className="text-primary" />
                   </div>
-                  <p className="text-sm text-[#757874]">No hay salidas en curso</p>
+                  <p className="text-sm text-on-surface-variant">No hay salidas en curso</p>
                 </div>
               ) : (
                 <ul className="flex flex-col gap-3">
@@ -905,46 +890,46 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
                     return (
                       <li
                         key={s.id}
-                        className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm overflow-hidden"
+                        className="bg-white rounded-2xl border border-secondary/15 shadow-sm overflow-hidden"
                       >
                         {/* Header row: always visible */}
                         <button
                           type="button"
                           onClick={() => void handleToggleSalud(s.id)}
-                          className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#f0f4fb] transition-colors"
+                          className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-container-low transition-colors"
                           aria-expanded={isExpanded}
                         >
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-slate-900 text-sm leading-tight truncate">
                               {s.nombreActividad}
                             </p>
-                            <p className="text-xs text-[#757874] mt-0.5">
+                            <p className="text-xs text-on-surface-variant mt-0.5">
                               Líder: {s.liderCordada} ·{' '}
                               {Array.isArray(s.participantes) ? s.participantes.length : 0} participante(s)
                             </p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-xs text-[#264c99] font-medium">Ver fichas</span>
+                            <span className="text-xs text-primary font-medium">Ver fichas</span>
                             {isExpanded ? (
-                              <ChevronUp size={16} className="text-[#264c99]" />
+                              <ChevronUp size={16} className="text-primary" />
                             ) : (
-                              <ChevronDown size={16} className="text-[#264c99]" />
+                              <ChevronDown size={16} className="text-primary" />
                             )}
                           </div>
                         </button>
 
                         {/* Expandable panel */}
                         {isExpanded && (
-                          <div className="border-t border-[#e8eef7] px-4 py-3">
+                          <div className="border-t border-primary-fixed px-4 py-3">
                             {loading && (
-                              <div className="flex items-center gap-2 py-4 text-[#757874]">
-                                <Loader2 className="animate-spin text-[#264c99]" size={16} />
+                              <div className="flex items-center gap-2 py-4 text-on-surface-variant">
+                                <Loader2 className="animate-spin text-primary" size={16} />
                                 <p className="text-xs">Cargando fichas de salud...</p>
                               </div>
                             )}
 
                             {fetchErr && (
-                              <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-sm text-[#8b3a44] mb-3">
+                              <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container mb-3">
                                 <AlertCircle size={16} className="shrink-0 mt-0.5" />
                                 <p className="text-xs">{fetchErr}</p>
                               </div>
@@ -957,14 +942,14 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
                                   {data.participantes.map((p) => (
                                     <li
                                       key={p.rut}
-                                      className="rounded-xl border border-[#e8eef7] px-3 py-2"
+                                      className="rounded-xl border border-primary-fixed px-3 py-2"
                                     >
                                       <div className="flex items-center justify-between gap-2">
                                         <div className="flex-1 min-w-0">
                                           <p className="text-sm font-medium text-slate-900 truncate">
                                             {p.nombre}
                                           </p>
-                                          <p className="text-[11px] text-[#757874]">RUT: {p.rut}</p>
+                                          <p className="text-[11px] text-on-surface-variant">RUT: {p.rut}</p>
                                         </div>
                                         {!p.fichaEncontrada && <SinFichaBadge />}
                                         {p.fichaEncontrada && (
@@ -981,8 +966,8 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
                                 </ul>
 
                                 {/* Send action */}
-                                <div className="border-t border-[#e8eef7] pt-3">
-                                  <p className="text-xs text-[#757874] mb-2">
+                                <div className="border-t border-primary-fixed pt-3">
+                                  <p className="text-xs text-on-surface-variant mb-2">
                                     Se enviará a:{' '}
                                     <span className="font-medium text-slate-700">
                                       {data.creatorEmail ?? 'correo vinculado a la cuenta'}
@@ -997,7 +982,7 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
                                   )}
 
                                   {errorMsg && (
-                                    <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-xs text-[#8b3a44] mb-2">
+                                    <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-xs text-on-error-container mb-2">
                                       <AlertCircle size={14} className="shrink-0 mt-0.5" />
                                       <p>{errorMsg}</p>
                                     </div>
@@ -1008,7 +993,7 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
                                       type="button"
                                       onClick={() => setConfirmEnvioId(s.id)}
                                       disabled={isEnviando}
-                                      className="inline-flex items-center gap-1.5 bg-[#264c99] text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-[#1e3d7d] disabled:opacity-50 transition-colors"
+                                      className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-primary-hover disabled:opacity-50 transition-colors"
                                     >
                                       <Send size={12} />
                                       Enviar resumen al responsable
@@ -1024,7 +1009,7 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
                                         type="button"
                                         onClick={() => void handleEnviarSalud(s.id)}
                                         disabled={isEnviando}
-                                        className="inline-flex items-center gap-1.5 bg-[#264c99] text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#1e3d7d] disabled:opacity-50 transition-colors"
+                                        className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-primary-hover disabled:opacity-50 transition-colors"
                                       >
                                         {isEnviando ? (
                                           <>
@@ -1064,13 +1049,13 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
             <section>
               <div className="flex items-center gap-2 mb-3">
                 <h2 className="text-base font-bold text-slate-900">Historial de registros</h2>
-                <span className="text-xs font-bold bg-[#e8eef7] text-[#264c99] px-2 py-0.5 rounded-full">
+                <span className="text-xs font-bold bg-primary-fixed text-primary px-2 py-0.5 rounded-full">
                   {allSalidas.length}
                 </span>
               </div>
 
               {allSalidas.length === 0 ? (
-                <p className="text-sm text-[#757874] py-6 text-center">
+                <p className="text-sm text-on-surface-variant py-6 text-center">
                   No hay salidas registradas en el sistema
                 </p>
               ) : (
@@ -1079,20 +1064,20 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
                     .filter((st) => grouped[st]?.length)
                     .map((st) => (
                       <div key={st}>
-                        <h3 className="text-xs font-bold text-[#264c99] uppercase tracking-wide mb-2">
+                        <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-2">
                           {STATUS_LABELS[st]} ({grouped[st].length})
                         </h3>
                         <ul className="flex flex-col gap-1">
                           {grouped[st].map((s) => (
                             <li
                               key={s.id}
-                              className="flex items-center gap-3 bg-white rounded-xl border border-[#4a6fad]/10 px-3 py-2.5"
+                              className="flex items-center gap-3 bg-white rounded-xl border border-secondary/10 px-3 py-2.5"
                             >
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-slate-900 truncate">
                                   {s.nombreActividad}
                                 </p>
-                                <p className="text-xs text-[#757874] truncate">
+                                <p className="text-xs text-on-surface-variant truncate">
                                   {DISCIPLINA_LABELS[s.disciplina] ?? s.disciplina} ·{' '}
                                   {formatDate(s.fechaInicio)}
                                 </p>
@@ -1129,7 +1114,6 @@ export function AdminPanel({ onBack, onDashboard, currentUserId }: AdminPanelPro
             </section>
           </>
         )}
-      </main>
-    </div>
+    </AppShell>
   )
 }

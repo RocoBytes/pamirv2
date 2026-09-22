@@ -150,7 +150,7 @@ test.describe('Branding por club — El Montañista nunca ve nada de Pamir', () 
   test('dashboard: muestra el nombre del club, la insignia CAEM, y ningún rastro de Pamir', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByText('Cargando salidas...')).toHaveCount(0)
-    await expect(page.getByText('Sin salidas aun')).toBeVisible()
+    await expect(page.getByText('Sin salidas activas en curso')).toBeVisible()
     await expect(page.getByText('El Montañista', { exact: true }).first()).toBeVisible()
     await expect(page.getByText('Socios CAEM')).toBeVisible()
     await expectNoPamirLeak(page)

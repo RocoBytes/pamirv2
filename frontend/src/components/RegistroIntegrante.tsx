@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Input } from './ui/Input'
 import { Select } from './ui/Select'
 import { Button } from './ui/Button'
+import { ClubLogo } from './ClubLogo'
 import { createIntegrante } from '../lib/api'
 import {
   registroIntegranteSchema,
@@ -92,14 +93,14 @@ function SectionHeader({
     <div className="flex items-center gap-3 mb-5">
       <span
         aria-hidden="true"
-        className="flex-shrink-0 w-7 h-7 rounded-full bg-[#264c99] text-white text-xs font-bold flex items-center justify-center"
+        className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center"
       >
         {number}
       </span>
       <h3
         ref={headingRef}
         tabIndex={-1}
-        className="text-base font-bold text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] focus-visible:ring-offset-1 rounded"
+        className="text-base font-bold text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 rounded"
       >
         {title}
       </h3>
@@ -110,7 +111,7 @@ function SectionHeader({
 function FieldError({ message }: { message?: string }) {
   if (!message) return null
   return (
-    <p className="text-xs text-[#A4636E] mt-1" role="alert">
+    <p className="text-xs text-error mt-1" role="alert">
       {message}
     </p>
   )
@@ -129,9 +130,9 @@ interface SingleSelectChipProps {
 function SingleSelectChip({ label, options, value, onChange, error, required }: SingleSelectChipProps) {
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-semibold text-[#264c99]">
+      <legend className="text-sm font-semibold text-primary">
         {label}
-        {required && <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>}
+        {required && <span className="text-error ml-1" aria-hidden="true">*</span>}
       </legend>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
@@ -144,10 +145,10 @@ function SingleSelectChip({ label, options, value, onChange, error, required }: 
               aria-pressed={selected}
               className={[
                 'px-4 py-2 rounded-xl text-sm font-medium border transition-all duration-150',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] focus-visible:ring-offset-1',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
                 selected
-                  ? 'bg-[#264c99] text-white border-[#264c99] shadow-sm'
-                  : 'bg-white text-slate-700 border-[#4a6fad]/40 hover:border-[#264c99] hover:text-[#264c99]',
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : 'bg-white text-slate-700 border-secondary/40 hover:border-primary hover:text-primary',
               ].join(' ')}
             >
               {opt.label}
@@ -170,9 +171,9 @@ interface YesNoFieldProps {
 function YesNoField({ label, value, onChange, error }: YesNoFieldProps) {
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-semibold text-[#264c99]">
+      <legend className="text-sm font-semibold text-primary">
         {label}
-        <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+        <span className="text-error ml-1" aria-hidden="true">*</span>
       </legend>
       <div className="flex gap-2">
         {([true, false] as const).map((opt) => {
@@ -186,10 +187,10 @@ function YesNoField({ label, value, onChange, error }: YesNoFieldProps) {
               aria-pressed={selected}
               className={[
                 'px-6 py-2 rounded-xl text-sm font-medium border transition-all duration-150',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] focus-visible:ring-offset-1',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
                 selected
-                  ? 'bg-[#264c99] text-white border-[#264c99] shadow-sm'
-                  : 'bg-white text-slate-700 border-[#4a6fad]/40 hover:border-[#264c99] hover:text-[#264c99]',
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : 'bg-white text-slate-700 border-secondary/40 hover:border-primary hover:text-primary',
               ].join(' ')}
             >
               {btnLabel}
@@ -226,9 +227,9 @@ function YesNoWithDetail({
   return (
     <div className="flex flex-col gap-2">
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm font-semibold text-[#264c99]">
+        <legend className="text-sm font-semibold text-primary">
           {label}
-          <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+          <span className="text-error ml-1" aria-hidden="true">*</span>
         </legend>
         <div className="flex gap-2">
           {([true, false] as const).map((opt) => {
@@ -241,10 +242,10 @@ function YesNoWithDetail({
                 aria-pressed={selected}
                 className={[
                   'px-6 py-2 rounded-xl text-sm font-medium border transition-all duration-150',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] focus-visible:ring-offset-1',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
                   selected
-                    ? 'bg-[#264c99] text-white border-[#264c99] shadow-sm'
-                    : 'bg-white text-slate-700 border-[#4a6fad]/40 hover:border-[#264c99] hover:text-[#264c99]',
+                    ? 'bg-primary text-white border-primary shadow-sm'
+                    : 'bg-white text-slate-700 border-secondary/40 hover:border-primary hover:text-primary',
                 ].join(' ')}
               >
                 {opt ? 'Sí' : 'No'}
@@ -263,13 +264,13 @@ function YesNoWithDetail({
             value={detalle}
             onChange={(e) => onChangeDetalle(e.target.value)}
             className={[
-              'w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-[#757874]/50 resize-none',
+              'w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-on-surface-variant/50 resize-none',
               'transition-colors duration-150',
-              'focus:outline-none focus:ring-2 focus:ring-[#264c99] focus:border-[#264c99]',
-              errorDetalle ? 'border-[#A4636E]' : 'border-[#4a6fad]/40',
+              'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
+              errorDetalle ? 'border-error' : 'border-secondary/40',
             ].join(' ')}
           />
-          <p className="text-xs text-[#757874] self-end">{detalle.length}/200</p>
+          <p className="text-xs text-on-surface-variant self-end">{detalle.length}/200</p>
           <FieldError message={errorDetalle} />
         </div>
       )}
@@ -508,13 +509,13 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
 
   if (success) {
     return (
-      <div className="min-h-screen bg-[#f0f4fb] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-alpine-canvas flex items-center justify-center px-4">
         <div className="text-center">
-          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-[#e8eef7] mx-auto mb-4">
-            <Check size={32} className="text-[#264c99]" />
+          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-primary-fixed mx-auto mb-4">
+            <Check size={32} className="text-primary" />
           </div>
           <h2 className="text-xl font-bold text-slate-900 mb-2">Integrante registrado</h2>
-          <p className="text-[#757874] text-sm">
+          <p className="text-on-surface-variant text-sm">
             {onComplete ? '¡Todo listo! Accediendo al sistema...' : 'Volviendo al formulario...'}
           </p>
         </div>
@@ -526,22 +527,25 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
   const isLastStep = currentStep === LAST_STEP
 
   return (
-    <div className="min-h-screen bg-[#f0f4fb] flex flex-col">
+    <div className="min-h-screen bg-alpine-canvas flex flex-col">
       {/* Top bar */}
-      <header className="bg-white border-b border-[#4a6fad]/15 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
+      <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-outline-variant/40 shadow-sm pt-safe">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
           <button
             type="button"
             onClick={handleLeave}
-            className="flex items-center gap-1.5 text-sm text-[#757874] hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] rounded transition-colors"
+            className="flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded transition-colors"
             aria-label="Volver"
           >
             <ChevronLeft size={18} />
             <span className="hidden sm:inline">Volver</span>
           </button>
-          <div className="flex items-center gap-2 ml-2">
-            <User size={18} className="text-[#264c99]" />
-            <span className="font-semibold text-slate-800 text-sm">Registro de Integrante</span>
+          <div className="flex items-center gap-2 ml-2 min-w-0">
+            <ClubLogo alt="" className="w-9 h-9 object-contain shrink-0" />
+            <User size={18} className="text-primary shrink-0" aria-hidden="true" />
+            <span className="font-semibold text-on-surface text-body-medium truncate">
+              Registro de Integrante
+            </span>
           </div>
         </div>
       </header>
@@ -549,7 +553,7 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
       {/* Stepper — puramente informativo: la única forma de moverse entre
           pasos es "Siguiente"/"Atrás" (más abajo), nunca tocando estas
           barras. */}
-      <div className="bg-white border-b border-[#4a6fad]/10">
+      <div className="bg-white border-b border-secondary/10">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-3 pb-2">
           <div className="flex gap-1.5 mb-2" role="list" aria-label="Progreso del formulario">
             {REGISTRO_INTEGRANTE_STEPS.map((step) => {
@@ -563,7 +567,7 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
                   aria-label={`Paso ${step.id}: ${step.title}${isCompleted ? ' (completado)' : isActive ? ' (actual)' : ''}`}
                   className={[
                     'flex-1 h-1.5 rounded-full transition-colors duration-300',
-                    isCompleted || isActive ? 'bg-[#264c99]' : 'bg-[#dde6f7]',
+                    isCompleted || isActive ? 'bg-primary' : 'bg-surface-container',
                   ].join(' ')}
                 />
               )
@@ -573,7 +577,7 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
               encabezado del paso, más abajo. aria-live anuncia el cambio de
               conteo; el cambio de foco al encabezado (ver el efecto de
               cambio de paso) anuncia el título por su cuenta. */}
-          <p className="text-xs font-semibold text-[#264c99] uppercase tracking-wider" aria-live="polite">
+          <p className="text-xs font-semibold text-primary uppercase tracking-wider" aria-live="polite">
             {progressLabel(currentStep)}
           </p>
         </div>
@@ -581,13 +585,13 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
 
       {/* Content */}
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-6">
-        <p className="text-sm text-[#757874] mb-6">
+        <p className="text-sm text-on-surface-variant mb-6">
           Completa la ficha de registro y datos médicos del integrante. Todos los campos marcados con{' '}
-          <span className="text-[#A4636E] font-semibold">*</span> son obligatorios.
+          <span className="text-error font-semibold">*</span> son obligatorios.
         </p>
 
         {apiError && (
-          <div className="rounded-xl border border-[#A4636E]/30 bg-[#f5e8ea] px-4 py-3 text-sm text-[#8b3a44] mb-5">
+          <div className="rounded-xl border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container mb-5">
             {apiError}
           </div>
         )}
@@ -595,7 +599,7 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
         <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate className="flex flex-col gap-6">
           <div key={currentStep} className="motion-safe:animate-step-in flex flex-col gap-6">
             {currentStep === 1 && (
-              <div className="rounded-2xl border border-[#4a6fad]/15 bg-white p-5 flex flex-col gap-5">
+              <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
                 <SectionHeader number="I" title={stepMeta.title} headingRef={stepHeadingRef} />
 
                 <Input
@@ -720,7 +724,7 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
             )}
 
             {currentStep === 2 && (
-              <div className="rounded-2xl border border-[#4a6fad]/15 bg-white p-5 flex flex-col gap-5">
+              <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
                 <SectionHeader number="II" title={stepMeta.title} headingRef={stepHeadingRef} />
 
                 <Input
@@ -754,7 +758,7 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
             )}
 
             {currentStep === 3 && (
-              <div className="rounded-2xl border border-[#4a6fad]/15 bg-white p-5 flex flex-col gap-5">
+              <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
                 <SectionHeader number="III" title={stepMeta.title} headingRef={stepHeadingRef} />
 
                 <Controller
@@ -869,13 +873,13 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
             )}
 
             {currentStep === 4 && (
-              <div className="rounded-2xl border border-[#4a6fad]/15 bg-white p-5 flex flex-col gap-5">
+              <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
                 <SectionHeader number="IV" title={stepMeta.title} headingRef={stepHeadingRef} />
 
                 {/* Cláusula 1 */}
                 <div className="flex flex-col gap-3">
-                  <div className="rounded-xl border border-[#4a6fad]/20 bg-[#f0f4fb]/60 p-4">
-                    <p className="text-xs font-semibold text-[#264c99] uppercase tracking-wider mb-2">
+                  <div className="rounded-xl border border-secondary/20 bg-surface-container-low/60 p-4">
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
                       1. Declaración de Salud y Aptitud Física
                     </p>
                     <p className="text-sm text-slate-700 leading-relaxed">
@@ -897,11 +901,11 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
                           onChange={(e) =>
                             field.onChange(e.target.checked ? true : (undefined as unknown as true))
                           }
-                          className="mt-0.5 w-4 h-4 rounded border-[#4a6fad]/40 text-[#264c99] focus:ring-[#264c99]"
+                          className="mt-0.5 w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
                         />
                         <span className="text-sm font-medium text-slate-700">
                           He leído y estoy de acuerdo
-                          <span className="text-[#A4636E] ml-1">*</span>
+                          <span className="text-error ml-1">*</span>
                         </span>
                       </label>
                     )}
@@ -911,8 +915,8 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
 
                 {/* Cláusula 2 */}
                 <div className="flex flex-col gap-3">
-                  <div className="rounded-xl border border-[#4a6fad]/20 bg-[#f0f4fb]/60 p-4">
-                    <p className="text-xs font-semibold text-[#264c99] uppercase tracking-wider mb-2">
+                  <div className="rounded-xl border border-secondary/20 bg-surface-container-low/60 p-4">
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
                       2. Aceptación de Riesgo y Exención de Responsabilidad
                     </p>
                     <p className="text-sm text-slate-700 leading-relaxed mb-3">
@@ -921,13 +925,13 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
                       otros factores objetivos y subjetivos que pueden resultar en lesiones graves o la muerte.
                     </p>
                     <ul className="flex flex-col gap-2">
-                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-[#4a6fad]/30">
+                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
                         <span className="font-medium">Exención:</span> Libero de toda responsabilidad civil y
                         criminal al Club, a sus directivos, guías, instructores y miembros, por cualquier
                         accidente o incidente derivado de los riesgos propios de la actividad o de mi propia
                         negligencia, siempre que el club haya actuado bajo los protocolos de seguridad estándar.
                       </li>
-                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-[#4a6fad]/30">
+                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
                         El Club no se hace responsable por accidentes derivados de la omisión de información o
                         negligencia de los participantes.
                       </li>
@@ -944,11 +948,11 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
                           onChange={(e) =>
                             field.onChange(e.target.checked ? true : (undefined as unknown as true))
                           }
-                          className="mt-0.5 w-4 h-4 rounded border-[#4a6fad]/40 text-[#264c99] focus:ring-[#264c99]"
+                          className="mt-0.5 w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
                         />
                         <span className="text-sm font-medium text-slate-700">
                           He leído y estoy de acuerdo
-                          <span className="text-[#A4636E] ml-1">*</span>
+                          <span className="text-error ml-1">*</span>
                         </span>
                       </label>
                     )}
@@ -958,8 +962,8 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
 
                 {/* Cláusula 3 */}
                 <div className="flex flex-col gap-3">
-                  <div className="rounded-xl border border-[#4a6fad]/20 bg-[#f0f4fb]/60 p-4">
-                    <p className="text-xs font-semibold text-[#264c99] uppercase tracking-wider mb-2">
+                  <div className="rounded-xl border border-secondary/20 bg-surface-container-low/60 p-4">
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
                       3. Consentimiento de Uso de Datos Personales (Ley 19.628)
                     </p>
                     <p className="text-sm text-slate-700 leading-relaxed mb-3">
@@ -967,15 +971,15 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
                       expresamente al Club para:
                     </p>
                     <ul className="flex flex-col gap-2 mb-3">
-                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-[#4a6fad]/30">
+                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
                         Tratar mis datos personales y sensibles (salud) con el fin exclusivo de gestionar mi
                         participación en actividades y responder ante emergencias médicas.
                       </li>
-                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-[#4a6fad]/30">
+                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
                         Almacenar de forma segura esta información, la cual solo será accesible por el cuerpo
                         técnico o servicios de emergencia en caso de ser necesario.
                       </li>
-                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-[#4a6fad]/30">
+                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
                         Comunicar estos datos a centros de salud o cuerpos de socorro en caso de rescate o
                         atención urgente.
                       </li>
@@ -1006,11 +1010,11 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
                           onChange={(e) =>
                             field.onChange(e.target.checked ? true : (undefined as unknown as true))
                           }
-                          className="mt-0.5 w-4 h-4 rounded border-[#4a6fad]/40 text-[#264c99] focus:ring-[#264c99]"
+                          className="mt-0.5 w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
                         />
                         <span className="text-sm font-medium text-slate-700">
                           He leído y estoy de acuerdo
-                          <span className="text-[#A4636E] ml-1">*</span>
+                          <span className="text-error ml-1">*</span>
                         </span>
                       </label>
                     )}
@@ -1020,8 +1024,8 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
 
                 {/* Cláusula 4 */}
                 <div className="flex flex-col gap-3">
-                  <div className="rounded-xl border border-[#4a6fad]/20 bg-[#f0f4fb]/60 p-4">
-                    <p className="text-xs font-semibold text-[#264c99] uppercase tracking-wider mb-2">
+                  <div className="rounded-xl border border-secondary/20 bg-surface-container-low/60 p-4">
+                    <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
                       4. Derecho de Imagen
                     </p>
                     <p className="text-sm text-slate-700 leading-relaxed">
@@ -1040,11 +1044,11 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
                           onChange={(e) =>
                             field.onChange(e.target.checked ? true : (undefined as unknown as true))
                           }
-                          className="mt-0.5 w-4 h-4 rounded border-[#4a6fad]/40 text-[#264c99] focus:ring-[#264c99]"
+                          className="mt-0.5 w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
                         />
                         <span className="text-sm font-medium text-slate-700">
                           He leído y estoy de acuerdo
-                          <span className="text-[#A4636E] ml-1">*</span>
+                          <span className="text-error ml-1">*</span>
                         </span>
                       </label>
                     )}
