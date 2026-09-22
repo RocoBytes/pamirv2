@@ -195,11 +195,15 @@ TMP=$(mktemp -d)
 : > "$TMP/.env"
 sed 's|/opt/pamir/.env|'"$TMP"'/.env|' deploy/docker-compose.yml > "$TMP/docker-compose.yml"
 
+# --profile ops is required. Without it Compose silently drops the `migrate`
+# service (it is gated by `profiles: [ops]`) and only two image lines print,
+# so the test would pass while never exercising the third service.
+
 echo "--- with PAMIR_TAG set (expect sha-abc1234)"
-PAMIR_TAG=sha-abc1234 docker compose -f "$TMP/docker-compose.yml" config | grep "image:"
+PAMIR_TAG=sha-abc1234 docker compose --profile ops -f "$TMP/docker-compose.yml" config | grep "image:"
 
 echo "--- with PAMIR_TAG unset (expect latest)"
-docker compose -f "$TMP/docker-compose.yml" config | grep "image:"
+docker compose --profile ops -f "$TMP/docker-compose.yml" config | grep "image:"
 ```
 
 - [ ] **Step 2: Run it and confirm the failure**
@@ -227,8 +231,8 @@ TMP=$(mktemp -d)
 : > "$TMP/.env"
 sed 's|/opt/pamir/.env|'"$TMP"'/.env|' deploy/docker-compose.yml > "$TMP/docker-compose.yml"
 
-PAMIR_TAG=sha-abc1234 docker compose -f "$TMP/docker-compose.yml" config | grep "image:"
-docker compose -f "$TMP/docker-compose.yml" config | grep "image:"
+PAMIR_TAG=sha-abc1234 docker compose --profile ops -f "$TMP/docker-compose.yml" config | grep "image:"
+docker compose --profile ops -f "$TMP/docker-compose.yml" config | grep "image:"
 ```
 
 Expected: the first run prints `sha-abc1234` three times; the second prints `latest` three times.
