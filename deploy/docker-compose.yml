@@ -5,7 +5,7 @@ name: pamir
 
 services:
   nginx:
-    image: ghcr.io/rocobytes/pamir-frontend:latest
+    image: ghcr.io/rocobytes/pamir-frontend:${PAMIR_TAG:-latest}
     restart: unless-stopped
     ports:
       - "80:80"
@@ -19,7 +19,7 @@ services:
     networks: [pamir]
 
   backend:
-    image: ghcr.io/rocobytes/pamir-backend:latest
+    image: ghcr.io/rocobytes/pamir-backend:${PAMIR_TAG:-latest}
     restart: unless-stopped
     env_file: /opt/pamir/.env
     # Publicación SOLO en localhost: el crontab del host llama a
@@ -35,7 +35,7 @@ services:
   # Migraciones one-shot. Nunca arranca con `up -d` (gateado por profile).
   # El deploy lo ejecuta explícitamente: docker compose run --rm migrate
   migrate:
-    image: ghcr.io/rocobytes/pamir-backend:latest
+    image: ghcr.io/rocobytes/pamir-backend:${PAMIR_TAG:-latest}
     profiles: [ops]
     env_file: /opt/pamir/.env
     command: ["npx", "prisma", "migrate", "deploy"]
