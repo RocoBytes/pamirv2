@@ -40,7 +40,6 @@ interface IntegranteEmailData {
 // recibe uno de estos en vez de leer variables de entorno globales.
 export interface OrgBranding {
   name: string;
-  shortName: string;
   contactName: string;
   contactEmail: string;
   frontendUrl: string;
@@ -49,7 +48,6 @@ export interface OrgBranding {
 export function brandingFor(org: OrganizationSummary): OrgBranding {
   return {
     name: org.name,
-    shortName: org.shortName ?? org.name,
     contactName: org.contactName,
     contactEmail: org.contactEmail,
     frontendUrl: FRONTEND_URL,
@@ -362,7 +360,7 @@ function emailShell(
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);max-width:600px;width:100%;">
         <tr>
           <td style="background:${GREEN};padding:28px 32px;">
-            <p style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">${escapeHtml(branding.shortName)}</p>
+            <p style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">${escapeHtml(branding.name)}</p>
             <p style="margin:6px 0 0;color:#c8dccb;font-size:14px;">${subtitle}</p>
           </td>
         </tr>
@@ -490,7 +488,7 @@ export function buildSalidaNotificationEmail(nombreCompleto: string, salida: Sal
     'Registro en salida de montaña',
     intro,
     tabla,
-    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}.`,
+    `Este correo es una notificación automática del sistema de ${escapeHtml(branding.name)}.`,
     '',
     branding,
   );
@@ -561,7 +559,7 @@ export function buildCierreNotificationEmail(
     'Cierre de salida de montaña',
     intro,
     tabla,
-    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}.`,
+    `Este correo es una notificación automática del sistema de ${escapeHtml(branding.name)}.`,
     (evaluacionUrl ? evaluacionCtaBlock(evaluacionUrl) : '') + feedbackCierreBlock(branding),
     branding,
   );
@@ -579,7 +577,7 @@ export function buildConfirmationEmail(data: IntegranteEmailData, branding: OrgB
         <!-- Header -->
         <tr>
           <td style="background:${GREEN};padding:28px 32px;">
-            <p style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">${escapeHtml(branding.shortName)}</p>
+            <p style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">${escapeHtml(branding.name)}</p>
             <p style="margin:6px 0 0;color:#c8dccb;font-size:14px;">Confirmación de registro de integrante</p>
           </td>
         </tr>
@@ -588,7 +586,7 @@ export function buildConfirmationEmail(data: IntegranteEmailData, branding: OrgB
         <tr>
           <td style="padding:24px 32px 16px;">
             <p style="margin:0;color:#1f2937;font-size:15px;">
-              Hola <strong>${escapeHtml(data.nombreCompleto)}</strong>, tu registro en el sistema ${escapeHtml(branding.shortName)} se completó exitosamente.
+              Hola <strong>${escapeHtml(data.nombreCompleto)}</strong>, tu registro en el sistema de ${escapeHtml(branding.name)} se completó exitosamente.
               A continuación encontrarás el resumen de los datos ingresados.
             </p>
           </td>
@@ -654,7 +652,7 @@ export function buildConfirmationEmail(data: IntegranteEmailData, branding: OrgB
         <tr>
           <td style="background:#f9fafb;padding:20px 32px;border-top:1px solid ${BORDER};">
             <p style="margin:0;color:${GRAY};font-size:12px;line-height:1.6;">
-              Este correo es un comprobante automático de tu registro en la aplicación de ${escapeHtml(branding.shortName)}.<br>
+              Este correo es un comprobante automático de tu registro en la aplicación de ${escapeHtml(branding.name)}.<br>
               Si no realizaste este registro o tienes dudas, ${contactLine(branding)}
             </p>
           </td>
@@ -710,7 +708,7 @@ export function buildAlertaSalidaEmail(salida: AlertaSalidaEmailData, branding: 
         <td style="padding:14px 16px;">
           <p style="margin:0;font-size:13px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:0.05em;">⚠ Acción requerida</p>
           <p style="margin:6px 0 0;font-size:13px;color:#7f1d1d;line-height:1.6;">
-            Verifica el estado de la cordada. Si el grupo ya retornó, registra el cierre en el sistema ${escapeHtml(branding.shortName)}.
+            Verifica el estado de la cordada. Si el grupo ya retornó, registra el cierre en el sistema de ${escapeHtml(branding.name)}.
             Si no has recibido noticias, activa el protocolo de búsqueda y rescate.
           </p>
         </td>
@@ -742,7 +740,7 @@ export function buildAlertaSalidaEmail(salida: AlertaSalidaEmailData, branding: 
     'ALERTA — Salida sin cierre registrado',
     intro,
     tabla,
-    `Esta alerta fue generada automáticamente por el sistema ${escapeHtml(branding.shortName)}. Hora de la alerta superada sin cierre.`,
+    `Esta alerta fue generada automáticamente por el sistema de ${escapeHtml(branding.name)}. Hora de la alerta superada sin cierre.`,
     '',
     branding,
   );
@@ -773,7 +771,7 @@ export function buildRecordatorioCierreEmail(salida: AlertaSalidaEmailData, bran
         <td style="padding:14px 16px;">
           <p style="margin:0;font-size:13px;font-weight:700;color:#92600a;text-transform:uppercase;letter-spacing:0.05em;">⏰ Cierra tu salida</p>
           <p style="margin:6px 0 0;font-size:13px;color:#78350f;line-height:1.6;">
-            Si tu grupo ya retornó, registra el <strong>formulario de cierre</strong> en el sistema ${escapeHtml(branding.shortName)} antes
+            Si tu grupo ya retornó, registra el <strong>formulario de cierre</strong> en el sistema de ${escapeHtml(branding.name)} antes
             de la hora de alerta. Si no se completa el cierre a esa hora, se activará automáticamente la
             <strong>ALERTA: Salida sin cierre</strong> hacia el equipo de seguridad.
           </p>
@@ -805,7 +803,7 @@ export function buildRecordatorioCierreEmail(salida: AlertaSalidaEmailData, bran
     'Recordatorio — Cierra tu salida',
     intro,
     tabla,
-    `Este recordatorio fue generado automáticamente por el sistema ${escapeHtml(branding.shortName)} antes de la hora de alerta.`,
+    `Este recordatorio fue generado automáticamente por el sistema de ${escapeHtml(branding.name)} antes de la hora de alerta.`,
     '',
     branding,
   );
@@ -916,11 +914,11 @@ export function buildVerificationEmail(name: string, verificationUrl: string, br
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:${GREEN};padding:28px 32px;">
-          <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${escapeHtml(branding.shortName)} — Confirma tu cuenta</h1>
+          <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${escapeHtml(branding.name)} — Confirma tu cuenta</h1>
         </td></tr>
         <tr><td style="padding:32px;">
           <p style="color:#374151;font-size:15px;margin:0 0 16px;">Hola <strong>${escapeHtml(name)}</strong>,</p>
-          <p style="color:#374151;font-size:15px;margin:0 0 24px;">Gracias por registrarte en ${escapeHtml(branding.shortName)}. Para activar tu cuenta haz clic en el botón de abajo:</p>
+          <p style="color:#374151;font-size:15px;margin:0 0 24px;">Gracias por registrarte en ${escapeHtml(branding.name)}. Para activar tu cuenta haz clic en el botón de abajo:</p>
           <div style="text-align:center;margin:0 0 24px;">
             <a href="${verificationUrl}" style="display:inline-block;background:${GREEN};color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 32px;border-radius:8px;">Verificar mi cuenta</a>
           </div>
@@ -947,7 +945,7 @@ export function buildPasswordResetEmail(name: string, resetUrl: string, branding
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:${GREEN};padding:28px 32px;">
-          <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${escapeHtml(branding.shortName)} — Restablece tu contraseña</h1>
+          <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${escapeHtml(branding.name)} — Restablece tu contraseña</h1>
         </td></tr>
         <tr><td style="padding:32px;">
           <p style="color:#374151;font-size:15px;margin:0 0 16px;">Hola <strong>${escapeHtml(name)}</strong>,</p>
@@ -1001,10 +999,10 @@ export function buildInvitationEmail(data: InvitationEmailData, branding: OrgBra
         </tr>`;
 
   return emailShell(
-    `Invitación a ${escapeHtml(branding.shortName)}`,
+    `Invitación a ${escapeHtml(branding.name)}`,
     intro,
     tabla,
-    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}. Si no esperabas esta invitación, puedes ignorar este mensaje.`,
+    `Este correo es una notificación automática del sistema de ${escapeHtml(branding.name)}. Si no esperabas esta invitación, puedes ignorar este mensaje.`,
     cta,
     branding,
   );
@@ -1111,7 +1109,7 @@ export function buildEventoInscripcionConfirmadaEmail(
     'Postulación recibida',
     intro,
     tabla,
-    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}.`,
+    `Este correo es una notificación automática del sistema de ${escapeHtml(branding.name)}.`,
     nota,
     branding,
   );
@@ -1153,7 +1151,7 @@ export function buildEventoSeleccionadoEmail(nombre: string, evento: EventoLifec
     'Selección confirmada',
     intro,
     tabla,
-    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}.`,
+    `Este correo es una notificación automática del sistema de ${escapeHtml(branding.name)}.`,
     nota,
     branding,
   );
@@ -1192,7 +1190,7 @@ export function buildEventoNoSeleccionadoEmail(
     'Resultado de tu postulación',
     intro,
     tabla,
-    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}.`,
+    `Este correo es una notificación automática del sistema de ${escapeHtml(branding.name)}.`,
     nota,
     branding,
   );
@@ -1225,7 +1223,7 @@ export function buildEventoCanceladoEmail(nombre: string, evento: EventoLifecycl
     'Evento cancelado',
     intro,
     tabla,
-    `Este correo es una notificación automática del sistema ${escapeHtml(branding.shortName)}.`,
+    `Este correo es una notificación automática del sistema de ${escapeHtml(branding.name)}.`,
     nota,
     branding,
   );

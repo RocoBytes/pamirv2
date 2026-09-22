@@ -39,7 +39,7 @@ function assertNoPamir(html: string): void {
 }
 
 function assertMentionsClub(html: string): void {
-  assert.equal(html.includes(branding.shortName), true, 'debe mencionar el nombre corto del club');
+  assert.equal(html.includes(branding.name), true, 'debe mencionar el nombre del club');
 }
 
 function assertHasContactLine(html: string): void {
@@ -258,13 +258,6 @@ describe('email-templates — branding por club en cada builder', () => {
     assertHasContactLine(html);
     assert.equal(html.includes(branding.frontendUrl), true);
     assertNoPamir(html);
-  });
-});
-
-describe('brandingFor', () => {
-  it('usa el nombre completo como shortName si Organization.shortName es null', () => {
-    const b = brandingFor({ ...org, shortName: null });
-    assert.equal(b.shortName, org.name);
   });
 });
 

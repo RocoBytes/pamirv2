@@ -1,15 +1,15 @@
 import { rangoFechasEvento } from '../email-templates.js';
 export function subjectPasswordReset(branding) {
-    return `Restablece tu contraseña — ${branding.shortName}`;
+    return `Restablece tu contraseña — ${branding.name}`;
 }
 export function subjectConfirmacionRegistro(branding) {
-    return `Confirmación de registro — ${branding.shortName}`;
+    return `Confirmación de registro — ${branding.name}`;
 }
 export function subjectRegistroSalida(branding, nombreActividad) {
-    return `Has sido registrado en la salida "${nombreActividad}" — ${branding.shortName}`;
+    return `Has sido registrado en la salida "${nombreActividad}" — ${branding.name}`;
 }
 export function subjectCierre(branding, nombreActividad) {
-    return `Cierre de la salida "${nombreActividad}" — ${branding.shortName}`;
+    return `Cierre de la salida "${nombreActividad}" — ${branding.name}`;
 }
 export function subjectRecordatorioCierre(nombreActividad) {
     return `Recordatorio: cierra tu salida — ${nombreActividad}`;
@@ -21,7 +21,7 @@ export function subjectSaludSalida(nombreActividad) {
     return `Resumen de fichas de salud — ${nombreActividad}`;
 }
 export function subjectInvitacion(branding) {
-    return `Te invitaron a ${branding.shortName}`;
+    return `Te invitaron a ${branding.name}`;
 }
 export function subjectEventoInscripcionConfirmada(evento) {
     return `Recibimos tu postulación: ${evento.titulo}`;

@@ -5,19 +5,19 @@ import type { OrgBranding } from '../email-templates.js';
 import { rangoFechasEvento } from '../email-templates.js';
 
 export function subjectPasswordReset(branding: OrgBranding): string {
-  return `Restablece tu contraseña — ${branding.shortName}`;
+  return `Restablece tu contraseña — ${branding.name}`;
 }
 
 export function subjectConfirmacionRegistro(branding: OrgBranding): string {
-  return `Confirmación de registro — ${branding.shortName}`;
+  return `Confirmación de registro — ${branding.name}`;
 }
 
 export function subjectRegistroSalida(branding: OrgBranding, nombreActividad: string): string {
-  return `Has sido registrado en la salida "${nombreActividad}" — ${branding.shortName}`;
+  return `Has sido registrado en la salida "${nombreActividad}" — ${branding.name}`;
 }
 
 export function subjectCierre(branding: OrgBranding, nombreActividad: string): string {
-  return `Cierre de la salida "${nombreActividad}" — ${branding.shortName}`;
+  return `Cierre de la salida "${nombreActividad}" — ${branding.name}`;
 }
 
 export function subjectRecordatorioCierre(nombreActividad: string): string {
@@ -33,7 +33,7 @@ export function subjectSaludSalida(nombreActividad: string): string {
 }
 
 export function subjectInvitacion(branding: OrgBranding): string {
-  return `Te invitaron a ${branding.shortName}`;
+  return `Te invitaron a ${branding.name}`;
 }
 
 interface EventoSubjectData {

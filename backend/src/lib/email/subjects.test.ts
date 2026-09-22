@@ -18,7 +18,6 @@ import {
 
 const branding: OrgBranding = {
   name: 'Club El Montañista',
-  shortName: 'El Montañista',
   contactName: 'Secretaría',
   contactEmail: 'contacto@elmontanista.cl',
   frontendUrl: 'https://app.elmontanista.cl',
@@ -27,23 +26,23 @@ const branding: OrgBranding = {
 const evento = { titulo: 'Cerro Plomo', fechaInicio: new Date('2026-11-01T00:00:00Z'), fechaFin: null };
 
 describe('subjects', () => {
-  it('subjectPasswordReset usa el shortName del club', () => {
-    assert.equal(subjectPasswordReset(branding), 'Restablece tu contraseña — El Montañista');
+  it('subjectPasswordReset usa el nombre del club', () => {
+    assert.equal(subjectPasswordReset(branding), 'Restablece tu contraseña — Club El Montañista');
   });
 
-  it('subjectConfirmacionRegistro usa el shortName del club', () => {
-    assert.equal(subjectConfirmacionRegistro(branding), 'Confirmación de registro — El Montañista');
+  it('subjectConfirmacionRegistro usa el nombre del club', () => {
+    assert.equal(subjectConfirmacionRegistro(branding), 'Confirmación de registro — Club El Montañista');
   });
 
-  it('subjectRegistroSalida incluye el nombre de la actividad y el shortName', () => {
+  it('subjectRegistroSalida incluye el nombre de la actividad y el nombre del club', () => {
     assert.equal(
       subjectRegistroSalida(branding, 'Cerro Plomo'),
-      'Has sido registrado en la salida "Cerro Plomo" — El Montañista',
+      'Has sido registrado en la salida "Cerro Plomo" — Club El Montañista',
     );
   });
 
-  it('subjectCierre incluye el nombre de la actividad y el shortName', () => {
-    assert.equal(subjectCierre(branding, 'Cerro Plomo'), 'Cierre de la salida "Cerro Plomo" — El Montañista');
+  it('subjectCierre incluye el nombre de la actividad y el nombre del club', () => {
+    assert.equal(subjectCierre(branding, 'Cerro Plomo'), 'Cierre de la salida "Cerro Plomo" — Club El Montañista');
   });
 
   it('subjectRecordatorioCierre no depende de la marca del club', () => {
@@ -58,8 +57,8 @@ describe('subjects', () => {
     assert.equal(subjectSaludSalida('Cerro Plomo'), 'Resumen de fichas de salud — Cerro Plomo');
   });
 
-  it('subjectInvitacion usa el shortName del club (nunca la marca fija del sistema)', () => {
-    assert.equal(subjectInvitacion(branding), 'Te invitaron a El Montañista');
+  it('subjectInvitacion usa el nombre del club (nunca la marca fija del sistema)', () => {
+    assert.equal(subjectInvitacion(branding), 'Te invitaron a Club El Montañista');
   });
 
   it('subjectEventoInscripcionConfirmada incluye el título del evento', () => {
