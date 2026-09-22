@@ -6,6 +6,7 @@
 export const MEMBRESIA_CLUBS = [
   'SOCIO_ANDINO_PAMIR',
   'SOCIO_EL_MONTANISTA',
+  'SOCIO_ANDINO_TESTING',
   'SOCIO_OTRO_CLUB',
   'POSTULANTE_CLUB',
   'NO_PERTENECE',
@@ -21,11 +22,17 @@ export type MembresiaClub = (typeof MEMBRESIA_CLUBS)[number];
 // membresía propia de un club, cualquier socio "de otro club"/"postulante"/
 // "no pertenece" caería, sin quererlo, dentro de la biblioteca de ese club.
 //
-// LÍMITE DEL PUENTE (bridge): hoy solo existen dos clubes reales y cada uno
-// necesita su propio código exclusivo (Organization.membresiaPropia no es
-// única en la base de datos — ver tenants.service.ts). Dar de alta un TERCER
-// club requiere agregar su código acá Y en las listas del frontend
-// (MembresiaClub del formulario de socios y del filtro de administración).
-export const MEMBRESIAS_PROPIAS = ['SOCIO_ANDINO_PAMIR', 'SOCIO_EL_MONTANISTA'] as const;
+// LÍMITE DEL PUENTE (bridge): cada club necesita su propio código exclusivo
+// (Organization.membresiaPropia no es única en la base de datos — ver
+// tenants.service.ts, que valida la unicidad a mano). Dar de alta un club
+// nuevo NO es solo correr el CLI: hay que agregar su código acá Y en las
+// listas del frontend (la unión MembresiaClub, CLUB_BADGE_LABELS y
+// CLUB_FILTER_LABELS en types/salida.ts, y el z.enum del paso 3 del wizard),
+// y desplegar ese cambio ANTES de poder crear el club.
+export const MEMBRESIAS_PROPIAS = [
+  'SOCIO_ANDINO_PAMIR',
+  'SOCIO_EL_MONTANISTA',
+  'SOCIO_ANDINO_TESTING',
+] as const;
 
 export type MembresiaPropia = (typeof MEMBRESIAS_PROPIAS)[number];

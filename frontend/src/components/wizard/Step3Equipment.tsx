@@ -25,7 +25,14 @@ const step3Schema = z.object({
         rut: z.string(),
         nombre: z.string(),
         membresiaClub: z
-          .enum(['SOCIO_ANDINO_PAMIR', 'SOCIO_EL_MONTANISTA', 'SOCIO_OTRO_CLUB', 'POSTULANTE_CLUB', 'NO_PERTENECE'])
+          .enum([
+            'SOCIO_ANDINO_PAMIR',
+            'SOCIO_EL_MONTANISTA',
+            'SOCIO_ANDINO_TESTING',
+            'SOCIO_OTRO_CLUB',
+            'POSTULANTE_CLUB',
+            'NO_PERTENECE',
+          ])
           .optional(),
         // Express participant fields (sin ficha registrada). Must be declared here so
         // Zod's .strip() does not drop them before the form is submitted.
