@@ -43,7 +43,7 @@ const Spinner = () => (
 // Recibe la sesión ya resuelta por App() en vez de llamar useAuth() de nuevo
 // (crearía un segundo estado independiente): así App() puede envolver todo
 // este árbol en OrganizationProvider con el club de la MISMA sesión.
-function AppContent({ user, token, isLoading, loginWithCredentials, logout }: ReturnType<typeof useAuth>) {
+function AppContent({ user, token, isLoading, loginWithCredentials, logout, refreshSession }: ReturnType<typeof useAuth>) {
   const [route, setRoute] = useState<Route>('dashboard')
   const [actionSalidaId, setActionSalidaId] = useState<string | null>(null)
   const [actionEventoId, setActionEventoId] = useState<string | null>(null)
@@ -264,6 +264,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout }: Re
         onBack={() => setRoute('dashboard')}
         onDashboard={() => setRoute('admin-dashboard')}
         currentUserId={user.id}
+        refreshSession={refreshSession}
       />
     )
   }

@@ -32,12 +32,16 @@ import { STATUS_LABELS, STATUS_COLORS, DISCIPLINA_LABELS } from '../types/salida
 import { InvitacionesManager } from './invitaciones/InvitacionesManager'
 import { UsuariosManager } from './invitaciones/UsuariosManager'
 import { DocumentosAdminSection } from './documentos/DocumentosAdminSection'
+import { ClubBrandingAdminSection } from './organizacion/ClubBrandingAdminSection'
 
 interface AdminPanelProps {
   shell: ShellContext
   onBack: () => void
   onDashboard: () => void
   currentUserId: string
+  // Pasado a ClubBrandingAdminSection: refresca /me tras subir o quitar el
+  // logo propio para que hasLogo/logoVersion lleguen frescos a toda la app.
+  refreshSession: () => Promise<void>
 }
 
 function formatDate(iso: string): string {
@@ -187,7 +191,7 @@ function SaludFlags({ salud }: { salud: NonNullable<ParticipanteSalud['salud']> 
 
 // ─── AdminPanel component ─────────────────────────────────────────────────────
 
-export function AdminPanel({ shell, onBack, onDashboard, currentUserId }: AdminPanelProps) {
+export function AdminPanel({ shell, onBack, onDashboard, currentUserId, refreshSession }: AdminPanelProps) {
   const { displayName } = useOrganization()
   const [salidas, setSalidas] = useState<SalidaRecord[] | null>(null)
   const [stats, setStats] = useState<AdminStats | null>(null)
@@ -452,6 +456,9 @@ export function AdminPanel({ shell, onBack, onDashboard, currentUserId }: AdminP
             )}
           </section>
         )}
+
+        {/* ── Section: Logo propio del club ───────────────────────────────── */}
+        {!isLoading && <ClubBrandingAdminSection refreshSession={refreshSession} />}
 
         {/* ── Section: Documentación del Club ─────────────────────────────── */}
         {!isLoading && <DocumentosAdminSection />}
