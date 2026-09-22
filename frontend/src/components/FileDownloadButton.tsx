@@ -59,7 +59,7 @@ export function FileDownloadButton({
         )}
       </button>
       {error && (
-        <p role="status" aria-live="polite" className="text-xs text-[#8b3a44] px-1">
+        <p role="status" aria-live="polite" className="text-xs text-on-error-container px-1">
           {error}
         </p>
       )}

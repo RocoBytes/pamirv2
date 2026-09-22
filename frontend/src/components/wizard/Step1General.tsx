@@ -68,9 +68,9 @@ function RadioChipGroup<T extends string>({
 }: RadioGroupProps<T>) {
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-semibold text-[#264c99]">
+      <legend className="text-sm font-semibold text-primary">
         {label}
-        <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+        <span className="text-error ml-1" aria-hidden="true">*</span>
       </legend>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
@@ -83,10 +83,10 @@ function RadioChipGroup<T extends string>({
               aria-pressed={selected}
               className={[
                 'px-4 py-2 rounded-xl text-sm font-medium border transition-all duration-150',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] focus-visible:ring-offset-1',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
                 selected
-                  ? 'bg-[#264c99] text-white border-[#264c99] shadow-sm'
-                  : 'bg-white text-slate-700 border-[#4a6fad]/40 hover:border-[#264c99] hover:text-[#264c99]',
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : 'bg-white text-slate-700 border-secondary/40 hover:border-primary hover:text-primary',
               ].join(' ')}
             >
               {opt.label}
@@ -95,7 +95,7 @@ function RadioChipGroup<T extends string>({
         })}
       </div>
       {error && (
-        <p className="text-xs text-[#A4636E]" role="alert">
+        <p className="text-xs text-error" role="alert">
           {error}
         </p>
       )}

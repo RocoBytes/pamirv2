@@ -68,10 +68,10 @@ export function UsuariosManager({ currentUserId }: UsuariosManagerProps) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <Users size={16} className="text-[#264c99]" />
+        <Users size={16} className="text-primary" />
         <h3 className="text-sm font-bold text-slate-900">Usuarios</h3>
         {usuarios && (
-          <span className="text-xs font-bold bg-[#e8eef7] text-[#264c99] px-2 py-0.5 rounded-full">
+          <span className="text-xs font-bold bg-primary-fixed text-primary px-2 py-0.5 rounded-full">
             {usuarios.length}
           </span>
         )}
@@ -91,7 +91,7 @@ export function UsuariosManager({ currentUserId }: UsuariosManagerProps) {
       )}
 
       {loadError && (
-        <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-sm text-[#8b3a44] mb-3">
+        <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container mb-3">
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
           <div className="flex-1">
             <p>{loadError}</p>
@@ -107,14 +107,14 @@ export function UsuariosManager({ currentUserId }: UsuariosManagerProps) {
       )}
 
       {!usuarios && !loadError && (
-        <div className="flex items-center gap-2 text-[#757874] py-6">
-          <Loader2 className="animate-spin text-[#264c99]" size={18} />
+        <div className="flex items-center gap-2 text-on-surface-variant py-6">
+          <Loader2 className="animate-spin text-primary" size={18} />
           <p className="text-sm">Cargando usuarios...</p>
         </div>
       )}
 
       {usuariosFiltrados && usuariosFiltrados.length === 0 && (
-        <p className="text-sm text-[#757874] py-6 text-center">
+        <p className="text-sm text-on-surface-variant py-6 text-center">
           {usuarios && usuarios.length > 0 ? 'Ningún usuario coincide con la búsqueda' : 'No hay usuarios registrados'}
         </p>
       )}
@@ -127,7 +127,7 @@ export function UsuariosManager({ currentUserId }: UsuariosManagerProps) {
             return (
               <li
                 key={u.id}
-                className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-3"
+                className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 bg-white rounded-2xl border border-secondary/15 shadow-sm p-3"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -138,9 +138,9 @@ export function UsuariosManager({ currentUserId }: UsuariosManagerProps) {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-[#757874] truncate">{u.email}</p>
+                  <p className="text-xs text-on-surface-variant truncate">{u.email}</p>
                   {rowError[u.id] && (
-                    <p className="text-xs text-[#A4636E] mt-1" role="alert">
+                    <p className="text-xs text-error mt-1" role="alert">
                       {rowError[u.id]}
                     </p>
                   )}
@@ -154,10 +154,10 @@ export function UsuariosManager({ currentUserId }: UsuariosManagerProps) {
                     options={ROL_OPTIONS}
                   />
                   {esUnoMismo && (
-                    <p className="text-[10px] text-[#757874] mt-1">No puedes cambiar tu propio rol</p>
+                    <p className="text-[10px] text-on-surface-variant mt-1">No puedes cambiar tu propio rol</p>
                   )}
                   {isSaving && (
-                    <p className="text-[10px] text-[#264c99] mt-1 flex items-center gap-1">
+                    <p className="text-[10px] text-primary mt-1 flex items-center gap-1">
                       <Loader2 size={10} className="animate-spin" />
                       Guardando...
                     </p>

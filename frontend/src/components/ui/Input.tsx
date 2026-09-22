@@ -19,15 +19,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       {label && (
         <label
           htmlFor={inputId}
-          className="text-sm font-semibold text-[#264c99]"
+          className="text-sm font-semibold text-primary"
         >
           {label}
-          {props.required && <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>}
+          {props.required && <span className="text-error ml-1" aria-hidden="true">*</span>}
         </label>
       )}
       <div className="relative flex items-center">
         {leftIcon && (
-          <span className="absolute left-3 text-[#4a6fad]/60 pointer-events-none">
+          <span className="absolute left-3 text-secondary/60 pointer-events-none">
             {leftIcon}
           </span>
         )}
@@ -36,13 +36,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           id={inputId}
           className={[
             'w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900',
-            'placeholder:text-[#757874]/50',
+            'placeholder:text-on-surface-variant/50',
             'transition-colors duration-150',
-            'focus:outline-none focus:ring-2 focus:ring-[#264c99] focus:border-[#264c99]',
-            'disabled:bg-[#f0f4fb] disabled:text-[#757874]/60 disabled:cursor-not-allowed',
+            'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
+            'disabled:bg-surface-container-low disabled:text-on-surface-variant/60 disabled:cursor-not-allowed',
             error
-              ? 'border-[#A4636E] focus:ring-[#A4636E] focus:border-[#A4636E]'
-              : 'border-[#4a6fad]/40',
+              ? 'border-error focus:ring-error focus:border-error'
+              : 'border-secondary/40',
             leftIcon ? 'pl-9' : '',
             rightIcon ? 'pr-9' : '',
             className,
@@ -56,18 +56,18 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           {...props}
         />
         {rightIcon && (
-          <span className="absolute right-3 text-[#4a6fad]/60 pointer-events-none">
+          <span className="absolute right-3 text-secondary/60 pointer-events-none">
             {rightIcon}
           </span>
         )}
       </div>
       {hint && !error && (
-        <p id={`${inputId}-hint`} className="text-xs text-[#757874]">
+        <p id={`${inputId}-hint`} className="text-xs text-on-surface-variant">
           {hint}
         </p>
       )}
       {error && (
-        <p id={`${inputId}-error`} className="text-xs text-[#A4636E]" role="alert">
+        <p id={`${inputId}-error`} className="text-xs text-error" role="alert">
           {error}
         </p>
       )}

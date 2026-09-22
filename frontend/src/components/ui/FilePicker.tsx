@@ -43,18 +43,18 @@ export function FilePicker({
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-sm font-semibold text-[#264c99]">{label}</span>
-      {hint && <p className="text-xs text-[#757874]">{hint}</p>}
+      <span className="text-sm font-semibold text-primary">{label}</span>
+      {hint && <p className="text-xs text-on-surface-variant">{hint}</p>}
 
       {value ? (
-        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-[#264c99]/40 bg-[#e8eef7]">
-          <Paperclip size={15} className="text-[#264c99] shrink-0" />
-          <span className="text-sm text-[#1e3c7a] flex-1 truncate">{value.name}</span>
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-primary/40 bg-primary-fixed">
+          <Paperclip size={15} className="text-primary shrink-0" />
+          <span className="text-sm text-primary-hover flex-1 truncate">{value.name}</span>
           <button
             type="button"
             onClick={() => onChange(null)}
             disabled={disabled}
-            className="shrink-0 text-[#4a6fad] hover:text-[#A4636E] transition-colors disabled:opacity-50"
+            className="shrink-0 text-secondary hover:text-error transition-colors disabled:opacity-50"
             aria-label="Quitar archivo"
           >
             <X size={15} />
@@ -63,14 +63,14 @@ export function FilePicker({
       ) : (
         <label
           className={[
-            'flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-[#4a6fad]/40 bg-white transition-colors',
+            'flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-secondary/40 bg-white transition-colors',
             disabled
               ? 'cursor-not-allowed opacity-60'
-              : 'cursor-pointer hover:border-[#264c99]/60 hover:bg-[#f5f8f5]',
+              : 'cursor-pointer hover:border-primary/60 hover:bg-surface-container-low',
           ].join(' ')}
         >
-          <Paperclip size={15} className="text-[#4a6fad]/60" />
-          <span className="text-sm text-[#757874]">{placeholder}</span>
+          <Paperclip size={15} className="text-secondary/60" />
+          <span className="text-sm text-on-surface-variant">{placeholder}</span>
           <input
             type="file"
             accept={accept}
@@ -82,7 +82,7 @@ export function FilePicker({
       )}
 
       {sizeError && (
-        <p className="text-xs text-[#A4636E]" role="alert">
+        <p className="text-xs text-error" role="alert">
           {sizeError}
         </p>
       )}

@@ -155,7 +155,7 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
     }
   }
 
-  const inputClass = 'w-full rounded-xl border border-[#4a6fad]/40 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#264c99] focus:border-[#264c99] transition-colors'
+  const inputClass = 'w-full rounded-xl border border-secondary/40 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors'
 
   // El login (y cualquier otra vista sin invitación resuelta) es
   // intencionalmente neutral: nunca antes de autenticar se sabe a qué club
@@ -180,14 +180,14 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
           <p className="text-white/50 mt-1 text-center text-sm">Registro de salidas de montaña</p>
         </div>
 
-        <div className="bg-[#fafaf8] rounded-2xl shadow-2xl p-8">
+        <div className="bg-surface-container-low rounded-2xl shadow-2xl p-8">
 
           {/* ── Verificación exitosa ─────────────────────────────────── */}
           {view === 'verify-success' && (
             <div className="flex flex-col items-center gap-4 text-center">
-              <CheckCircle size={48} className="text-[#264c99]" />
+              <CheckCircle size={48} className="text-primary" />
               <h2 className="text-xl font-bold text-slate-800">¡Cuenta verificada!</h2>
-              <p className="text-[#757874] text-sm">Tu email fue confirmado. Ahora puedes iniciar sesión.</p>
+              <p className="text-on-surface-variant text-sm">Tu email fue confirmado. Ahora puedes iniciar sesión.</p>
               <Button fullWidth onClick={() => setView('login')}>Iniciar sesión</Button>
             </div>
           )}
@@ -195,9 +195,9 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
           {/* ── Error de verificación ────────────────────────────────── */}
           {view === 'verify-error' && (
             <div className="flex flex-col items-center gap-4 text-center">
-              <AlertCircle size={48} className="text-[#A4636E]" />
+              <AlertCircle size={48} className="text-error" />
               <h2 className="text-xl font-bold text-slate-800">Enlace inválido</h2>
-              <p className="text-[#757874] text-sm">El enlace de verificación es inválido o ya fue usado.</p>
+              <p className="text-on-surface-variant text-sm">El enlace de verificación es inválido o ya fue usado.</p>
               <Button fullWidth onClick={() => setView('login')}>Volver al inicio</Button>
             </div>
           )}
@@ -206,10 +206,10 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
           {view === 'reset' && (
             <>
               <h2 className="text-xl font-bold text-slate-800 mb-1">Nueva contraseña</h2>
-              <p className="text-[#757874] text-sm mb-6">Ingresa tu nueva contraseña.</p>
+              <p className="text-on-surface-variant text-sm mb-6">Ingresa tu nueva contraseña.</p>
               {resetDone ? (
                 <div className="flex flex-col gap-4 text-center">
-                  <CheckCircle size={40} className="text-[#264c99] mx-auto" />
+                  <CheckCircle size={40} className="text-primary mx-auto" />
                   <p className="text-slate-700 text-sm font-medium">¡Contraseña actualizada! Ya puedes iniciar sesión.</p>
                   <Button fullWidth onClick={() => setView('login')}>Iniciar sesión</Button>
                 </div>
@@ -224,11 +224,11 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                       required
                       className={inputClass + ' pr-10'}
                     />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#757874]">
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
-                  {error && <p className="text-xs text-[#A4636E]" role="alert">{error}</p>}
+                  {error && <p className="text-xs text-error" role="alert">{error}</p>}
                   <Button type="submit" fullWidth disabled={submitting}>
                     {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Actualizar contraseña'}
                   </Button>
@@ -242,27 +242,27 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
             <>
               {inviteLoading && (
                 <div className="flex flex-col items-center gap-3 py-6 text-center">
-                  <Loader2 size={32} className="animate-spin text-[#264c99]" />
-                  <p className="text-sm text-[#757874]">Consultando invitación...</p>
+                  <Loader2 size={32} className="animate-spin text-primary" />
+                  <p className="text-sm text-on-surface-variant">Consultando invitación...</p>
                 </div>
               )}
 
               {!inviteLoading && inviteLoadError && (
                 <div className="flex flex-col items-center gap-4 text-center">
-                  <AlertCircle size={48} className="text-[#A4636E]" />
+                  <AlertCircle size={48} className="text-error" />
                   <h2 className="text-xl font-bold text-slate-800">Invitación no disponible</h2>
-                  <p className="text-[#757874] text-sm" role="alert">{inviteLoadError}</p>
+                  <p className="text-on-surface-variant text-sm" role="alert">{inviteLoadError}</p>
                   <Button fullWidth onClick={() => setView('login')}>Volver al inicio</Button>
                 </div>
               )}
 
               {!inviteLoading && !inviteLoadError && inviteInfo && (
                 <>
-                  <div className="flex items-center gap-2 text-[#4a6fad] mb-1">
+                  <div className="flex items-center gap-2 text-secondary mb-1">
                     <UserPlus size={18} />
                     <h2 className="text-xl font-bold text-slate-800">Crea tu cuenta</h2>
                   </div>
-                  <p className="text-[#757874] text-sm mb-6">
+                  <p className="text-on-surface-variant text-sm mb-6">
                     <span className="font-semibold text-slate-700">{inviteInfo.invitadoPor}</span> te invitó a
                     unirse a <span className="font-semibold text-slate-700">{clubDisplayName(inviteInfo.organization)}</span>{' '}
                     como <span className="font-semibold text-slate-700">{inviteInfo.rolLabel}</span>.
@@ -270,8 +270,8 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
 
                   <form onSubmit={(e) => void handleAcceptInvite(e)} className="flex flex-col gap-4">
                     <div>
-                      <span className="block text-xs font-semibold text-[#264c99] mb-1">Email</span>
-                      <p className={inputClass + ' bg-[#f0f4fb] text-[#757874]'} aria-label="Email de la invitación">{inviteInfo.email}</p>
+                      <span className="block text-xs font-semibold text-primary mb-1">Email</span>
+                      <p className={inputClass + ' bg-surface-container-low text-on-surface-variant'} aria-label="Email de la invitación">{inviteInfo.email}</p>
                     </div>
 
                     <input
@@ -299,7 +299,7 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                       <button
                         type="button"
                         onClick={() => setShowInvitePassword(!showInvitePassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#757874]"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant"
                         aria-label={showInvitePassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                       >
                         {showInvitePassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -317,7 +317,7 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                       className={inputClass}
                     />
 
-                    {inviteError && <p className="text-xs text-[#A4636E]" role="alert">{inviteError}</p>}
+                    {inviteError && <p className="text-xs text-error" role="alert">{inviteError}</p>}
 
                     <Button type="submit" fullWidth disabled={inviteSubmitting}>
                       {inviteSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Crear cuenta'}
@@ -331,14 +331,14 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
           {/* ── Olvidé mi contraseña ─────────────────────────────────── */}
           {view === 'forgot' && (
             <>
-              <button onClick={() => setView('login')} className="flex items-center gap-1 text-sm text-[#757874] hover:text-slate-700 mb-4 transition-colors">
+              <button onClick={() => setView('login')} className="flex items-center gap-1 text-sm text-on-surface-variant hover:text-slate-700 mb-4 transition-colors">
                 <ArrowLeft size={14} />Volver
               </button>
               <h2 className="text-xl font-bold text-slate-800 mb-1">Restablecer contraseña</h2>
-              <p className="text-[#757874] text-sm mb-6">Ingresa tu email y te enviaremos un enlace.</p>
+              <p className="text-on-surface-variant text-sm mb-6">Ingresa tu email y te enviaremos un enlace.</p>
               {forgotSent ? (
                 <div className="flex flex-col gap-3 text-center">
-                  <CheckCircle size={40} className="text-[#264c99] mx-auto" />
+                  <CheckCircle size={40} className="text-primary mx-auto" />
                   <p className="text-slate-700 text-sm">Si el email está registrado, recibirás el enlace en breve. Revisa tu bandeja de entrada y la carpeta de spam.</p>
                   <Button variant="ghost" fullWidth onClick={() => setView('login')}>Volver al inicio</Button>
                 </div>
@@ -352,7 +352,7 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                     required
                     className={inputClass}
                   />
-                  {error && <p className="text-xs text-[#A4636E]" role="alert">{error}</p>}
+                  {error && <p className="text-xs text-error" role="alert">{error}</p>}
                   <Button type="submit" fullWidth disabled={submitting}>
                     {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Enviar enlace'}
                   </Button>
@@ -365,7 +365,7 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
           {view === 'login' && (
             <>
               <h2 className="text-xl font-bold text-slate-800 mb-1" style={{ fontFamily: "'Manrope', sans-serif" }}>Bienvenido</h2>
-              <p className="text-[#757874] text-sm mb-7">Inicia sesión para guardar y sincronizar tus salidas.</p>
+              <p className="text-on-surface-variant text-sm mb-7">Inicia sesión para guardar y sincronizar tus salidas.</p>
               {loginNote && (
                 <div className="flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800 mb-5">
                   <CheckCircle size={14} className="shrink-0 mt-0.5" />
@@ -392,21 +392,21 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                     autoComplete="current-password"
                     className={inputClass + ' pr-10'}
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#757874]">
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                {error && <p className="text-xs text-[#A4636E]" role="alert">{error}</p>}
+                {error && <p className="text-xs text-error" role="alert">{error}</p>}
                 <Button type="submit" fullWidth disabled={submitting || isLoading}>
                   {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Iniciar sesión'}
                 </Button>
               </form>
-              <div className="flex justify-end text-xs text-[#4a6fad] mb-3">
+              <div className="flex justify-end text-xs text-secondary mb-3">
                 <button type="button" onClick={() => { clearError(); setView('forgot') }} className="hover:underline">
                   ¿Olvidaste tu contraseña?
                 </button>
               </div>
-              <p className="text-center text-[11px] text-[#757874]">
+              <p className="text-center text-[11px] text-on-surface-variant">
                 El acceso es solo por invitación de un administrador o líder del club.
               </p>
             </>

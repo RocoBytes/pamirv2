@@ -49,14 +49,14 @@ function formatPostulacion(iso: string): string {
 
 function DeliveryIcons({ postulante }: { postulante: PostulanteRow }) {
   if (postulante.notificaciones.length === 0) {
-    return <span className="text-xs text-[#757874]">—</span>
+    return <span className="text-xs text-on-surface-variant">—</span>
   }
   return (
     <span className="inline-flex items-center gap-1.5">
       {postulante.notificaciones.map((n, i) => {
         const label = `${TIPO_NOTIFICACION_LABELS[n.tipo]}: ${n.estado.toLowerCase()}${n.ultimoError ? ` — ${n.ultimoError}` : ''}`
         if (n.estado === 'ENVIADA') {
-          return <CheckCircle2 key={i} size={15} className="text-[#2c6e49]" aria-label={label} />
+          return <CheckCircle2 key={i} size={15} className="text-pine" aria-label={label} />
         }
         if (n.estado === 'ERROR') {
           return (
@@ -65,7 +65,7 @@ function DeliveryIcons({ postulante }: { postulante: PostulanteRow }) {
             </span>
           )
         }
-        return <Clock key={i} size={15} className="text-[#757874]" aria-label={label} />
+        return <Clock key={i} size={15} className="text-on-surface-variant" aria-label={label} />
       })}
     </span>
   )
@@ -108,8 +108,8 @@ export function PostulantesTab({ eventoId, onFinalizado }: PostulantesTabProps) 
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3 text-[#757874]">
-        <Loader2 className="animate-spin text-[#264c99]" size={28} />
+      <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
+        <Loader2 className="animate-spin text-primary" size={28} />
         <p className="text-sm">Cargando postulantes...</p>
       </div>
     )
@@ -118,8 +118,8 @@ export function PostulantesTab({ eventoId, onFinalizado }: PostulantesTabProps) 
   if (error || !data) {
     return (
       <div className="flex flex-col items-center py-12 gap-4 text-center">
-        <AlertCircle size={32} className="text-[#A4636E]" />
-        <p className="text-sm text-[#757874]">{error ?? 'Error al cargar los postulantes'}</p>
+        <AlertCircle size={32} className="text-error" />
+        <p className="text-sm text-on-surface-variant">{error ?? 'Error al cargar los postulantes'}</p>
         <Button variant="secondary" size="sm" onClick={() => void load()}>
           Reintentar
         </Button>
@@ -197,18 +197,18 @@ export function PostulantesTab({ eventoId, onFinalizado }: PostulantesTabProps) 
     <div className="flex flex-col gap-4">
       {postulantes.length === 0 ? (
         <div className="flex flex-col items-center py-12 gap-3 text-center">
-          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-[#e8eef7]">
-            <Users size={24} className="text-[#264c99]" />
+          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-fixed">
+            <Users size={24} className="text-primary" />
           </div>
-          <p className="text-sm text-[#757874]">Aún no hay postulaciones para este evento.</p>
+          <p className="text-sm text-on-surface-variant">Aún no hay postulaciones para este evento.</p>
         </div>
       ) : (
         <>
           {/* Tabla por orden de llegada */}
-          <div className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm overflow-x-auto">
+          <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm overflow-x-auto">
             <table className="w-full text-sm min-w-[720px]">
               <thead>
-                <tr className="text-left text-xs text-[#757874] uppercase tracking-wide border-b border-[#4a6fad]/15">
+                <tr className="text-left text-xs text-on-surface-variant uppercase tracking-wide border-b border-secondary/15">
                   <th className="px-3 py-2.5 w-8"></th>
                   <th className="px-3 py-2.5">Postulante</th>
                   <th className="px-3 py-2.5">Teléfono</th>
@@ -233,33 +233,33 @@ export function PostulantesTab({ eventoId, onFinalizado }: PostulantesTabProps) 
                           disabled={!seleccionable}
                           onChange={() => toggleSeleccion(p.id)}
                           aria-label={`Seleccionar a ${p.usuario.nombre}`}
-                          className="w-4 h-4 rounded border-[#4a6fad]/40 text-[#264c99] focus:ring-[#264c99] disabled:opacity-30"
+                          className="w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary disabled:opacity-30"
                         />
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-slate-900">{p.usuario.nombre}</span>
                           {clubBadge && (
-                            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-[#264c99]/10 text-[#264c99] px-1.5 py-0.5 rounded-md">
+                            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-1.5 py-0.5 rounded-md">
                               {clubBadge}
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-[#757874]">{p.usuario.email}</p>
+                        <p className="text-xs text-on-surface-variant">{p.usuario.email}</p>
                       </td>
-                      <td className="px-3 py-2.5 text-[#757874]">{p.telefono ?? '—'}</td>
+                      <td className="px-3 py-2.5 text-on-surface-variant">{p.telefono ?? '—'}</td>
                       <td className="px-3 py-2.5">
                         {p.tieneVehiculo ? (
-                          <span className="inline-flex items-center gap-1 text-[#2c6e49]">
+                          <span className="inline-flex items-center gap-1 text-pine">
                             <Check size={14} />
                             <Car size={14} />
                             <span className="text-xs">ofrece {p.cuposVehiculo ?? 0}</span>
                           </span>
                         ) : (
-                          <X size={14} className="text-[#757874]" aria-label="Sin vehículo" />
+                          <X size={14} className="text-on-surface-variant" aria-label="Sin vehículo" />
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-[#757874] whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-on-surface-variant whitespace-nowrap">
                         {formatPostulacion(p.postuladoAt)}
                       </td>
                       <td className="px-3 py-2.5">
@@ -281,19 +281,19 @@ export function PostulantesTab({ eventoId, onFinalizado }: PostulantesTabProps) 
 
           {/* Resumen de selección + transporte */}
           {esPublicado && (
-            <div className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 flex flex-col gap-1.5">
+            <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 flex flex-col gap-1.5">
               <p className="text-sm font-semibold text-slate-900">
                 Seleccionados {sel} / {cupos} cupos
               </p>
-              <p className="text-xs text-[#757874]">
+              <p className="text-xs text-on-surface-variant">
                 {conductores.length}{' '}
                 {conductores.length === 1 ? 'conductor seleccionado' : 'conductores seleccionados'} ·{' '}
                 {asientos} asientos ofrecidos · {pasajeros}{' '}
                 {pasajeros === 1 ? 'pasajero' : 'pasajeros'} sin vehículo —{' '}
                 {asientos >= pasajeros ? (
-                  <span className="font-semibold text-[#2c6e49]">transporte cubierto</span>
+                  <span className="font-semibold text-pine">transporte cubierto</span>
                 ) : (
-                  <span className="font-semibold text-[#A4636E]">
+                  <span className="font-semibold text-error">
                     faltan {pasajeros - asientos} asientos
                   </span>
                 )}
@@ -305,7 +305,7 @@ export function PostulantesTab({ eventoId, onFinalizado }: PostulantesTabProps) 
 
       {actionError && (
         <div
-          className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 px-4 py-3 text-sm text-[#8b3a44]"
+          className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-4 py-3 text-sm text-on-error-container"
           role="alert"
         >
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
@@ -314,7 +314,7 @@ export function PostulantesTab({ eventoId, onFinalizado }: PostulantesTabProps) 
       )}
 
       {resultadoReenvio && (
-        <p className="text-xs font-medium text-[#264c99] bg-[#e8eef7] border border-[#264c99]/20 rounded-xl px-3 py-2">
+        <p className="text-xs font-medium text-primary bg-primary-fixed border border-primary/20 rounded-xl px-3 py-2">
           Reenvío completado: {resultadoReenvio}
         </p>
       )}

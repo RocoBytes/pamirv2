@@ -32,9 +32,9 @@ export function ExpressResponsibilityModal({ onCancel, onConfirm }: ExpressRespo
       aria-labelledby="express-responsibility-title"
     >
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-        <div className="flex items-start gap-3 px-5 py-4 border-b border-[#A4636E]/20 bg-[#f5e8ea]">
-          <AlertTriangle size={22} className="text-[#8b3a44] shrink-0 mt-0.5" />
-          <h2 id="express-responsibility-title" className="text-base font-bold text-[#8b3a44] leading-snug">
+        <div className="flex items-start gap-3 px-5 py-4 border-b border-error/20 bg-error-container">
+          <AlertTriangle size={22} className="text-on-error-container shrink-0 mt-0.5" />
+          <h2 id="express-responsibility-title" className="text-base font-bold text-on-error-container leading-snug">
             Participantes sin ficha registrada — responsabilidad del líder
           </h2>
         </div>
@@ -107,10 +107,10 @@ export function IntegranteExpressModal({ initialRut, onCancel, onSubmit }: Integ
       aria-labelledby="express-form-title"
     >
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-        <header className="flex items-center justify-between px-5 py-4 border-b border-[#4a6fad]/15 bg-[#f0f4fb]">
+        <header className="flex items-center justify-between px-5 py-4 border-b border-secondary/15 bg-surface-container-low">
           <div className="flex items-center gap-2">
-            <UserPlus size={18} className="text-[#8b3a44] shrink-0" />
-            <h2 id="express-form-title" className="text-base font-bold text-[#264c99]">
+            <UserPlus size={18} className="text-on-error-container shrink-0" />
+            <h2 id="express-form-title" className="text-base font-bold text-primary">
               Participante express
             </h2>
           </div>
@@ -125,16 +125,16 @@ export function IntegranteExpressModal({ initialRut, onCancel, onSubmit }: Integ
         </header>
 
         <form onSubmit={handleSubmit(submit)} noValidate className="flex flex-col gap-4 px-5 py-4">
-          <p className="text-xs text-[#757874] leading-relaxed">
+          <p className="text-xs text-on-surface-variant leading-relaxed">
             Persona sin ficha registrada. Quedará asociada solo a esta salida, identificada como
-            <span className="font-semibold text-[#8b3a44]"> Express</span>.
+            <span className="font-semibold text-on-error-container"> Express</span>.
           </p>
 
           <Input
             label="RUT"
             readOnly
             error={errors.rut?.message}
-            className="bg-[#f0f4fb] text-[#757874] cursor-not-allowed font-mono"
+            className="bg-surface-container-low text-on-surface-variant cursor-not-allowed font-mono"
             {...register('rut')}
           />
           <Input

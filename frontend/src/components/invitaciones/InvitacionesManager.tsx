@@ -28,7 +28,7 @@ interface InvitacionesManagerProps {
 }
 
 const ESTADO_BADGE_CLASS: Record<EstadoInvitacion, string> = {
-  PENDIENTE: 'bg-[#e8eef7] text-[#264c99] border border-[#264c99]/20',
+  PENDIENTE: 'bg-primary-fixed text-primary border border-primary/20',
   ACEPTADA: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
   REVOCADA: 'bg-slate-100 text-slate-500 border border-slate-200',
   EXPIRADA: 'bg-amber-50 text-amber-800 border border-amber-200',
@@ -230,10 +230,10 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
       {/* ── Formulario de invitación ─────────────────────────────────────── */}
       <form
         onSubmit={(e) => void handleCrear(e)}
-        className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 mb-5 flex flex-col gap-3"
+        className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 mb-5 flex flex-col gap-3"
       >
         <div className="flex items-center gap-2">
-          <UserPlus size={16} className="text-[#264c99]" />
+          <UserPlus size={16} className="text-primary" />
           <h3 className="text-sm font-bold text-slate-900">Nueva invitación</h3>
         </div>
 
@@ -252,7 +252,7 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
 
           {soloUnaOpcion ? (
             <div className="flex items-end pb-2 sm:w-56 shrink-0">
-              <p className="text-xs text-[#757874]">
+              <p className="text-xs text-on-surface-variant">
                 Se invitará como <span className="font-semibold text-slate-700">{ROL_LABELS[opcionesRol[0]!]}</span>.
               </p>
             </div>
@@ -270,7 +270,7 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
         </div>
 
         {createError && (
-          <p className="text-xs text-[#A4636E]" role="alert">
+          <p className="text-xs text-error" role="alert">
             {createError}
           </p>
         )}
@@ -284,7 +284,7 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
 
       {/* ── Lista de invitaciones ────────────────────────────────────────── */}
       {listError && (
-        <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-sm text-[#8b3a44] mb-4">
+        <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container mb-4">
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
           <div className="flex-1">
             <p>{listError}</p>
@@ -300,18 +300,18 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
       )}
 
       {!invitaciones && !listError && (
-        <div className="flex items-center gap-2 text-[#757874] py-6">
-          <Loader2 className="animate-spin text-[#264c99]" size={18} />
+        <div className="flex items-center gap-2 text-on-surface-variant py-6">
+          <Loader2 className="animate-spin text-primary" size={18} />
           <p className="text-sm">Cargando invitaciones...</p>
         </div>
       )}
 
       {invitaciones && invitaciones.length === 0 && (
         <div className="flex flex-col items-center py-10 gap-3 text-center">
-          <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-[#e8eef7]">
-            <Inbox size={22} className="text-[#264c99]" />
+          <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-primary-fixed">
+            <Inbox size={22} className="text-primary" />
           </div>
-          <p className="text-sm text-[#757874]">Todavía no has enviado invitaciones</p>
+          <p className="text-sm text-on-surface-variant">Todavía no has enviado invitaciones</p>
         </div>
       )}
 
@@ -325,21 +325,21 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
               const puedeReenviar = inv.estado === 'PENDIENTE' || inv.estado === 'EXPIRADA'
               const puedeRevocar = inv.estado === 'PENDIENTE'
               return (
-                <li key={inv.id} className="bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4">
+                <li key={inv.id} className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-slate-900 text-sm truncate">{inv.email}</p>
-                      <p className="text-xs text-[#757874] mt-0.5">{ROL_LABELS[inv.rol]}</p>
+                      <p className="text-xs text-on-surface-variant mt-0.5">{ROL_LABELS[inv.rol]}</p>
                     </div>
                     <EstadoBadge estado={inv.estado} />
                   </div>
-                  <p className="text-xs text-[#757874]">Vence: {formatDate(inv.expiresAt)}</p>
+                  <p className="text-xs text-on-surface-variant">Vence: {formatDate(inv.expiresAt)}</p>
                   {mostrarInvitadoPor && inv.invitadoPor && (
-                    <p className="text-xs text-[#757874]">Invitó: {inv.invitadoPor.name}</p>
+                    <p className="text-xs text-on-surface-variant">Invitó: {inv.invitadoPor.name}</p>
                   )}
 
                   {rowError[inv.id] && (
-                    <p className="text-xs text-[#A4636E] mt-2" role="alert">
+                    <p className="text-xs text-error mt-2" role="alert">
                       {rowError[inv.id]}
                     </p>
                   )}
@@ -351,7 +351,7 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
                           type="button"
                           onClick={() => void handleReenviar(inv.id)}
                           disabled={isPending}
-                          className="inline-flex items-center gap-1.5 bg-[#e8eef7] text-[#264c99] text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-[#dde6f7] disabled:opacity-50 transition-colors"
+                          className="inline-flex items-center gap-1.5 bg-primary-fixed text-primary text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-surface-container disabled:opacity-50 transition-colors"
                         >
                           <Send size={12} />
                           Reenviar
@@ -362,7 +362,7 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
                           type="button"
                           onClick={() => setConfirmRevocarId(inv.id)}
                           disabled={isPending}
-                          className="inline-flex items-center gap-1.5 text-[#8b3a44] text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-[#f5e8ea] disabled:opacity-50 transition-colors"
+                          className="inline-flex items-center gap-1.5 text-on-error-container text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-error-container disabled:opacity-50 transition-colors"
                         >
                           <Ban size={12} />
                           Revocar
@@ -397,10 +397,10 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
           </ul>
 
           {/* Desktop: table */}
-          <div className="hidden md:block overflow-x-auto rounded-2xl border border-[#4a6fad]/15 shadow-sm">
+          <div className="hidden md:block overflow-x-auto rounded-2xl border border-secondary/15 shadow-sm">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-[#e8eef7] text-[#264c99] text-xs uppercase tracking-wide">
+                <tr className="bg-primary-fixed text-primary text-xs uppercase tracking-wide">
                   <th className="text-left font-bold px-4 py-2">Email</th>
                   <th className="text-left font-bold px-4 py-2">Rol</th>
                   <th className="text-left font-bold px-4 py-2">Estado</th>
@@ -416,15 +416,15 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
                   const puedeReenviar = inv.estado === 'PENDIENTE' || inv.estado === 'EXPIRADA'
                   const puedeRevocar = inv.estado === 'PENDIENTE'
                   return (
-                    <tr key={inv.id} className="border-t border-[#4a6fad]/10 bg-white">
+                    <tr key={inv.id} className="border-t border-secondary/10 bg-white">
                       <td className="px-4 py-2.5 text-slate-900">{inv.email}</td>
                       <td className="px-4 py-2.5 text-slate-700">{ROL_LABELS[inv.rol]}</td>
                       <td className="px-4 py-2.5">
                         <EstadoBadge estado={inv.estado} />
                       </td>
-                      <td className="px-4 py-2.5 text-[#757874]">{formatDate(inv.expiresAt)}</td>
+                      <td className="px-4 py-2.5 text-on-surface-variant">{formatDate(inv.expiresAt)}</td>
                       {mostrarInvitadoPor && (
-                        <td className="px-4 py-2.5 text-[#757874]">{inv.invitadoPor?.name ?? '—'}</td>
+                        <td className="px-4 py-2.5 text-on-surface-variant">{inv.invitadoPor?.name ?? '—'}</td>
                       )}
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -434,7 +434,7 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
                               onClick={() => void handleReenviar(inv.id)}
                               disabled={isPending}
                               aria-label={`Reenviar invitación a ${inv.email}`}
-                              className="inline-flex items-center gap-1.5 bg-[#e8eef7] text-[#264c99] text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-[#dde6f7] disabled:opacity-50 transition-colors"
+                              className="inline-flex items-center gap-1.5 bg-primary-fixed text-primary text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-surface-container disabled:opacity-50 transition-colors"
                             >
                               <Send size={12} />
                               Reenviar
@@ -446,7 +446,7 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
                               onClick={() => setConfirmRevocarId(inv.id)}
                               disabled={isPending}
                               aria-label={`Revocar invitación a ${inv.email}`}
-                              className="inline-flex items-center gap-1.5 text-[#8b3a44] text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-[#f5e8ea] disabled:opacity-50 transition-colors"
+                              className="inline-flex items-center gap-1.5 text-on-error-container text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-error-container disabled:opacity-50 transition-colors"
                             >
                               <Ban size={12} />
                               Revocar
@@ -475,7 +475,7 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
                           )}
                         </div>
                         {rowError[inv.id] && (
-                          <p className="text-xs text-[#A4636E] mt-1" role="alert">
+                          <p className="text-xs text-error mt-1" role="alert">
                             {rowError[inv.id]}
                           </p>
                         )}

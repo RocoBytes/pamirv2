@@ -192,16 +192,16 @@ export function TimeInput24({
   }
 
   const borderClass = error
-    ? 'border-[#A4636E] focus-within:ring-[#A4636E]'
-    : 'border-[#4a6fad]/40 focus-within:ring-[#264c99] focus-within:border-[#264c99]'
+    ? 'border-error focus-within:ring-error'
+    : 'border-secondary/40 focus-within:ring-primary focus-within:border-primary'
 
   return (
     <div className="flex flex-col gap-1">
       {label && (
-        <label htmlFor={`${inputId}-h`} className="text-sm font-semibold text-[#264c99]">
+        <label htmlFor={`${inputId}-h`} className="text-sm font-semibold text-primary">
           {label}
           {required && (
-            <span className="text-[#A4636E] ml-1" aria-hidden="true">
+            <span className="text-error ml-1" aria-hidden="true">
               *
             </span>
           )}
@@ -216,7 +216,7 @@ export function TimeInput24({
           borderClass,
         ].join(' ')}
       >
-        <Clock className="ml-3 w-4 h-4 text-[#4a6fad]/60 shrink-0" aria-hidden="true" />
+        <Clock className="ml-3 w-4 h-4 text-secondary/60 shrink-0" aria-hidden="true" />
 
         {/* Hours spinner */}
         <div className="flex flex-col items-center ml-2">
@@ -225,7 +225,7 @@ export function TimeInput24({
             tabIndex={-1}
             onClick={() => stepHours(1)}
             aria-label="Aumentar horas"
-            className="text-[#4a6fad]/60 hover:text-[#264c99] leading-none"
+            className="text-secondary/60 hover:text-primary leading-none"
           >
             <ChevronUp className="w-3.5 h-3.5" />
           </button>
@@ -250,7 +250,7 @@ export function TimeInput24({
             tabIndex={-1}
             onClick={() => stepHours(-1)}
             aria-label="Disminuir horas"
-            className="text-[#4a6fad]/60 hover:text-[#264c99] leading-none"
+            className="text-secondary/60 hover:text-primary leading-none"
           >
             <ChevronDown className="w-3.5 h-3.5" />
           </button>
@@ -267,7 +267,7 @@ export function TimeInput24({
             tabIndex={-1}
             onClick={() => stepMinutes(1)}
             aria-label="Aumentar minutos"
-            className="text-[#4a6fad]/60 hover:text-[#264c99] leading-none"
+            className="text-secondary/60 hover:text-primary leading-none"
           >
             <ChevronUp className="w-3.5 h-3.5" />
           </button>
@@ -291,14 +291,14 @@ export function TimeInput24({
             tabIndex={-1}
             onClick={() => stepMinutes(-1)}
             aria-label="Disminuir minutos"
-            className="text-[#4a6fad]/60 hover:text-[#264c99] leading-none"
+            className="text-secondary/60 hover:text-primary leading-none"
           >
             <ChevronDown className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
       {error && (
-        <p className="text-xs text-[#A4636E]" role="alert">
+        <p className="text-xs text-error" role="alert">
           {error}
         </p>
       )}

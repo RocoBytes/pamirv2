@@ -152,7 +152,7 @@ const CampoTextarea = forwardRef<HTMLTextAreaElement, CampoTextareaProps>(functi
   const areaId = id ?? label.toLowerCase().replace(/\s+/g, '-')
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={areaId} className="text-sm font-semibold text-[#264c99]">
+      <label htmlFor={areaId} className="text-sm font-semibold text-primary">
         {label}
       </label>
       <textarea
@@ -162,16 +162,16 @@ const CampoTextarea = forwardRef<HTMLTextAreaElement, CampoTextareaProps>(functi
         aria-invalid={error ? 'true' : undefined}
         className={[
           'w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900',
-          'placeholder:text-[#757874]/50 transition-colors duration-150',
-          'focus:outline-none focus:ring-2 focus:ring-[#264c99] focus:border-[#264c99]',
+          'placeholder:text-on-surface-variant/50 transition-colors duration-150',
+          'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
           error
-            ? 'border-[#A4636E] focus:ring-[#A4636E] focus:border-[#A4636E]'
-            : 'border-[#4a6fad]/40',
+            ? 'border-error focus:ring-error focus:border-error'
+            : 'border-secondary/40',
         ].join(' ')}
         {...props}
       />
       {error && (
-        <p className="text-xs text-[#A4636E]" role="alert">
+        <p className="text-xs text-error" role="alert">
           {error}
         </p>
       )}
@@ -302,8 +302,8 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
       {/* ── Cabecera ── */}
-      <section className="bg-white rounded-2xl border border-[#4a6fad]/15 p-5 shadow-sm flex flex-col gap-4">
-        <h2 className="text-sm font-bold text-[#264c99]">Cabecera</h2>
+      <section className="bg-white rounded-2xl border border-secondary/15 p-5 shadow-sm flex flex-col gap-4">
+        <h2 className="text-sm font-bold text-primary">Cabecera</h2>
 
         <Input
           label="Título"
@@ -405,8 +405,8 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
       </section>
 
       {/* ── Cupos e inscripción ── */}
-      <section className="bg-white rounded-2xl border border-[#4a6fad]/15 p-5 shadow-sm flex flex-col gap-4">
-        <h2 className="text-sm font-bold text-[#264c99]">Cupos e inscripción</h2>
+      <section className="bg-white rounded-2xl border border-secondary/15 p-5 shadow-sm flex flex-col gap-4">
+        <h2 className="text-sm font-bold text-primary">Cupos e inscripción</h2>
 
         <Input
           label="Cupos"
@@ -438,14 +438,14 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
             )}
           />
         </div>
-        <p className="text-xs text-[#757874] -mt-2">
+        <p className="text-xs text-on-surface-variant -mt-2">
           Sugerencia automática: dos días antes del inicio, a las 23:59.
         </p>
       </section>
 
       {/* ── Contenido ── */}
-      <section className="bg-white rounded-2xl border border-[#4a6fad]/15 p-5 shadow-sm flex flex-col gap-4">
-        <h2 className="text-sm font-bold text-[#264c99]">Contenido</h2>
+      <section className="bg-white rounded-2xl border border-secondary/15 p-5 shadow-sm flex flex-col gap-4">
+        <h2 className="text-sm font-bold text-primary">Contenido</h2>
 
         <CampoTextarea
           label="Objetivo"
@@ -461,20 +461,20 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
         />
         {adjuntoActual && !adjuntoFile ? (
           <div className="flex flex-col gap-2">
-            <span className="text-sm font-semibold text-[#264c99]">Adjunto del itinerario</span>
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-[#264c99]/40 bg-[#e8eef7]">
+            <span className="text-sm font-semibold text-primary">Adjunto del itinerario</span>
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-primary/40 bg-primary-fixed">
               <FileDownloadButton
                 fetchUrl={() => fetchEventoItinerarioUrl(adjuntoActual.eventoId)}
-                className="flex items-center gap-2 flex-1 min-w-0 text-sm text-[#1e3c7a] hover:underline text-left disabled:opacity-60"
+                className="flex items-center gap-2 flex-1 min-w-0 text-sm text-primary-hover hover:underline text-left disabled:opacity-60"
               >
-                <Paperclip size={15} className="text-[#264c99] shrink-0" />
+                <Paperclip size={15} className="text-primary shrink-0" />
                 <span className="truncate">{adjuntoActual.nombre}</span>
               </FileDownloadButton>
               <button
                 type="button"
                 onClick={() => setQuitarAdjunto(true)}
                 disabled={saving}
-                className="shrink-0 text-[#4a6fad] hover:text-[#A4636E] transition-colors disabled:opacity-50"
+                className="shrink-0 text-secondary hover:text-error transition-colors disabled:opacity-50"
                 aria-label="Quitar adjunto"
               >
                 <X size={15} />
@@ -486,7 +486,7 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
             label={
               <>
                 Adjunto del itinerario{' '}
-                <span className="text-[#757874] font-normal">(opcional)</span>
+                <span className="text-on-surface-variant font-normal">(opcional)</span>
               </>
             }
             hint="PDF, JPG o PNG, máximo 15 MB. Se sube al guardar."
@@ -501,12 +501,12 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
           />
         )}
         {quitarAdjunto && !adjuntoFile && evento?.itinerarioFileId && (
-          <p className="text-xs text-[#757874] -mt-2">
+          <p className="text-xs text-on-surface-variant -mt-2">
             Se quitará el adjunto al guardar.{' '}
             <button
               type="button"
               onClick={() => setQuitarAdjunto(false)}
-              className="font-semibold text-[#264c99] hover:underline"
+              className="font-semibold text-primary hover:underline"
             >
               Deshacer
             </button>
@@ -543,7 +543,7 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
       )}
 
       {submitError && (
-        <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 px-4 py-3 text-sm text-[#8b3a44]" role="alert">
+        <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-4 py-3 text-sm text-on-error-container" role="alert">
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
           <p>{submitError}</p>
         </div>

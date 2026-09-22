@@ -66,9 +66,9 @@ interface YesNoFieldProps {
 function YesNoField({ label, value, onChange, error }: YesNoFieldProps) {
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-semibold text-[#264c99]">
+      <legend className="text-sm font-semibold text-primary">
         {label}
-        <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+        <span className="text-error ml-1" aria-hidden="true">*</span>
       </legend>
       <div className="flex gap-2">
         {([true, false] as const).map((opt) => {
@@ -82,10 +82,10 @@ function YesNoField({ label, value, onChange, error }: YesNoFieldProps) {
               aria-pressed={selected}
               className={[
                 'px-6 py-2 rounded-xl text-sm font-medium border transition-all duration-150',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] focus-visible:ring-offset-1',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
                 selected
-                  ? 'bg-[#264c99] text-white border-[#264c99] shadow-sm'
-                  : 'bg-white text-slate-700 border-[#4a6fad]/40 hover:border-[#264c99] hover:text-[#264c99]',
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : 'bg-white text-slate-700 border-secondary/40 hover:border-primary hover:text-primary',
               ].join(' ')}
             >
               {btnLabel}
@@ -94,7 +94,7 @@ function YesNoField({ label, value, onChange, error }: YesNoFieldProps) {
         })}
       </div>
       {error && (
-        <p className="text-xs text-[#A4636E]" role="alert">
+        <p className="text-xs text-error" role="alert">
           {error}
         </p>
       )}
@@ -151,7 +151,7 @@ interface RutLookupResultProps {
 function RutLookupResult({ rut, integrante, loading, actionLabel, isAdmin, onSelect, onCreateIntegrante, onStartExpress }: RutLookupResultProps) {
   if (loading) {
     return (
-      <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[#4a6fad]/20 bg-[#f0f4fb] text-sm text-[#757874]">
+      <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-secondary/20 bg-surface-container-low text-sm text-on-surface-variant">
         <Loader2 size={15} className="animate-spin shrink-0" />
         Buscando integrante...
       </div>
@@ -160,18 +160,18 @@ function RutLookupResult({ rut, integrante, loading, actionLabel, isAdmin, onSel
 
   if (integrante) {
     return (
-      <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[#264c99]/30 bg-[#e8eef7]">
-        <UserCheck size={18} className="text-[#264c99] shrink-0" />
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-primary/30 bg-primary-fixed">
+        <UserCheck size={18} className="text-primary shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-[#1e3c7a] truncate">
+          <p className="text-sm font-semibold text-primary-hover truncate">
             {integrante.nombreCompleto}
             {integrante.membresiaClub && (
-              <span className="ml-2 align-middle text-[10px] font-bold uppercase tracking-wide bg-[#264c99]/10 text-[#264c99] px-1.5 py-0.5 rounded-md">
+              <span className="ml-2 align-middle text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-1.5 py-0.5 rounded-md">
                 {CLUB_BADGE_LABELS[integrante.membresiaClub]}
               </span>
             )}
           </p>
-          <p className="text-xs text-[#757874]">{integrante.rut}</p>
+          <p className="text-xs text-on-surface-variant">{integrante.rut}</p>
         </div>
         <Button type="button" size="sm" onClick={() => onSelect(integrante)}>
           {actionLabel}
@@ -182,8 +182,8 @@ function RutLookupResult({ rut, integrante, loading, actionLabel, isAdmin, onSel
 
   if (integrante === null) {
     return (
-      <div className="flex flex-col gap-2 px-4 py-3 rounded-xl border border-[#4a6fad]/20 bg-[#f0f4fb]">
-        <p className="text-sm text-[#757874]">
+      <div className="flex flex-col gap-2 px-4 py-3 rounded-xl border border-secondary/20 bg-surface-container-low">
+        <p className="text-sm text-on-surface-variant">
           Sin ficha en este club para el RUT{' '}
           <span className="font-mono font-medium text-slate-700">{rut}</span>.
           Puedes agregarlo como participante express o pedirle que complete su
@@ -192,16 +192,16 @@ function RutLookupResult({ rut, integrante, loading, actionLabel, isAdmin, onSel
         <button
           type="button"
           onClick={onStartExpress}
-          className="flex items-center gap-1.5 text-sm text-[#8b3a44] hover:text-[#A4636E] font-semibold self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A4636E] rounded transition-colors"
+          className="flex items-center gap-1.5 text-sm text-on-error-container hover:text-error font-semibold self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error rounded transition-colors"
         >
-          <UserPlus size={15} className="text-[#A4636E]" />
+          <UserPlus size={15} className="text-error" />
           Agregar participante express
         </button>
         {isAdmin && (
           <button
             type="button"
             onClick={onCreateIntegrante}
-            className="flex items-center gap-1.5 text-sm text-[#264c99] hover:text-[#1e3c7a] font-medium self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99] rounded transition-colors"
+            className="flex items-center gap-1.5 text-sm text-primary hover:text-primary-hover font-medium self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded transition-colors"
           >
             <UserPlus size={15} />
             Crear integrante con ficha completa
@@ -238,29 +238,29 @@ export function LiderPicker({ value, participantes, onChange, error }: LiderPick
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-sm font-semibold text-[#264c99]">
+      <label className="text-sm font-semibold text-primary">
         Líder de Cordada
-        <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+        <span className="text-error ml-1" aria-hidden="true">*</span>
       </label>
 
       {!hasParticipants ? (
-        <div className="px-4 py-3 rounded-xl border border-[#4a6fad]/20 bg-[#f0f4fb] text-sm text-[#757874]">
+        <div className="px-4 py-3 rounded-xl border border-secondary/20 bg-surface-container-low text-sm text-on-surface-variant">
           Primero agrega al menos un participante a la nómina.
         </div>
       ) : value ? (
         <div
           className={[
             'flex items-center gap-2 px-3 py-2.5 rounded-xl border',
-            error ? 'border-[#A4636E]' : 'border-[#264c99]/40 bg-[#e8eef7]',
+            error ? 'border-error' : 'border-primary/40 bg-primary-fixed',
           ].join(' ')}
         >
-          <UserCheck size={16} className="text-[#264c99] shrink-0" />
-          <span className="text-sm font-medium text-[#1e3c7a] flex-1">{value}</span>
+          <UserCheck size={16} className="text-primary shrink-0" />
+          <span className="text-sm font-medium text-primary-hover flex-1">{value}</span>
           <button
             type="button"
             onClick={handleClear}
             aria-label="Quitar líder de cordada"
-            className="text-[#264c99] hover:text-[#A4636E] transition-colors leading-none"
+            className="text-primary hover:text-error transition-colors leading-none"
           >
             <X size={14} />
           </button>
@@ -274,8 +274,8 @@ export function LiderPicker({ value, participantes, onChange, error }: LiderPick
             aria-expanded={open}
             className={[
               'w-full flex items-center justify-between px-3 py-2.5 rounded-xl border bg-white text-sm text-left',
-              'focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow',
-              error ? 'border-[#A4636E] text-[#A4636E]' : 'border-[#4a6fad]/30 text-[#adb5ad]',
+              'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+              error ? 'border-error text-error' : 'border-secondary/30 text-outline',
             ].join(' ')}
           >
             <span>Selecciona el líder de cordada</span>
@@ -286,7 +286,7 @@ export function LiderPicker({ value, participantes, onChange, error }: LiderPick
             <ul
               role="listbox"
               aria-label="Participantes disponibles"
-              className="absolute z-10 mt-1 w-full rounded-xl border border-[#4a6fad]/20 bg-white shadow-lg overflow-hidden"
+              className="absolute z-10 mt-1 w-full rounded-xl border border-secondary/20 bg-white shadow-lg overflow-hidden"
             >
               {participantes.map((name) => (
                 <li key={name}>
@@ -295,7 +295,7 @@ export function LiderPicker({ value, participantes, onChange, error }: LiderPick
                     role="option"
                     aria-selected={false}
                     onClick={() => handleSelect(name)}
-                    className="w-full text-left px-4 py-2.5 text-sm text-slate-800 hover:bg-[#e8eef7] hover:text-[#1e3c7a] transition-colors"
+                    className="w-full text-left px-4 py-2.5 text-sm text-slate-800 hover:bg-primary-fixed hover:text-primary-hover transition-colors"
                   >
                     {name}
                   </button>
@@ -307,7 +307,7 @@ export function LiderPicker({ value, participantes, onChange, error }: LiderPick
       )}
 
       {error && (
-        <p className="text-xs text-[#A4636E]" role="alert">{error}</p>
+        <p className="text-xs text-error" role="alert">{error}</p>
       )}
     </div>
   )
@@ -358,7 +358,7 @@ export function ParticipantePicker({ selected, isAdmin, onAdd, onCreateIntegrant
         onChange={(e) => setRut(formatRut(e.target.value))}
         placeholder={selected.length === 0 ? 'Ingresa el RUT del participante' : 'Agregar otro participante por RUT'}
         aria-label="RUT del participante"
-        className="w-full px-3 py-2.5 rounded-xl border border-[#4a6fad]/30 bg-white text-sm text-slate-800 placeholder:text-[#adb5ad] focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 focus:border-[#264c99] transition-shadow"
+        className="w-full px-3 py-2.5 rounded-xl border border-secondary/30 bg-white text-sm text-slate-800 placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow"
       />
 
       {isComplete && !alreadyAdded && (
@@ -378,7 +378,7 @@ export function ParticipantePicker({ selected, isAdmin, onAdd, onCreateIntegrant
       )}
 
       {isComplete && !loading && alreadyAdded && (
-        <p className="text-xs text-[#757874] px-1">
+        <p className="text-xs text-on-surface-variant px-1">
           Este integrante ya está en la nómina.
         </p>
       )}
@@ -447,21 +447,21 @@ export function Step3HumanTeam({ defaultValues, isAdmin, onSubmit, onBack, onCre
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
       {/* Nómina de Participantes */}
       <div className="flex flex-col gap-2">
-        <span className="text-sm font-semibold text-[#264c99]">
+        <span className="text-sm font-semibold text-primary">
           Nómina de Participantes
-          <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+          <span className="text-error ml-1" aria-hidden="true">*</span>
         </span>
-        <p className="text-xs text-[#757874]">
+        <p className="text-xs text-on-surface-variant">
           Selecciona los integrantes registrados que participarán en esta salida.
         </p>
 
         {/* Selected participant chips */}
         {participantes.length > 0 && (
-          <div className="flex flex-wrap gap-2 p-3 rounded-xl border border-[#4a6fad]/20 bg-[#f0f4fb]/60">
+          <div className="flex flex-wrap gap-2 p-3 rounded-xl border border-secondary/20 bg-surface-container-low/60">
             {participantes.map((p) => (
               <span
                 key={p.rut}
-                className="inline-flex items-center gap-1.5 bg-[#e8eef7] text-[#1e3c7a] text-sm font-medium px-3 py-1 rounded-full border border-[#264c99]/20"
+                className="inline-flex items-center gap-1.5 bg-primary-fixed text-primary-hover text-sm font-medium px-3 py-1 rounded-full border border-primary/20"
               >
                 {p.esExpress ? (
                   <span className="text-[10px] font-bold uppercase tracking-wide bg-[#fef2f2] border border-[#fca5a5] text-[#991b1b] px-1.5 py-0.5 rounded-md">
@@ -469,7 +469,7 @@ export function Step3HumanTeam({ defaultValues, isAdmin, onSubmit, onBack, onCre
                   </span>
                 ) : (
                   p.membresiaClub && (
-                    <span className="text-[10px] font-bold uppercase tracking-wide bg-[#264c99]/10 text-[#264c99] px-1.5 py-0.5 rounded-md">
+                    <span className="text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-1.5 py-0.5 rounded-md">
                       {CLUB_BADGE_LABELS[p.membresiaClub]}
                     </span>
                   )
@@ -479,7 +479,7 @@ export function Step3HumanTeam({ defaultValues, isAdmin, onSubmit, onBack, onCre
                   type="button"
                   onClick={() => removeParticipante(p.rut)}
                   aria-label={`Quitar ${p.nombre}`}
-                  className="text-[#264c99] hover:text-[#A4636E] transition-colors leading-none"
+                  className="text-primary hover:text-error transition-colors leading-none"
                 >
                   <X size={13} />
                 </button>
@@ -497,7 +497,7 @@ export function Step3HumanTeam({ defaultValues, isAdmin, onSubmit, onBack, onCre
         />
 
         {errors.participantes && (
-          <p className="text-xs text-[#A4636E]" role="alert">
+          <p className="text-xs text-error" role="alert">
             {errors.participantes.message}
           </p>
         )}
@@ -518,7 +518,7 @@ export function Step3HumanTeam({ defaultValues, isAdmin, onSubmit, onBack, onCre
       />
 
       {/* Coordinación grupal */}
-      <div className="rounded-2xl border border-[#4a6fad]/15 bg-[#f0f4fb]/60 p-4">
+      <div className="rounded-2xl border border-secondary/15 bg-surface-container-low/60 p-4">
         <Controller
           control={control}
           name="coordinacionGrupal"
@@ -534,7 +534,7 @@ export function Step3HumanTeam({ defaultValues, isAdmin, onSubmit, onBack, onCre
       </div>
 
       {/* Matriz de riesgos */}
-      <div className="rounded-2xl border border-[#4a6fad]/15 bg-[#f0f4fb]/60 p-4">
+      <div className="rounded-2xl border border-secondary/15 bg-surface-container-low/60 p-4">
         <Controller
           control={control}
           name="matrizRiesgos"

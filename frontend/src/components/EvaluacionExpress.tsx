@@ -50,11 +50,11 @@ interface NotaFieldProps {
 function NotaField({ legend, labelMin, labelMax, value, error, onChange }: NotaFieldProps) {
   return (
     <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-semibold text-[#264c99]">
+      <legend className="text-sm font-semibold text-primary">
         {legend}
-        <span className="text-[#A4636E] ml-1" aria-hidden="true">*</span>
+        <span className="text-error ml-1" aria-hidden="true">*</span>
       </legend>
-      <div className="flex items-center justify-between gap-1 text-xs text-[#757874] mb-1">
+      <div className="flex items-center justify-between gap-1 text-xs text-on-surface-variant mb-1">
         <span>1 &mdash; {labelMin}</span>
         <span>5 &mdash; {labelMax}</span>
       </div>
@@ -66,10 +66,10 @@ function NotaField({ legend, labelMin, labelMax, value, error, onChange }: NotaF
             onClick={() => onChange(n)}
             className={[
               'flex-1 py-3 rounded-xl border text-sm font-bold transition-all duration-150',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#264c99]/40',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
               value === n
-                ? 'bg-[#264c99] border-[#264c99] text-white'
-                : 'bg-white border-[#4a6fad]/30 text-slate-700 hover:border-[#264c99]/40 hover:bg-[#f5f8f5]',
+                ? 'bg-primary border-primary text-white'
+                : 'bg-white border-secondary/30 text-slate-700 hover:border-primary/40 hover:bg-surface-container-low',
             ].join(' ')}
           >
             {n}
@@ -77,7 +77,7 @@ function NotaField({ legend, labelMin, labelMax, value, error, onChange }: NotaF
         ))}
       </div>
       {error && (
-        <p className="text-xs text-[#A4636E]" role="alert">
+        <p className="text-xs text-error" role="alert">
           {error}
         </p>
       )}
@@ -90,8 +90,8 @@ function NotaField({ legend, labelMin, labelMax, value, error, onChange }: NotaF
 // mientras carga o si la consulta falló: se muestra neutral en ese caso.
 function Shell({ children, org }: { children: React.ReactNode; org?: OrganizationBrand | null }) {
   return (
-    <div className="min-h-screen bg-[#f0f4fb]">
-      <header className="bg-white border-b border-[#4a6fad]/10 shadow-sm">
+    <div className="min-h-screen bg-alpine-canvas">
+      <header className="bg-white border-b border-secondary/10 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-2.5">
           <ClubLogo org={org ?? null} alt="" className="w-11 h-11 object-contain" />
           <span className="font-bold text-slate-900 text-lg">{clubShortName(org ?? null)}</span>
@@ -108,7 +108,7 @@ function CenteredMessage({ icon, title, text }: { icon: React.ReactNode; title: 
       {icon}
       <div>
         <p className="font-semibold text-slate-700">{title}</p>
-        <p className="text-sm text-[#757874] mt-1 max-w-sm">{text}</p>
+        <p className="text-sm text-on-surface-variant mt-1 max-w-sm">{text}</p>
       </div>
     </div>
   )
@@ -165,8 +165,8 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
   if (isLoading) {
     return (
       <Shell>
-        <div className="flex flex-col items-center justify-center py-16 gap-3 text-[#757874]">
-          <Loader2 className="animate-spin text-[#264c99]" size={28} />
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
+          <Loader2 className="animate-spin text-primary" size={28} />
           <p className="text-sm">Cargando evaluación...</p>
         </div>
       </Shell>
@@ -177,7 +177,7 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
     return (
       <Shell>
         <CenteredMessage
-          icon={<AlertCircle size={32} className="text-[#A4636E]" />}
+          icon={<AlertCircle size={32} className="text-error" />}
           title="Enlace no válido"
           text="Esta evaluación no existe o el enlace es incorrecto. Revisa el correo que recibiste e intenta nuevamente."
         />
@@ -212,17 +212,17 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
   return (
     <Shell org={info.organization}>
       <div className="mb-5">
-        <div className="flex items-center gap-2 text-[#4a6fad] text-xs font-semibold uppercase tracking-widest mb-1">
+        <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
           <Mountain size={14} />
           Evaluación express de salida
         </div>
         <h1 className="text-xl font-bold text-slate-900">{info.nombreActividad}</h1>
-        <p className="text-sm text-[#757874] mt-0.5">
+        <p className="text-sm text-on-surface-variant mt-0.5">
           Solo te tomará 1 minuto.
         </p>
       </div>
 
-      <div className="flex items-start gap-2 rounded-xl bg-[#e8eef7] border border-[#264c99]/20 p-3 mb-6 text-sm text-[#264c99]">
+      <div className="flex items-start gap-2 rounded-xl bg-primary-fixed border border-primary/20 p-3 mb-6 text-sm text-primary">
         <ShieldCheck size={18} className="shrink-0 mt-0.5" />
         <p>
           Esta evaluación es <strong>anónima</strong>: tu respuesta no queda asociada a tu
@@ -230,7 +230,7 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6 bg-white rounded-2xl border border-[#4a6fad]/15 shadow-sm p-4 sm:p-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 sm:p-6">
         <Controller
           control={control}
           name="notaObjetivos"
@@ -277,9 +277,9 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
         />
 
         <div className="flex flex-col gap-2">
-          <label htmlFor="comentario" className="text-sm font-semibold text-[#264c99]">
+          <label htmlFor="comentario" className="text-sm font-semibold text-primary">
             ¿Tienes comentarios que quieras dar o algo que agregar?
-            <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-[#4a6fad] bg-[#e8eef7] px-2 py-0.5 rounded-md">
+            <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-secondary bg-primary-fixed px-2 py-0.5 rounded-md">
               Anónimo · Opcional
             </span>
           </label>
@@ -288,16 +288,16 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
             rows={4}
             placeholder="Situaciones o actitudes observadas, sugerencias, reconocimientos..."
             {...register('comentario')}
-            className="w-full rounded-xl border border-[#4a6fad]/30 bg-white px-3 py-2.5 text-sm text-slate-700 placeholder:text-[#757874]/60 focus:outline-none focus:ring-2 focus:ring-[#264c99]/40 resize-y"
+            className="w-full rounded-xl border border-secondary/30 bg-white px-3 py-2.5 text-sm text-slate-700 placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-2 focus:ring-primary/40 resize-y"
           />
           <div className="flex items-center justify-between">
             {errors.comentario ? (
-              <p className="text-xs text-[#A4636E]" role="alert">{errors.comentario.message}</p>
+              <p className="text-xs text-error" role="alert">{errors.comentario.message}</p>
             ) : <span />}
             <span
               className={[
                 'text-xs tabular-nums',
-                comentarioVal.length > 1800 ? 'text-[#A4636E]' : 'text-[#757874]',
+                comentarioVal.length > 1800 ? 'text-error' : 'text-on-surface-variant',
               ].join(' ')}
             >
               {comentarioVal.length} / 2000
@@ -306,7 +306,7 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
         </div>
 
         {submitError && (
-          <div className="flex items-start gap-2 rounded-xl bg-[#f5e8ea] border border-[#A4636E]/30 p-3 text-sm text-[#8b3a44]">
+          <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container">
             <AlertCircle size={18} className="shrink-0 mt-0.5" />
             <p>{submitError}</p>
           </div>
