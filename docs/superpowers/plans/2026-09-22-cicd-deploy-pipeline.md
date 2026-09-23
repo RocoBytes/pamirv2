@@ -703,13 +703,32 @@ sed -n '620,690p' README.md
 
 - [ ] **Step 2: Rewrite it to describe what now exists**
 
+**Write this section in Spanish.** `README.md` is entirely in Spanish (697 lines), so
+under the comment-language rule the replacement prose matches the file, not the English
+used inside the workflow. Neutral professional register, no regional forms.
+
+**The existing text is not merely incomplete, it is now false.** It currently reads
+"Cada push a `main` dispara [.github/workflows/deploy.yml]" and then describes that
+trigger deploying to the VPS. With the approval gate, a push to `main` verifies and
+publishes images but deploys nothing until a human approves. Correct that sentence
+rather than appending to it.
+
 The replacement section must state:
-- Every push runs `verify-backend` and `verify-frontend`; pull requests run only those.
-- Pushes to `main` additionally build and push `latest` and `sha-<commit>` to GHCR.
-- The deploy job waits on the `production` environment until a reviewer approves it.
-- Deployment writes `PAMIR_TAG` into `/opt/pamir/.env`, reports pending migrations, applies them, rolls the containers and verifies `/api/health`.
-- Rollback: ssh to the VPS, edit `PAMIR_TAG` in `/opt/pamir/.env` to an earlier `sha-` tag, then `docker compose up -d`.
-- Required repository settings: secrets `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`, plus a `production` environment with a required reviewer.
+- Every push and every pull request runs `verify-backend` and `verify-frontend`.
+- Pushes to `main` additionally build and publish `latest` and `sha-<commit>` to GHCR.
+  Pull requests never publish; `workflow_dispatch` publishes only from `main`.
+- The deploy job then waits on the `production` environment and does nothing at all
+  until a reviewer approves it. This is the step that makes a push to `main` safe.
+- On approval, deployment writes `PAMIR_TAG` into `/opt/pamir/.env`, pulls the new
+  images, prints the pending migrations, applies them, rolls the containers and
+  verifies `/api/health`.
+- Rollback: ssh to the VPS, set `PAMIR_TAG` in `/opt/pamir/.env` to an earlier `sha-`
+  tag, then `docker compose up -d`.
+- Required repository settings, which the pipeline cannot create: secrets `VPS_HOST`,
+  `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`, plus a `production` environment with a
+  required reviewer.
+- `/opt/pamir/.env` must already exist with real secrets: the deploy step refuses to
+  run without it rather than risk overwriting it.
 
 - [ ] **Step 3: Verify no stale claims remain**
 
