@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { isAdmin, canInvite, puedeGestionarSalida } from './authz.js';
+import { isAdmin, canInvite, gestionaTodasLasCategorias, puedeGestionarSalida } from './authz.js';
 
 describe('isAdmin', () => {
   it('returns true for a user with rol ADMIN', () => {
@@ -56,6 +56,28 @@ describe('canInvite', () => {
 
   it('returns false when rol is missing', () => {
     assert.equal(canInvite({}), false);
+  });
+});
+
+describe('gestionaTodasLasCategorias', () => {
+  it('returns true for a user with rol LIDER', () => {
+    assert.equal(gestionaTodasLasCategorias({ rol: 'LIDER' }), true);
+  });
+
+  it('returns false for a user with rol SOCIO', () => {
+    assert.equal(gestionaTodasLasCategorias({ rol: 'SOCIO' }), false);
+  });
+
+  it('returns false for a user with rol ADMIN (maneja todo por otra vía, no por esta)', () => {
+    assert.equal(gestionaTodasLasCategorias({ rol: 'ADMIN' }), false);
+  });
+
+  it('returns false for an undefined user', () => {
+    assert.equal(gestionaTodasLasCategorias(undefined), false);
+  });
+
+  it('returns false for a null user', () => {
+    assert.equal(gestionaTodasLasCategorias(null), false);
   });
 });
 

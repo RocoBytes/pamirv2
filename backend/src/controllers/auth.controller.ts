@@ -10,6 +10,7 @@ import { subjectPasswordReset } from '../lib/email/subjects.js';
 import { emailField, passwordField, SALT_ROUNDS } from '../lib/auth-fields.js';
 import { FRONTEND_URL } from '../lib/config.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
+import { categoriasGestionadas } from '../lib/gestores-eventos.js';
 import { isOrganizationSuspended, CLUB_SUSPENDIDO_MENSAJE } from '../lib/organization-status.js';
 import { toPublicOrganization } from '../lib/serializers/organization.js';
 
@@ -101,9 +102,10 @@ export async function login(req: Request, res: Response): Promise<void> {
     }
 
     const token = signToken({ userId: user.id, email: user.email });
-    // gestorCategoriasDe consulta un modelo de tenant (GestorCategoria): corre
-    // ya dentro del contexto del club del usuario autenticado.
-    const gestorCategorias = await runWithOrganization(user.organizationId, () => gestorCategoriasDe(user.id));
+    // categoriasGestionadas consulta modelos de tenant (CategoriaEvento o
+    // GestorCategoria): corre ya dentro del contexto del club del usuario
+    // autenticado.
+    const gestorCategorias = await runWithOrganization(user.organizationId, () => categoriasGestionadas(user));
 
     res.json({
       token,
@@ -126,22 +128,12 @@ export async function login(req: Request, res: Response): Promise<void> {
 
 // ─── Me ───────────────────────────────────────────────────────────────────────
 
-// Categorías de eventos que el usuario gestiona (vacío para la mayoría)
-async function gestorCategoriasDe(userId: string): Promise<{ categoriaId: number; slug: string }[]> {
-  const filas = await prisma.gestorCategoria.findMany({
-    where: { usuarioId: userId },
-    select: { categoriaId: true, categoria: { select: { slug: true } } },
-    orderBy: { categoriaId: 'asc' },
-  });
-  return filas.map((f) => ({ categoriaId: f.categoriaId, slug: f.categoria.slug }));
-}
-
 // Usuario autenticado actual. authMiddleware ya lo cargó fresco desde la base
 // de datos, por lo que rol siempre refleja el valor vigente.
 export async function getMe(req: Request, res: Response): Promise<void> {
   try {
     const { id, organizationId, email, name, rol, organization } = req.user!;
-    const gestorCategorias = await gestorCategoriasDe(id);
+    const gestorCategorias = await categoriasGestionadas(req.user!);
     res.json({
       user: { id, organizationId, email, name, rol, gestorCategorias, organization: toPublicOrganization(organization) },
     });
