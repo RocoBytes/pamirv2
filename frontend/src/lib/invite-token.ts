@@ -17,3 +17,20 @@ export function parseInviteToken(hash: string): string | null {
     return null
   }
 }
+
+// Mismo criterio que parseInviteToken, para el QR reusable del club
+// (`#qr=<token>`): el token nunca llega al servidor ni a los logs del proxy.
+export function parseQrToken(hash: string): string | null {
+  try {
+    const raw = hash.startsWith('#') ? hash.slice(1) : hash
+    if (!raw) return null
+
+    const params = new URLSearchParams(raw)
+    const token = params.get('qr')
+    if (!token || token.length > MAX_TOKEN_LENGTH) return null
+
+    return token
+  } catch {
+    return null
+  }
+}
