@@ -120,14 +120,16 @@ jobs:
     env:
       TAG: ${{ needs.images.outputs.tag }}
       VPS: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
-      DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
+      # A secret, not a variable: this repository is public, so its Actions
+      # logs are too, and a secret is masked wherever it is echoed.
+      DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Validate DEPLOY_DIR
         run: |
           if [ -z "$DEPLOY_DIR" ]; then
-            echo "::error::The DEPLOY_DIR repository variable is not set. It must point to an absolute path on the shared server (for example /home/<user>/riala)."
+            echo "::error::The DEPLOY_DIR secret of the production environment is not set. It must point to an absolute path on the shared server (for example /home/<user>/riala)."
             exit 1
           fi
           case "$DEPLOY_DIR" in
