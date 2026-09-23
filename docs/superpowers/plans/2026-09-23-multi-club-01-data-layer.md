@@ -240,7 +240,10 @@ If the auto-generated `CreateIndex`/`AddForeignKey` block Prisma actually wrote 
 
 - [ ] **Step 7: Apply the migration**
 
+`db:migrate` and the `psql` calls below write to whatever `DATABASE_URL` in `backend/.env` points to, and neither runs the target guard on its own. Check the target first; stop if it is not the local/development database:
+
 ```bash
+npm run db:guard
 npm run db:migrate -- add_membresias
 ```
 
@@ -992,7 +995,11 @@ Production deploy for this PR stays manual (see the open CI-network decision in 
 ssh emgusprod
 cd ~/riala
 
-# 1. Pull the image this PR's merge built and published to GHCR.
+# 1. Pin this release (the merge commit's short SHA, e.g. sha-1a2b3c4) and
+#    pull the images GHCR already has for it. Write down the current
+#    RIALA_TAG first: it is the rollback target.
+grep '^RIALA_TAG=' .env
+grep -v '^RIALA_TAG=' .env > .env.next && echo 'RIALA_TAG=sha-<merge-sha>' >> .env.next && mv .env.next .env && chmod 600 .env
 docker compose pull
 
 # 2. Preflight: the new backend image must start cleanly against this
@@ -1012,7 +1019,20 @@ docker compose up -d --remove-orphans
 
 # 6. Health check.
 curl -fsS https://riala.cl/api/health
+
+# 7. Close the migrate-to-roll window: the OLD container kept serving
+#    between step 4 and step 5, and it creates users without a membership.
+#    Re-run the idempotent backfill now that only the new image serves.
+set -a; . ./.env; set +a
+docker run --rm postgres:16-alpine psql "$DATABASE_URL" -c "
+INSERT INTO membresias (id, organization_id, usuario_id, rol, creado_at)
+SELECT gen_random_uuid()::text, organization_id, id, rol, CURRENT_TIMESTAMP
+FROM users
+ON CONFLICT (organization_id, usuario_id) DO NOTHING;
+"
 ```
+
+Expected at step 7: `INSERT 0 0` in the normal case; `INSERT 0 N` means N users were created inside the window and are now covered.
 
 **Post-deploy verification (read-only):**
 
@@ -1027,6 +1047,6 @@ WHERE NOT EXISTS (SELECT 1 FROM membresias m WHERE m.usuario_id = u.id);
 "
 ```
 
-Expected: `usuarios_sin_membresia | 0`. A nonzero count means the backfill missed rows created between the backup branch and the migration running (should not happen — the migration runs before the containers roll, so no request can create a `User` without a `Membresia` in between) and must be investigated before considering the deploy complete.
+Expected: `usuarios_sin_membresia | 0`. The old container keeps serving between the migration (step 4) and the roll (step 5), so a user can be created without a `Membresia` inside that window; step 7 exists for exactly that. A nonzero count after step 7 is a real dual-write gap in the new image and must be investigated before considering the deploy complete.
 
-**Rollback note:** `users.organization_id`/`users.rol` are never read, written, or altered by this PR's migration — only copied from. Rolling back to the previous image tag (`RIALA_TAG` set back to the prior `sha-` value in `~/riala/.env`, then `docker compose up -d`) is safe without reversing the migration: the old image never references `membresias`, so the table is simply unused again, with no data loss on either side.
+**Rollback note:** `users.organization_id`/`users.rol` are never read, written, or altered by this PR's migration — only copied from. Rolling back to the previous image tag (`RIALA_TAG` set back to the prior `sha-` value in `~/riala/.env`, then `docker compose up -d`) is safe without reversing the migration: the old image never references `membresias`, so the table is simply unused again, with no data loss on either side. **Re-deploying after a rollback:** the old image creates users without memberships while it runs, and the migration will not run again, so repeat step 7 (the idempotent backfill) right after rolling forward again.
