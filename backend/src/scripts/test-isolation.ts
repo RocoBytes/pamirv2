@@ -122,6 +122,7 @@ async function purgeOrganization(organizationId: string): Promise<void> {
     await prisma.codigoQrInvitacion.deleteMany({ where: { organizationId } });
     await prisma.invitacion.deleteMany({ where: { organizationId } });
     await prisma.dashboardLayout.deleteMany({ where: { organizationId } });
+    await prisma.membresia.deleteMany({ where: { organizationId } });
     await prisma.user.deleteMany({ where: { organizationId } });
     await prisma.organization.delete({ where: { id: organizationId } });
   });
@@ -150,6 +151,7 @@ interface OrgSeed {
   organizationName: string;
   adminUserId: string;
   adminEmail: string;
+  membresiaAdminId: string;
   // Socio (no admin) con su propia ficha de Integrante en el mismo club — ver
   // el check de la biblioteca de documentos en runHttpChecks.
   socioUserId: string;
@@ -199,6 +201,10 @@ async function seedOrganization(label: 'A' | 'B', slug: string): Promise<OrgSeed
       },
     });
 
+    const membresiaAdmin = await prisma.membresia.create({
+      data: { organizationId: organization.id, usuarioId: adminUser.id, rol: 'ADMIN' },
+    });
+
     const integrante = await prisma.integrante.create({
       data: {
         organizationId: organization.id,
@@ -245,6 +251,10 @@ async function seedOrganization(label: 'A' | 'B', slug: string): Promise<OrgSeed
         rol: 'SOCIO',
         emailVerified: true,
       },
+    });
+
+    await prisma.membresia.create({
+      data: { organizationId: organization.id, usuarioId: socioUser.id, rol: 'SOCIO' },
     });
 
     await prisma.integrante.create({
@@ -419,6 +429,7 @@ async function seedOrganization(label: 'A' | 'B', slug: string): Promise<OrgSeed
       organizationName,
       adminUserId: adminUser.id,
       adminEmail,
+      membresiaAdminId: membresiaAdmin.id,
       socioUserId: socioUser.id,
       socioEmail,
       integranteId: integrante.id,
@@ -483,6 +494,14 @@ function buildProbes(seedA: OrgSeed, seedB: OrgSeed): ModelProbe[] {
       idA: seedA.adminUserId,
       idB: seedB.adminUserId,
       updateProbe: { name: 'probe' },
+      rowCount: 2,
+    },
+    {
+      name: 'Membresia',
+      delegate: asCheckable(prisma.membresia),
+      idA: seedA.membresiaAdminId,
+      idB: seedB.membresiaAdminId,
+      updateProbe: { rol: 'SOCIO' },
       rowCount: 2,
     },
     {
