@@ -103,6 +103,10 @@ jobs:
   deploy:
     needs: images
     runs-on: ubuntu-latest
+    # Bounds a stalled ssh/scp/curl call: without this, it would run to the
+    # 360-minute default while holding the deploy-production concurrency
+    # group below, queuing every later deployment behind it.
+    timeout-minutes: 20
     # Requires a reviewer on the `production` environment. The job queues
     # here and touches nothing until a human approves it.
     environment: production
@@ -125,6 +129,20 @@ jobs:
           printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
           printf '%s\n' "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_deploy ~/.ssh/known_hosts
+          # BatchMode/ConnectTimeout bound a stalled connection attempt.
+          # ServerAliveInterval/ServerAliveCountMax additionally bound a
+          # mid-transfer stall, which ConnectTimeout alone does not cover —
+          # that matters for the long-running `migrate deploy` step below.
+          # Applies to every ssh/scp in this job; restrictive permissions
+          # keep it consistent with the key and known_hosts files above.
+          cat > ~/.ssh/config <<'EOF'
+          Host *
+            BatchMode yes
+            ConnectTimeout 10
+            ServerAliveInterval 15
+            ServerAliveCountMax 4
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Sync the deployment files
         run: |
@@ -141,10 +159,12 @@ jobs:
             # grep below fails, '|| true' swallows it, .env.next is left empty,
             # and the mv replaces every production secret with one PAMIR_TAG line.
             test -f .env
-            # grep -v exits non-zero when nothing matches, the normal case on a
-            # first deploy, so its status must not abort the step...
+            # \`grep -v\` exits non-zero when it selects no lines at all — an
+            # empty .env, or one holding only PAMIR_TAG= lines — so its status
+            # must not abort the step...
             grep -v '^PAMIR_TAG=' .env > .env.next || true
-            # ...but an empty result means we are about to wipe the file.
+            # ...and \`test -s\` below is what actually catches that case: an
+            # empty result means we are about to wipe the file.
             test -s .env.next
             echo 'PAMIR_TAG=$TAG' >> .env.next
             mv .env.next .env
@@ -177,7 +197,7 @@ jobs:
       - name: Verify the deployment is healthy
         run: |
           for i in 1 2 3 4 5 6 7 8 9 10; do
-            if curl -fsS https://andinoclubpamir.app/api/health; then
+            if curl -fsS --connect-timeout 5 --max-time 10 https://andinoclubpamir.app/api/health; then
               echo "healthy after ${i} attempt(s)"
               exit 0
             fi
