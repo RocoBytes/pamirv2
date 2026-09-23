@@ -225,10 +225,13 @@ automatic club filter would start returning users from every club. Two layers:
   the not-a-member screen; joining with an existing account by invitation and by QR directo.
 
 **Delivery: chained PRs, each deployable on its own.**
-1. **Data:** `Membresia` model, migration and backfill, scope classification, dual write on every
-   user-creation path, the static guard. Reads still use `User.organizationId`.
-2. **Backend:** `authMiddleware` reads memberships and `X-Club`; login and `/me` return `clubes`;
-   admin endpoints on memberships; password reset branding; CLI.
+1. **Data:** `Membresia` model (added to `TENANT_MODELS`), migration and backfill, dual write on
+   every path that creates a `User` or changes `User.rol`. Reads still use `User.organizationId`,
+   and `User` stays tenant-scoped.
+2. **Backend:** `User` moves to `GLOBAL_MODELS` together with the static guard, in the same PR
+   where every in-club read switches to `Membresia` (moving it earlier would expose users of
+   every club to the admin list); `authMiddleware` reads memberships and `X-Club`; login and
+   `/me` return `clubes`; admin endpoints on memberships; password reset branding; CLI.
 3. **Joining:** invitations, QR by email and QR directo with an existing account.
 4. **Frontend:** path routing, `X-Club`, "Mis clubes", "Cambiar de club", not-a-member and
    club-not-found screens, per-club storage, join screens.
