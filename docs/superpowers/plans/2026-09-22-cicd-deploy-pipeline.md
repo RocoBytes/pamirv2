@@ -373,13 +373,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Deployments touch a single production database. Never run two at once,
-# and never cancel one midway: an interrupted migration is worse than a
-# slow queue.
-concurrency:
-  group: deploy-production
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
@@ -553,6 +546,13 @@ Add to the end of `.github/workflows/deploy.yml`:
     # Requires a reviewer on the `production` environment. The job queues
     # here and touches nothing until a human approves it.
     environment: production
+    # Scoped to this job alone. At workflow level this would also queue the
+    # verify jobs, and a run parked on the approval above would hold the
+    # group — GitHub only auto-fails an unactioned approval after 30 days,
+    # so one slow approver could freeze all CI for the repository.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     env:
       TAG: ${{ needs.images.outputs.tag }}
       VPS: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
@@ -630,13 +630,19 @@ actionlint .github/workflows/deploy.yml
 
 Expected: no output, exit 0.
 
-- [ ] **Step 3: Verify the full workflow parses as YAML**
+- [ ] **Step 3: Verify all four jobs are defined**
+
+`actionlint` already parsed the file in Step 2, so this only confirms the job set.
+Do not reach for PyYAML: it is not installed in this machine's system Python, and
+installing it is not worth a four-line check.
 
 ```bash
-python3 -c "import yaml,sys; d=yaml.safe_load(open('.github/workflows/deploy.yml')); print(sorted(d['jobs'].keys()))"
+for j in verify-backend verify-frontend images deploy; do
+  grep -qE "^  ${j}:$" .github/workflows/deploy.yml && echo "$j: ok" || echo "$j: MISSING"
+done
 ```
 
-Expected: `['deploy', 'images', 'verify-backend', 'verify-frontend']`
+Expected: all four print `ok`.
 
 - [ ] **Step 4: Commit**
 
