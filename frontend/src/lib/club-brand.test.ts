@@ -8,8 +8,28 @@ import {
   esSocioDelClub,
   documentTitle,
   DEFAULT_CLUB_LOGO,
+  PLATFORM_LOGO_FULL,
+  PLATFORM_NAME,
 } from './club-brand'
 import type { Organization } from '../types/salida'
+
+// Alambre de tropiezo: fija los valores reales (no solo la constante contra
+// sí misma, como hacen el resto de los tests de abajo) — así un cambio
+// accidental de ruta de los assets de marca (ver frontend/public/brand/) se
+// nota acá en vez de solo en un e2e.
+describe('constantes de marca de la plataforma (RIALA)', () => {
+  it('DEFAULT_CLUB_LOGO apunta al emblema de RIALA', () => {
+    expect(DEFAULT_CLUB_LOGO).toBe('/brand/riala-emblem.png')
+  })
+
+  it('PLATFORM_LOGO_FULL apunta al lockup completo de RIALA', () => {
+    expect(PLATFORM_LOGO_FULL).toBe('/brand/riala-logo.webp')
+  })
+
+  it('PLATFORM_NAME es "RIALA"', () => {
+    expect(PLATFORM_NAME).toBe('RIALA')
+  })
+})
 
 const PAMIR: Organization = {
   id: 'org-pamir',

@@ -13,6 +13,13 @@ import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 import { signToken } from '../lib/jwt.js';
 import { crearInvitacionPlataforma } from '../services/invitaciones.service.js';
 import { invitacionesRepoPrisma } from '../services/invitaciones.repo.prisma.js';
+import { solicitarInvitacionQr as solicitarInvitacionQrService, MENSAJE_SOLICITUD_GENERICA, } from '../services/codigos-qr.service.js';
+import { codigosQrRepoPrisma } from '../services/codigos-qr.repo.prisma.js';
+import { generateInviteToken } from '../lib/invitaciones.js';
+import { cifrarTokenQr } from '../lib/codigos-qr.js';
+import { requireJwtSecret } from '../lib/jwt.js';
+import { isOrganizationSuspended } from '../lib/organization-status.js';
+import { toPublicOrganizationBrand } from '../lib/serializers/organization.js';
 import { crearClub, listarClubes, cambiarEstadoClub, invitarAdminClub, } from '../services/tenants.service.js';
 import { tenantsRepoPrisma } from '../services/tenants.repo.prisma.js';
 import { computeDeclaracionHash } from '../lib/tenant-defaults.js';
@@ -74,6 +81,10 @@ async function purgeOrganization(organizationId) {
         await prisma.salida.deleteMany({ where: { organizationId } });
         await prisma.documento.deleteMany({ where: { organizationId } });
         await prisma.integrante.deleteMany({ where: { organizationId } });
+        // Antes de invitaciones/organización: CodigoQrInvitacion referencia a
+        // Organization con onDelete Restrict (como el resto de los modelos de
+        // tenant), aunque Invitacion.codigoQrId apunta a ella con SetNull.
+        await prisma.codigoQrInvitacion.deleteMany({ where: { organizationId } });
         await prisma.invitacion.deleteMany({ where: { organizationId } });
         await prisma.dashboardLayout.deleteMany({ where: { organizationId } });
         await prisma.user.deleteMany({ where: { organizationId } });
@@ -852,6 +863,175 @@ async function runHttpChecks(baseUrl, seedA, seedB) {
         assert.equal(resB.status, 403);
     });
 }
+// ─── QR reusable del club ───────────────────────────────────────────────────────
+function buildFakeCodigosQrDeps(capturedEmails) {
+    return {
+        repo: codigosQrRepoPrisma,
+        sendInvitationEmail: async (_organizationId, params) => {
+            capturedEmails.push(params);
+        },
+        getOrganizationPublic: async (organizationId) => {
+            const org = await prisma.organization.findUnique({
+                where: { id: organizationId },
+                select: { slug: true, name: true, shortName: true, logoObjectKey: true, status: true },
+            });
+            if (!org)
+                return null;
+            return { brand: toPublicOrganizationBrand(org), suspended: isOrganizationSuspended(org.status) };
+        },
+        withOrganization: (organizationId, fn) => runWithOrganization(organizationId, fn),
+        now: () => new Date(),
+        frontendUrl: 'https://iso-test.local',
+        jwtSecret: requireJwtSecret(),
+        logError: () => { },
+    };
+}
+async function runQrChecks(baseUrl, seedA, seedB) {
+    // El último paso de runHttpChecks deja a B en SUSPENDED a propósito; esta
+    // sección necesita a B respondiendo con normalidad para sus propios checks
+    // de aislamiento (listar/ver/revocar el código de A) — mismo motivo y mismo
+    // patrón que runFileDownloadChecks más abajo.
+    await runAsPlatform(() => prisma.organization.update({ where: { id: seedB.organizationId }, data: { status: 'ACTIVE' } }));
+    const tokenA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+    const tokenB = signToken({ userId: seedB.adminUserId, email: seedB.adminEmail });
+    let qrIdA = '';
+    let qrTokenA = '';
+    await check('ADMIN A crea un QR reusable y GET /api/qr/consultar expone la marca de SU club', async () => {
+        const creado = await postJsonAuth(baseUrl, tokenA, '/api/invitaciones/qr', {
+            duracion: '24h',
+            maxUsos: 3,
+            etiqueta: `iso-test-qr-${RANDOM_SUFFIX}`,
+        });
+        assert.equal(creado.status, 201);
+        const body = creado.body;
+        qrIdA = body.codigo.id;
+        qrTokenA = body.qrUrl.split('#qr=')[1] ?? '';
+        assert.ok(qrTokenA.length > 0);
+        assert.equal(body.codigo.usosRestantes, 3);
+        const consultado = await postJson(baseUrl, '/api/qr/consultar', { token: qrTokenA });
+        assert.equal(consultado.status, 200);
+        const consultadoBody = consultado.body;
+        assert.equal(consultadoBody.organization.slug, SLUG_A);
+    });
+    const emailNuevoQr = `qr-nuevo-${RANDOM_SUFFIX}@iso-test.local`;
+    await check('POST /api/qr/solicitar con un email nuevo mintea una Invitacion SOCIO en A y decrementa usosRestantes', async () => {
+        const solicitado = await postJson(baseUrl, '/api/qr/solicitar', { token: qrTokenA, email: emailNuevoQr });
+        assert.equal(solicitado.status, 202);
+        assert.equal(solicitado.body.message, MENSAJE_SOLICITUD_GENERICA);
+        const invitacion = await runAsPlatform(() => prisma.invitacion.findFirst({ where: { email: emailNuevoQr } }));
+        assert.ok(invitacion);
+        assert.equal(invitacion?.organizationId, seedA.organizationId);
+        assert.equal(invitacion?.rol, 'SOCIO');
+        assert.equal(invitacion?.invitadoPorId, seedA.adminUserId);
+        assert.equal(invitacion?.codigoQrId, qrIdA);
+        const listado = await getJson(baseUrl, tokenA, '/api/invitaciones/qr');
+        assert.equal(listado.status, 200);
+        const codigos = listado.body.codigos;
+        const propio = codigos.find((c) => c.id === qrIdA);
+        assert.equal(propio?.usosRestantes, 2);
+    });
+    await check('solicitar de nuevo con el MISMO email, o con el email de un ADMIN existente de OTRO club, da la misma respuesta 202 sin nueva fila', async () => {
+        const repetida = await postJson(baseUrl, '/api/qr/solicitar', { token: qrTokenA, email: emailNuevoQr });
+        const conCuentaExistente = await postJson(baseUrl, '/api/qr/solicitar', { token: qrTokenA, email: seedB.adminEmail });
+        assert.deepEqual(repetida, { status: 202, body: { message: MENSAJE_SOLICITUD_GENERICA } });
+        assert.deepEqual(conCuentaExistente, { status: 202, body: { message: MENSAJE_SOLICITUD_GENERICA } });
+        const invitacionesEmailRepetido = await runAsPlatform(() => prisma.invitacion.findMany({ where: { email: emailNuevoQr } }));
+        assert.equal(invitacionesEmailRepetido.length, 1);
+        const invitacionEmailAdminB = await runAsPlatform(() => prisma.invitacion.findFirst({ where: { email: seedB.adminEmail } }));
+        assert.equal(invitacionEmailAdminB, null);
+    });
+    await check('el admin de B no puede listar/ver/revocar el código QR de A (404, sin revelar existencia)', async () => {
+        const verDesdeB = await getJson(baseUrl, tokenB, `/api/invitaciones/qr/${qrIdA}`);
+        assert.equal(verDesdeB.status, 404);
+        const revocarDesdeB = await postJsonAuth(baseUrl, tokenB, `/api/invitaciones/qr/${qrIdA}/revocar`, {});
+        assert.equal(revocarDesdeB.status, 404);
+        const listadoB = await getJson(baseUrl, tokenB, '/api/invitaciones/qr');
+        assert.equal(listadoB.status, 200);
+        const codigosB = listadoB.body.codigos;
+        assert.equal(codigosB.some((c) => c.id === qrIdA), false);
+    });
+    await check('un token de QR en /api/auth/invitaciones/consultar (invitación individual) da 404', async () => {
+        const res = await postJson(baseUrl, '/api/auth/invitaciones/consultar', { token: qrTokenA });
+        assert.equal(res.status, 404);
+    });
+    await check('aceptar una invitación minteada por el QR de A, por HTTP, crea al usuario como SOCIO de A y permite iniciar sesión', async () => {
+        const capturedEmails = [];
+        const email = `qr-aceptada-${RANDOM_SUFFIX}@iso-test.local`;
+        const resultado = await runAsPlatform(() => solicitarInvitacionQrService(buildFakeCodigosQrDeps(capturedEmails), qrTokenA, { email }));
+        assert.equal(resultado.ok, true);
+        assert.equal(capturedEmails.length, 1);
+        const inviteToken = capturedEmails[0]?.inviteUrl.split('#invite=')[1] ?? '';
+        assert.ok(inviteToken.length > 0);
+        const aceptada = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', {
+            token: inviteToken,
+            name: 'Vía QR',
+            password: 'password123',
+        });
+        assert.equal(aceptada.status, 201);
+        const creado = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+        assert.ok(creado);
+        assert.equal(creado?.organizationId, seedA.organizationId);
+        assert.equal(creado?.rol, 'SOCIO');
+        const login = await postJson(baseUrl, '/api/auth/login', { email, password: 'password123' });
+        assert.equal(login.status, 200);
+        const org = login.body.user.organization;
+        assert.equal(org?.slug, SLUG_A);
+    });
+    await check('revocar el código de A (ADMIN A) lo deja no-activo; solicitar después da 410', async () => {
+        const revocado = await postJsonAuth(baseUrl, tokenA, `/api/invitaciones/qr/${qrIdA}/revocar`, {});
+        assert.equal(revocado.status, 200);
+        const solicitado = await postJson(baseUrl, '/api/qr/solicitar', {
+            token: qrTokenA,
+            email: `qr-revocado-${RANDOM_SUFFIX}@iso-test.local`,
+        });
+        assert.equal(solicitado.status, 410);
+    });
+    await check('maxUsos=1: agotado el único uso, la siguiente solicitud (email nuevo) da 410', async () => {
+        const creado = await postJsonAuth(baseUrl, tokenA, '/api/invitaciones/qr', { duracion: '2h', maxUsos: 1 });
+        assert.equal(creado.status, 201);
+        const token = creado.body.qrUrl.split('#qr=')[1] ?? '';
+        const primera = await postJson(baseUrl, '/api/qr/solicitar', {
+            token,
+            email: `qr-agota-1-${RANDOM_SUFFIX}@iso-test.local`,
+        });
+        assert.equal(primera.status, 202);
+        const segunda = await postJson(baseUrl, '/api/qr/solicitar', {
+            token,
+            email: `qr-agota-2-${RANDOM_SUFFIX}@iso-test.local`,
+        });
+        assert.equal(segunda.status, 410);
+    });
+    // Este check corre ANTES de que runHttpChecks suspenda B en su propio
+    // último paso: suspende y reactiva el club B él mismo, para que las
+    // verificaciones de runHttpChecks que siguen (que asumen B activo) no se
+    // vean afectadas por este check.
+    await check('club suspendido: solicitar sobre un QR válido de ese club da 410', async () => {
+        await runAsPlatform(() => prisma.organization.update({ where: { id: seedB.organizationId }, data: { status: 'SUSPENDED' } }));
+        try {
+            const { token, tokenHash } = generateInviteToken();
+            await runAsPlatform(() => prisma.codigoQrInvitacion.create({
+                data: {
+                    organizationId: seedB.organizationId,
+                    tokenHash,
+                    tokenCifrado: cifrarTokenQr(token, requireJwtSecret()),
+                    etiqueta: 'iso-test-club-suspendido',
+                    maxUsos: 5,
+                    usosRestantes: 5,
+                    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                    creadoPorId: seedB.adminUserId,
+                },
+            }));
+            const solicitado = await postJson(baseUrl, '/api/qr/solicitar', {
+                token,
+                email: `qr-suspendido-${RANDOM_SUFFIX}@iso-test.local`,
+            });
+            assert.equal(solicitado.status, 410);
+        }
+        finally {
+            await runAsPlatform(() => prisma.organization.update({ where: { id: seedB.organizationId }, data: { status: 'ACTIVE' } }));
+        }
+    });
+}
 // La suite jamás debe escribir en un bucket real: getFileStorage() debe
 // resolver al adaptador de memoria (la suite corre sin STORAGE_PROVIDER=gcs
 // ni variables GCS_*). Lanza en vez de continuar en silencio.
@@ -1445,6 +1625,12 @@ async function main() {
         const started = await startServer();
         server = started.server;
         await runHttpChecks(started.baseUrl, seedA, seedB);
+        // DESPUÉS de runHttpChecks a propósito: crea usuarios/invitaciones nuevos
+        // en A, y los checks de conteo exacto de runHttpChecks (admin/users,
+        // invitaciones) ya corrieron. runQrChecks reactiva B él mismo al empezar
+        // (el último paso de runHttpChecks lo deja SUSPENDED) — mismo motivo que
+        // runFileDownloadChecks más abajo.
+        await runQrChecks(started.baseUrl, seedA, seedB);
         await runFileDownloadChecks(started.baseUrl, seedA, seedB);
         await runClubLogoChecks(started.baseUrl, seedA, seedB);
         await runTenantCliChecks(started.baseUrl, seedA, seedB);

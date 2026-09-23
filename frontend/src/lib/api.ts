@@ -19,6 +19,15 @@ import type {
   CrearInvitacionResponse,
   ListarInvitacionesResponse,
 } from '../types/invitacion'
+import type {
+  QrDuracion,
+  CrearCodigoQrResponse,
+  ListarCodigosQrResponse,
+  VerCodigoQrResponse,
+  RevocarCodigoQrResponse,
+  ConsultarCodigoQrResponse,
+  SolicitarInvitacionQrResponse,
+} from '../types/codigo-qr'
 
 // En desarrollo el proxy de Vite redirige /api → localhost:3000.
 // En producción (Vercel) no hay proxy: se usa VITE_API_URL apuntando a Render.com.
@@ -848,6 +857,64 @@ export async function reenviarInvitacion(id: string): Promise<CrearInvitacionRes
     headers: authHeaders(),
   })
   return handleResponse<CrearInvitacionResponse>(res)
+}
+
+// ─── QR reusable del club ─────────────────────────────────────────────────────
+
+// Autenticados (ADMIN o LIDER): ADMIN ve todos los del club, LIDER solo los suyos.
+
+export async function listarCodigosQr(): Promise<ListarCodigosQrResponse> {
+  const res = await fetch(`${API_BASE}/invitaciones/qr`, {
+    headers: authHeaders(),
+  })
+  return handleResponse<ListarCodigosQrResponse>(res)
+}
+
+export async function crearCodigoQr(
+  data: { duracion?: QrDuracion; maxUsos?: number; etiqueta?: string } = {},
+): Promise<CrearCodigoQrResponse> {
+  const res = await fetch(`${API_BASE}/invitaciones/qr`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(data),
+  })
+  return handleResponse<CrearCodigoQrResponse>(res)
+}
+
+export async function verCodigoQr(id: string): Promise<VerCodigoQrResponse> {
+  const res = await fetch(`${API_BASE}/invitaciones/qr/${encodeURIComponent(id)}`, {
+    headers: authHeaders(),
+  })
+  return handleResponse<VerCodigoQrResponse>(res)
+}
+
+export async function revocarCodigoQr(id: string): Promise<RevocarCodigoQrResponse> {
+  const res = await fetch(`${API_BASE}/invitaciones/qr/${encodeURIComponent(id)}/revocar`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  return handleResponse<RevocarCodigoQrResponse>(res)
+}
+
+// Públicos: no llevan Authorization. El token siempre va en el body, nunca en
+// la URL, para que no quede en los logs de acceso.
+
+export async function consultarCodigoQr(token: string): Promise<ConsultarCodigoQrResponse> {
+  const res = await fetch(`${API_BASE}/qr/consultar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  })
+  return handleResponse<ConsultarCodigoQrResponse>(res)
+}
+
+export async function solicitarInvitacionQr(token: string, email: string): Promise<SolicitarInvitacionQrResponse> {
+  const res = await fetch(`${API_BASE}/qr/solicitar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, email }),
+  })
+  return handleResponse<SolicitarInvitacionQrResponse>(res)
 }
 
 // ─── Usuarios (solo administrador) ────────────────────────────────────────────

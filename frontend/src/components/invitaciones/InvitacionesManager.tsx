@@ -22,6 +22,7 @@ import { rolesInvitables } from '../../lib/roles'
 import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { Button } from '../ui/Button'
+import { QrCode } from './QrCode'
 
 interface InvitacionesManagerProps {
   rolActual: Rol
@@ -119,6 +120,13 @@ function EnlaceBanner({ inviteUrl, emailEnviado }: EnlaceBannerProps) {
           No se pudo copiar automáticamente. Selecciona el texto de arriba y cópialo manualmente.
         </p>
       )}
+
+      {/* El QR codifica el mismo enlace personal de un solo uso: mostrarlo a
+          cualquier otra persona equivale a compartir el enlace mismo. */}
+      <div className="flex flex-col items-start gap-1.5 pt-1">
+        <QrCode value={inviteUrl} size={160} alt="Código QR de la invitación" className="rounded-lg bg-white p-1.5" />
+        <p className="text-xs">Muéstralo solo a la persona invitada: es su enlace personal.</p>
+      </div>
     </div>
   )
 }

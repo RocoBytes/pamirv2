@@ -19,10 +19,11 @@ import { AdminPanel } from './components/AdminPanel'
 import { AdminDashboard } from './components/AdminDashboard'
 import { SalidaEditForm } from './components/SalidaEditForm'
 import { InvitarPage } from './components/invitaciones/InvitarPage'
+import { QrInvitacionPage } from './components/QrInvitacionPage'
 import { Button } from './components/ui/Button'
 import { fetchMyIntegrante } from './lib/api'
 import type { IntegranteRecord } from './types/salida'
-import { parseInviteToken } from './lib/invite-token'
+import { parseInviteToken, parseQrToken } from './lib/invite-token'
 import { puedeInvitar } from './lib/roles'
 
 type Route = 'dashboard' | 'nueva-salida' | 'nuevo-integrante' | 'nueva-cierre' | 'nuevo-integrante-standalone' | 'documentos' | 'contactos' | 'admin-panel' | 'admin-dashboard' | 'editar-salida' | 'eventos' | 'crear-evento' | 'gestionar-evento' | 'invitar'
@@ -56,6 +57,11 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   const [inviteToken, setInviteToken] = useState<string | null>(() =>
     parseInviteToken(window.location.hash),
   )
+  // Token del QR reusable del club (`#qr=<token>`): #invite= tiene prioridad
+  // si por algún motivo llegaran ambos en el mismo fragmento.
+  const [qrToken, setQrToken] = useState<string | null>(() =>
+    parseInviteToken(window.location.hash) ? null : parseQrToken(window.location.hash),
+  )
 
   useEffect(() => {
     if (!inviteToken) return
@@ -63,6 +69,11 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
     // historial ni sobreviva a un refresh accidental.
     window.history.replaceState(null, '', window.location.pathname + window.location.search)
   }, [inviteToken])
+
+  useEffect(() => {
+    if (!qrToken) return
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
+  }, [qrToken])
 
   const isAuthenticated = !!(user && token)
   // Autorización por rol en DB (no por email): promover o degradar un admin
@@ -135,6 +146,20 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   // EvaluacionExpress muestra "Enlace no válido" en vez de caer al login.
   if (evaluacionToken !== null) {
     return <EvaluacionExpress token={evaluacionToken} />
+  }
+
+  // Página pública: se muestra ANTES del gate de sesión a propósito — aunque
+  // ya haya sesión iniciada es inofensivo mostrarla (ofrece "Ir a la
+  // aplicación" en ese caso), y quien escanea el QR sin sesión no debe
+  // esperar a que resuelva /me.
+  if (qrToken) {
+    return (
+      <QrInvitacionPage
+        token={qrToken}
+        isAuthenticated={isAuthenticated}
+        onIrALaApp={() => setQrToken(null)}
+      />
+    )
   }
 
   if (isLoading || (isAuthenticated && !integranteChecked)) {

@@ -16,7 +16,13 @@ const RUN_AS_PLATFORM_ALLOWED_FILES = [
   'src/controllers/evaluaciones.controller.ts',
   'src/controllers/cron.controller.ts',
   'src/controllers/clubes.controller.ts',
+  // QR reusable del club: sus endpoints públicos (consultar/solicitar)
+  // arrancan en contexto de plataforma, igual que consultarInvitacion.
+  'src/controllers/codigos-qr.controller.ts',
   'src/services/invitaciones.repo.prisma.ts',
+  // findUserByEmail (User.email es único en toda la plataforma) — mismo
+  // motivo que invitaciones.repo.prisma.ts arriba.
+  'src/services/codigos-qr.repo.prisma.ts',
   'src/scripts/**',
   '**/*.test.ts',
 ];

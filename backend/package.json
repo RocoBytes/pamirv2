@@ -42,7 +42,9 @@
     "pretest:storage": "npm run db:guard",
     "test:storage": "tsx src/scripts/test-storage.ts",
     "pretest:email": "npm run db:guard",
-    "test:email": "tsx src/scripts/test-email.ts"
+    "test:email": "tsx src/scripts/test-email.ts",
+    "preoneoff:rebrand-house-club": "npm run db:guard",
+    "oneoff:rebrand-house-club": "tsx src/scripts/rebrand-house-club.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^8.2.0",

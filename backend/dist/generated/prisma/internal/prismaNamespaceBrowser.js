@@ -43,6 +43,7 @@ export const ModelName = {
     User: 'User',
     DashboardLayout: 'DashboardLayout',
     Invitacion: 'Invitacion',
+    CodigoQrInvitacion: 'CodigoQrInvitacion',
     Salida: 'Salida',
     EvaluacionToken: 'EvaluacionToken',
     EvaluacionRespuesta: 'EvaluacionRespuesta',
@@ -117,7 +118,22 @@ export const InvitacionScalarFieldEnum = {
     aceptadaAt: 'aceptadaAt',
     usuarioId: 'usuarioId',
     revocadaAt: 'revocadaAt',
-    createdAt: 'createdAt'
+    createdAt: 'createdAt',
+    codigoQrId: 'codigoQrId'
+};
+export const CodigoQrInvitacionScalarFieldEnum = {
+    id: 'id',
+    organizationId: 'organizationId',
+    tokenHash: 'tokenHash',
+    tokenCifrado: 'tokenCifrado',
+    rol: 'rol',
+    etiqueta: 'etiqueta',
+    maxUsos: 'maxUsos',
+    usosRestantes: 'usosRestantes',
+    expiresAt: 'expiresAt',
+    revocadoAt: 'revocadoAt',
+    createdAt: 'createdAt',
+    creadoPorId: 'creadoPorId'
 };
 export const SalidaScalarFieldEnum = {
     id: 'id',

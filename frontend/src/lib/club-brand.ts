@@ -8,7 +8,16 @@ import { CLUB_BADGE_LABELS } from '../types/salida'
 // resolver aún, o una invitación/evaluación cuyo backend no lo resolvió).
 const NEUTRAL_CLUB_NAME = 'Tu club'
 
-export const DEFAULT_CLUB_LOGO = '/logos/_default.svg'
+// Emblema de RIALA (la plataforma, no un club): fallback de cualquier club sin
+// logo propio, y el logo que se ve en las pantallas sin sesión sin club
+// resuelto (login neutral, ver AuthPage.tsx). Reemplaza al SVG de montaña
+// genérico que usaba antes.
+export const DEFAULT_CLUB_LOGO = '/brand/riala-emblem.png'
+
+// Lockup completo de la marca (emblema + wordmark + tagline), usado en el
+// login neutral en vez del ícono chico + nombre de club.
+export const PLATFORM_LOGO_FULL = '/brand/riala-logo.webp'
+export const PLATFORM_NAME = 'RIALA'
 
 type NameSource = Pick<Organization | OrganizationBrand, 'name' | 'shortName'>
 

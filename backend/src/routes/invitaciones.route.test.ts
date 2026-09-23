@@ -46,4 +46,33 @@ describe('invitaciones.route', () => {
     const layers = await loadRouterLayers();
     assert.equal(hasRoute(layers, '/:id/reenviar', 'post'), true);
   });
+
+  it('expone POST /qr (crear código QR reusable)', async () => {
+    const layers = await loadRouterLayers();
+    assert.equal(hasRoute(layers, '/qr', 'post'), true);
+  });
+
+  it('expone GET /qr (listar códigos QR)', async () => {
+    const layers = await loadRouterLayers();
+    assert.equal(hasRoute(layers, '/qr', 'get'), true);
+  });
+
+  it('expone GET /qr/:id (ver/reabrir un código QR)', async () => {
+    const layers = await loadRouterLayers();
+    assert.equal(hasRoute(layers, '/qr/:id', 'get'), true);
+  });
+
+  it('expone POST /qr/:id/revocar', async () => {
+    const layers = await loadRouterLayers();
+    assert.equal(hasRoute(layers, '/qr/:id/revocar', 'post'), true);
+  });
+
+  it('las rutas de /qr se declaran antes que "/:id/..." (nunca quedan bajo su sombra)', async () => {
+    const layers = await loadRouterLayers();
+    const paths = layers.filter((l) => l.route).map((l) => l.route!.path);
+    const primeraQr = paths.findIndex((p) => p.startsWith('/qr'));
+    const primeraId = paths.findIndex((p) => p.startsWith('/:id'));
+    assert.ok(primeraQr >= 0 && primeraId >= 0);
+    assert.ok(primeraQr < primeraId);
+  });
 });

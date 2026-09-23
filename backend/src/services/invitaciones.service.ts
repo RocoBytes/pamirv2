@@ -60,6 +60,12 @@ export interface CrearInvitacionData {
   // crearInvitacionPlataforma); toda invitación normal trae un invitador.
   invitadoPorId: string | null;
   emitidaPorPlataforma: boolean;
+  // Código QR reusable que mintió esta invitación (ver
+  // services/codigos-qr.service.ts, solicitarInvitacionQr). Opcional: toda
+  // invitación creada por este archivo (crearInvitacion,
+  // crearInvitacionPlataforma, reenviarInvitacion) sigue sin tocarlo, así que
+  // el comportamiento existente no cambia.
+  codigoQrId?: string | null;
 }
 
 export interface AceptarInvitacionInput {

@@ -228,6 +228,24 @@ describe('email-templates — branding por club en cada builder', () => {
     assertNoPamir(html);
   });
 
+  it('buildInvitationEmail sin viaQr es byte a byte igual que sin ese parámetro', () => {
+    assert.equal(
+      buildInvitationEmail(invitationData, branding),
+      buildInvitationEmail(invitationData, branding, {}),
+    );
+    assert.equal(
+      buildInvitationEmail(invitationData, branding),
+      buildInvitationEmail(invitationData, branding, { viaQr: false }),
+    );
+  });
+
+  it('buildInvitationEmail con viaQr agrega el párrafo del QR', () => {
+    const html = buildInvitationEmail(invitationData, branding, { viaQr: true });
+    assert.match(html, /código QR/);
+    assert.equal(html.includes(invitationData.inviteUrl), true);
+    assertMentionsClub(html);
+  });
+
   it('buildEventoInscripcionConfirmadaEmail usa branding.frontendUrl en el CTA', () => {
     const html = buildEventoInscripcionConfirmadaEmail('Juan Soto', evento, inscripcion, branding);
     assertMentionsClub(html);

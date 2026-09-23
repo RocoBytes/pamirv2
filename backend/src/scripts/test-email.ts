@@ -21,16 +21,41 @@ import { emailField } from '../lib/auth-fields.js';
 
 const KINDS = Object.keys(MAIL_FROM) as EmailKind[];
 
+// riala es el club "de casa" (ver CLAUDE.md, el rebrand de la organización
+// pamir); --slug permite apuntar a cualquier otro club sin tocar el script.
+const DEFAULT_SLUG = 'riala';
+
 interface CheckResult {
   kind: EmailKind;
   ok: boolean;
   detail?: string;
 }
 
+interface ParsedArgs {
+  destino: string | undefined;
+  slug: string;
+}
+
+function parseArgs(argv: string[]): ParsedArgs {
+  let slug = DEFAULT_SLUG;
+  const rest: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--slug') {
+      slug = argv[i + 1] ?? slug;
+      i++;
+      continue;
+    }
+    rest.push(argv[i]!);
+  }
+  return { destino: rest[0], slug };
+}
+
 async function main(): Promise<void> {
-  const destinoParsed = emailField.safeParse(process.argv[2]);
+  const { destino, slug } = parseArgs(process.argv.slice(2));
+
+  const destinoParsed = emailField.safeParse(destino);
   if (!destinoParsed.success) {
-    console.error('[test-email] Uso: npm run test:email -- <destino@ejemplo.com>');
+    console.error('[test-email] Uso: npm run test:email -- <destino@ejemplo.com> [--slug <slug-del-club>]');
     process.exitCode = 1;
     return;
   }
@@ -50,7 +75,7 @@ async function main(): Promise<void> {
   }
 
   const organization = await runAsPlatform(() =>
-    prisma.organization.findUniqueOrThrow({ where: { slug: 'pamir' } }),
+    prisma.organization.findUniqueOrThrow({ where: { slug } }),
   );
 
   const results: CheckResult[] = [];

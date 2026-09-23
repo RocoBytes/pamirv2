@@ -241,13 +241,13 @@ test.describe('Branding por club — El Montañista nunca ve nada de Pamir', () 
   test('sin logo propio subido: cae al logo neutral por defecto, sin imagen rota', async ({ page }) => {
     await page.goto('/')
     // El Montañista no tiene /logos/el-montanista.png en este entorno: el
-    // <img> debe terminar apuntando al SVG neutral tras el evento onError.
+    // <img> debe terminar apuntando al emblema de RIALA tras el evento onError.
     const logo = page.locator('header img').first()
-    await expect(logo).toHaveAttribute('src', /_default\.svg$/)
+    await expect(logo).toHaveAttribute('src', /riala-emblem\.png$/)
   })
 })
 
-test.describe('Branding por club — el fixture de Pamir sigue mostrando su propia marca', () => {
+test.describe('Branding por club — sin logo propio ni estático: cadena de fallback completa hasta el emblema neutral', () => {
   test.beforeEach(async ({ page }) => {
     await setAuth(page, MOCK_USER)
     await mockMe(page, MOCK_USER)
@@ -255,10 +255,16 @@ test.describe('Branding por club — el fixture de Pamir sigue mostrando su prop
     await mockSalidas(page, [])
   })
 
-  test('el logo de Pamir carga desde /logos/pamir.png, su nombre es visible y la insignia es ACP', async ({ page }) => {
+  // El fixture de Pamir no trae hasLogo (sin logo subido) y /logos/pamir.png
+  // ya no existe en frontend/public (se retiró junto con el resto de la marca
+  // de Pamir): el <img> pasa por los tres escalones de clubLogoCandidates
+  // (subido → estático → neutral) y termina en el emblema de RIALA. El
+  // nombre y la insignia del club siguen siendo datos propios del club —no
+  // dependen del logo— y no deben verse afectados por esa caída.
+  test('el logo cae de /logos/pamir.png (ya no existe) al emblema de RIALA; el nombre e insignia del club son los suyos', async ({ page }) => {
     await page.goto('/')
     const logo = page.locator('header img').first()
-    await expect(logo).toHaveAttribute('src', '/logos/pamir.png')
+    await expect(logo).toHaveAttribute('src', /riala-emblem\.png$/)
     await expect(page.getByText('Pamir', { exact: true }).first()).toBeVisible()
     // "Socios ACP" es la insignia de la propia tarjeta del dashboard (no un
     // texto de DocumentosPage) — no hace falta navegar para verla.
@@ -281,11 +287,16 @@ test.describe('Branding por club — semántica "socio de ESTE club", no "es Pam
 })
 
 test.describe('Branding por club — pantallas sin sesión', () => {
-  test('login: sin nombre ni logo de ningún club, título genérico', async ({ page }) => {
+  test('login: sin nombre ni logo de ningún club, título genérico, y el lockup de RIALA en vez del tile de un club', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
     await expect(page.getByText('© 2026 RIALA · Seguridad en Montaña')).toBeVisible()
     await expect(page.title()).resolves.toBe('Registro de Salidas de Montaña')
+    // Sin ?club= ni invitación: el primer <img> es el lockup de la
+    // plataforma (emblema + wordmark + tagline), no el tile+ClubLogo.
+    const logo = page.locator('img').first()
+    await expect(logo).toHaveAttribute('src', /riala-logo\.webp$/)
+    await expect(logo).toHaveAttribute('alt', 'RIALA')
     await expectNoPamirLeak(page)
   })
 

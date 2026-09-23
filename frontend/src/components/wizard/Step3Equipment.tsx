@@ -29,6 +29,7 @@ const step3Schema = z.object({
             'SOCIO_ANDINO_PAMIR',
             'SOCIO_EL_MONTANISTA',
             'SOCIO_ANDINO_TESTING',
+            'SOCIO_RIALA',
             'SOCIO_OTRO_CLUB',
             'POSTULANTE_CLUB',
             'NO_PERTENECE',

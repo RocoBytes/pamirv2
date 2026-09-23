@@ -14,6 +14,7 @@ import adminRouter from './admin.route.js';
 import invitacionesRouter from './invitaciones.route.js';
 import organizacionRouter from './organizacion.route.js';
 import clubesRouter from './clubes.route.js';
+import qrPublicoRouter from './qr-publico.route.js';
 
 const router = Router();
 
@@ -34,5 +35,9 @@ router.use('/organizacion', organizacionRouter);
 // Público (sin authMiddleware): marca y logo por slug, para pantallas SIN
 // sesión — ver routes/clubes.route.ts.
 router.use('/clubes', clubesRouter);
+// Público (sin authMiddleware): consultar/solicitar por el QR reusable del
+// club — ver routes/qr-publico.route.ts. Fuera de /auth a propósito, con su
+// propio límite de tasa (lib/rate-limits.ts).
+router.use('/qr', qrPublicoRouter);
 
 export default router;

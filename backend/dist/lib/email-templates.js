@@ -698,11 +698,16 @@ export function buildPasswordResetEmail(name, resetUrl, branding) {
 </body>
 </html>`;
 }
-export function buildInvitationEmail(data, branding) {
+export function buildInvitationEmail(data, branding, opts = {}) {
     const inviteUrlSafe = escapeHtml(data.inviteUrl);
     const intro = `<p style="margin:0;color:#1f2937;font-size:15px;">
     <strong>${escapeHtml(data.invitadoPorNombre)}</strong> te invitó a crear una cuenta en el sistema de ${escapeHtml(branding.name)}.
-  </p>`;
+  </p>${opts.viaQr
+        ? `
+  <p style="margin:10px 0 0;color:#1f2937;font-size:15px;">
+    Solicitaste esta invitación escaneando el código QR de ${escapeHtml(branding.name)}. Si no fuiste tú, puedes ignorar este correo.
+  </p>`
+        : ''}`;
     const tabla = `${row('Rol asignado', data.rolLabel)}`;
     const cta = `
         <tr>
