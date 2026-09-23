@@ -37,6 +37,9 @@ const HKDF_SALT = 'riala-qr';
 const HKDF_INFO = 'riala-qr-token-v1';
 const HKDF_KEY_LEN = 32;
 const GCM_IV_LEN = 12;
+// Largo completo del tag de GCM: se exige exacto al descifrar, porque Node
+// acepta tags truncados (desde 4 bytes) si no se fija authTagLength.
+const GCM_TAG_LEN = 16;
 const PAYLOAD_VERSION = 'v1';
 function deriveKey(secret) {
     const derived = hkdfSync('sha256', secret, HKDF_SALT, HKDF_INFO, HKDF_KEY_LEN);
@@ -70,9 +73,9 @@ export function descifrarTokenQr(payload, secret) {
         const iv = Buffer.from(ivB64 ?? '', 'base64url');
         const tag = Buffer.from(tagB64 ?? '', 'base64url');
         const ciphertext = Buffer.from(ciphertextB64 ?? '', 'base64url');
-        if (iv.length !== GCM_IV_LEN || tag.length === 0 || ciphertext.length === 0)
+        if (iv.length !== GCM_IV_LEN || tag.length !== GCM_TAG_LEN || ciphertext.length === 0)
             return null;
-        const decipher = createDecipheriv('aes-256-gcm', key, iv);
+        const decipher = createDecipheriv('aes-256-gcm', key, iv, { authTagLength: GCM_TAG_LEN });
         decipher.setAuthTag(tag);
         const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
         return plaintext.toString('utf8');

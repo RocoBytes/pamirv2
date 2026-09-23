@@ -82,6 +82,14 @@ describe('cifrarTokenQr / descifrarTokenQr', () => {
     assert.notEqual(cifrarTokenQr(token, SECRET), cifrarTokenQr(token, SECRET));
   });
 
+  it('un tag truncado devuelve null aunque sea un prefijo del tag real', () => {
+    const payload = cifrarTokenQr('token-de-prueba', SECRET);
+    const partes = payload.split('.');
+    const truncado = Buffer.from(partes[2] ?? '', 'base64url').subarray(0, 4);
+    const conTagCorto = [partes[0], partes[1], truncado.toString('base64url'), partes[3]].join('.');
+    assert.equal(descifrarTokenQr(conTagCorto, SECRET), null);
+  });
+
   it('un payload alterado (tag manipulado) devuelve null, nunca lanza', () => {
     const payload = cifrarTokenQr('token', SECRET);
     const partes = payload.split('.');
