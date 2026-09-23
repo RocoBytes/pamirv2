@@ -140,6 +140,51 @@ jobs:
               ;;
           esac
 
+      # The shared server only accepts SSH over its WireGuard network: port
+      # 22 is closed to the internet, so a hosted runner has to join that
+      # network first. The runner is one dedicated peer with its own key; it
+      # routes only the server's VPN address through the tunnel, so the rest
+      # of the job's traffic (GHCR, apt, checkout) keeps using the runner's
+      # normal network, and the other peers are unreachable from here.
+      # VPS_HOST must hold the server's VPN address, and VPS_KNOWN_HOSTS its
+      # host key under that address.
+      - name: Join the server's WireGuard network
+        env:
+          WG_PRIVATE_KEY: ${{ secrets.WG_PRIVATE_KEY }}
+          WG_ADDRESS: ${{ secrets.WG_ADDRESS }}
+          WG_SERVER_PUBLIC_KEY: ${{ secrets.WG_SERVER_PUBLIC_KEY }}
+          WG_ENDPOINT: ${{ secrets.WG_ENDPOINT }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          for name in WG_PRIVATE_KEY WG_ADDRESS WG_SERVER_PUBLIC_KEY WG_ENDPOINT VPS_HOST; do
+            if [ -z "${!name}" ]; then
+              echo "::error::The $name secret of the production environment is not set."
+              exit 1
+            fi
+          done
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wireguard-tools
+          umask 077
+          sudo mkdir -p /etc/wireguard
+          sudo tee /etc/wireguard/wg0.conf > /dev/null <<EOF
+          [Interface]
+          PrivateKey = $WG_PRIVATE_KEY
+          Address = $WG_ADDRESS
+
+          [Peer]
+          PublicKey = $WG_SERVER_PUBLIC_KEY
+          Endpoint = $WG_ENDPOINT
+          AllowedIPs = $VPS_HOST/32
+          PersistentKeepalive = 15
+          EOF
+          sudo wg-quick up wg0
+          # A handshake only happens once traffic flows; reaching the ssh port
+          # proves the tunnel carries it before any ssh step depends on it.
+          if ! timeout 20 bash -c "until </dev/tcp/$VPS_HOST/22; do sleep 2; done" 2> /dev/null; then
+            echo "::error::The WireGuard tunnel came up but the server does not answer through it. Check that the runner's peer is registered on the server with this address."
+            exit 1
+          fi
+
       - name: Load the SSH credentials
         run: |
           mkdir -p ~/.ssh
