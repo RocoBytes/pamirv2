@@ -24,6 +24,16 @@ export const ESTADO_CODIGO_QR_LABELS: Record<EstadoCodigoQr, string> = {
   REVOCADO: 'Revocado',
 }
 
+// CORREO: el QR reusable de siempre (pide una invitación por email). DIRECTO:
+// QR "de un solo uso" para un evento — quien lo escanea se registra en el
+// momento, sin paso de correo.
+export type ModoCodigoQr = 'CORREO' | 'DIRECTO'
+
+export const MODO_CODIGO_QR_LABELS: Record<ModoCodigoQr, string> = {
+  CORREO: 'Reutilizable',
+  DIRECTO: 'Directo',
+}
+
 export interface CodigoQr {
   id: string
   etiqueta: string | null
@@ -36,6 +46,10 @@ export interface CodigoQr {
   createdAt: string
   estado: EstadoCodigoQr
   creadoPor: { id: string; name: string } | null
+  modo: ModoCodigoQr
+  // Quién se registró con este código — solo puede ser no-null en uno DIRECTO
+  // ya AGOTADO.
+  registrado: { name: string; email: string } | null
 }
 
 // ─── Payloads de respuesta de la API ──────────────────────────────────────────
@@ -58,11 +72,22 @@ export interface RevocarCodigoQrResponse {
   codigo: CodigoQr
 }
 
+export interface EstadoCodigoQrResponse {
+  estado: EstadoCodigoQr
+  registrado: { name: string; email: string } | null
+  expiresAt: string
+}
+
 export interface ConsultarCodigoQrResponse {
   organization: OrganizationBrand
   expiresAt: string
+  modo: ModoCodigoQr
 }
 
 export interface SolicitarInvitacionQrResponse {
   message: string
+}
+
+export interface RegistrarConQrDirectoResponse {
+  ok: true
 }

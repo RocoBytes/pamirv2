@@ -21,12 +21,15 @@ import type {
 } from '../types/invitacion'
 import type {
   QrDuracion,
+  ModoCodigoQr,
   CrearCodigoQrResponse,
   ListarCodigosQrResponse,
   VerCodigoQrResponse,
   RevocarCodigoQrResponse,
+  EstadoCodigoQrResponse,
   ConsultarCodigoQrResponse,
   SolicitarInvitacionQrResponse,
+  RegistrarConQrDirectoResponse,
 } from '../types/codigo-qr'
 
 // En desarrollo el proxy de Vite redirige /api → localhost:3000.
@@ -871,7 +874,7 @@ export async function listarCodigosQr(): Promise<ListarCodigosQrResponse> {
 }
 
 export async function crearCodigoQr(
-  data: { duracion?: QrDuracion; maxUsos?: number; etiqueta?: string } = {},
+  data: { modo?: ModoCodigoQr; duracion?: QrDuracion; maxUsos?: number; etiqueta?: string } = {},
 ): Promise<CrearCodigoQrResponse> {
   const res = await fetch(`${API_BASE}/invitaciones/qr`, {
     method: 'POST',
@@ -896,6 +899,14 @@ export async function revocarCodigoQr(id: string): Promise<RevocarCodigoQrRespon
   return handleResponse<RevocarCodigoQrResponse>(res)
 }
 
+// Poleado por el panel de "QR directo" mientras espera un escaneo.
+export async function estadoCodigoQr(id: string): Promise<EstadoCodigoQrResponse> {
+  const res = await fetch(`${API_BASE}/invitaciones/qr/${encodeURIComponent(id)}/estado`, {
+    headers: authHeaders(),
+  })
+  return handleResponse<EstadoCodigoQrResponse>(res)
+}
+
 // Públicos: no llevan Authorization. El token siempre va en el body, nunca en
 // la URL, para que no quede en los logs de acceso.
 
@@ -915,6 +926,22 @@ export async function solicitarInvitacionQr(token: string, email: string): Promi
     body: JSON.stringify({ token, email }),
   })
   return handleResponse<SolicitarInvitacionQrResponse>(res)
+}
+
+// Contraparte DIRECTO de solicitarInvitacionQr: da de alta la cuenta en el
+// acto. El llamador inicia sesión después con las mismas credenciales (no hay
+// token de sesión en esta respuesta) — igual que el flujo de aceptar una
+// invitación normal.
+export async function registrarConQrDirecto(
+  token: string,
+  data: { name: string; email: string; password: string },
+): Promise<RegistrarConQrDirectoResponse> {
+  const res = await fetch(`${API_BASE}/qr/registrar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, ...data }),
+  })
+  return handleResponse<RegistrarConQrDirectoResponse>(res)
 }
 
 // ─── Usuarios (solo administrador) ────────────────────────────────────────────
