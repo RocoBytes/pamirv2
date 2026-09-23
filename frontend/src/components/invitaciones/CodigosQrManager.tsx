@@ -560,7 +560,7 @@ export function CodigosQrManager({ rolActual }: CodigosQrManagerProps) {
       )}
 
       {/* ── Formulario de creación (QR reutilizable) ─────────────────────── */}
-      <h3 className="text-sm font-bold text-slate-900 mb-3">QR reutilizable (seminarios)</h3>
+      <h3 className="text-sm font-bold text-slate-900 mb-3">QR reutilizable</h3>
       <form
         onSubmit={(e) => void handleCrear(e)}
         className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 mb-5 flex flex-col gap-3"
@@ -598,7 +598,7 @@ export function CodigosQrManager({ rolActual }: CodigosQrManagerProps) {
               label="Etiqueta"
               value={etiqueta}
               onChange={(e) => setEtiqueta(e.target.value)}
-              placeholder="Ej.: Seminario de rescate 2026"
+              placeholder="Ej.: Invitación especial de usuarios"
               maxLength={80}
               disabled={creating}
             />
