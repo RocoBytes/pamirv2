@@ -438,11 +438,17 @@ un enlace de invitación con `localhost` a un administrador real.
 Cada club envía sus propios correos con su propio nombre visible, no un
 remitente único de la plataforma: `backend/src/lib/email/club-email.ts` arma
 el remitente como `"<Organization.name>" <dirección>` (el nombre se sanea
-para que no pueda inyectar cabeceras) y usa `Organization.contactEmail` como
-`Reply-To` (se omite si no es un email válido). `backend/src/lib/email-
-templates.ts` recibe ese branding (`brandingFor(org)`) y lo aplica a todos los
-correos (encabezado, pie de página, asuntos) — ningún texto queda fijo a
-"Pamir".
+para que no pueda inyectar cabeceras). `backend/src/lib/email-templates.ts`
+recibe ese branding (`brandingFor(org)`) y lo aplica al encabezado, al cuerpo
+y a los asuntos — ningún texto queda fijo a "Pamir".
+
+El soporte, en cambio, es de la plataforma y no del club: el `Reply-To` de
+todo correo y la línea del pie ("Si tienes dudas, comunícate con El equipo de
+RIALA al correo contacto@riala.cl") usan siempre `PLATFORM_SUPPORT_EMAIL`
+(`backend/src/lib/config.ts`), sea cual sea el club. Los correos de
+notificación no esperan respuesta; la única excepción visible es el bloque
+"¿Algo que agregar o corregir?" del correo de cierre, que nombra el contacto
+del club (`Organization.contactEmail`) porque esas correcciones son del club.
 
 La DIRECCIÓN remitente, en cambio, no depende del club: es una de dos
 direcciones fijas según el tipo de correo (`kind`, obligatorio en cada llamada

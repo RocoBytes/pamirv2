@@ -1,4 +1,4 @@
-import { FRONTEND_URL } from './config.js';
+import { FRONTEND_URL, PLATFORM_SUPPORT_EMAIL } from './config.js';
 import type { OrganizationSummary } from '../types/index.js';
 
 interface IntegranteEmailData {
@@ -54,17 +54,16 @@ export function brandingFor(org: OrganizationSummary): OrgBranding {
   };
 }
 
-function contactLine(branding: OrgBranding): string {
-  if (branding.contactEmail) {
-    return `comunícate con <strong>${escapeHtml(branding.contactName)}</strong> al correo <a href="mailto:${branding.contactEmail}" style="color:${GREEN};">${branding.contactEmail}</a>`;
-  }
-  return `comunícate con <strong>${escapeHtml(branding.contactName)}</strong>`;
-}
-
 const GREEN = '#264c99';
 const LIGHT_GREEN = '#e8eef7';
 const GRAY = '#757874';
 const BORDER = '#d1d5db';
+
+// Línea de soporte fija del pie de cada correo: es soporte de la plataforma,
+// deliberadamente independiente del tenant (el encabezado y los nombres del
+// club siguen siendo los del club). Es la misma dirección del Reply-To (ver
+// lib/email/club-email.ts).
+const SUPPORT_LINE = `Si tienes dudas, comunícate con <strong>El equipo de RIALA</strong> al correo <a href="mailto:${PLATFORM_SUPPORT_EMAIL}" style="color:${GREEN};">${PLATFORM_SUPPORT_EMAIL}</a>`;
 
 function escapeHtml(str: string): string {
   return str
@@ -377,7 +376,7 @@ function emailShell(
           <td style="background:#f9fafb;padding:20px 32px;border-top:1px solid ${BORDER};">
             <p style="margin:0;color:${GRAY};font-size:12px;line-height:1.6;">
               ${footerNote}<br>
-              Si tienes dudas, ${contactLine(branding)}
+              ${SUPPORT_LINE}
             </p>
           </td>
         </tr>
@@ -411,10 +410,13 @@ function evaluacionCtaBlock(evaluacionUrl: string): string {
         </tr>`;
 }
 
+// Las correcciones de un cierre van al club, no al soporte de la plataforma:
+// por eso este bloque nombra el contacto del club y no invita a responder el
+// correo (el Reply-To es el soporte de RIALA, ver lib/email/club-email.ts).
 function feedbackCierreBlock(branding: OrgBranding): string {
   const replyHint = branding.contactEmail
-    ? `escríbenos a <a href="mailto:${branding.contactEmail}" style="color:${GREEN};font-weight:600;">${branding.contactEmail}</a> o responde directamente este correo`
-    : 'responde directamente este correo';
+    ? `escríbenos a <a href="mailto:${branding.contactEmail}" style="color:${GREEN};font-weight:600;">${branding.contactEmail}</a>`
+    : `comunícate con <strong>${escapeHtml(branding.contactName)}</strong>`;
   return `
         <tr>
           <td style="padding:0 32px 24px;">
@@ -653,7 +655,7 @@ export function buildConfirmationEmail(data: IntegranteEmailData, branding: OrgB
           <td style="background:#f9fafb;padding:20px 32px;border-top:1px solid ${BORDER};">
             <p style="margin:0;color:${GRAY};font-size:12px;line-height:1.6;">
               Este correo es un comprobante automático de tu registro en la aplicación de ${escapeHtml(branding.name)}.<br>
-              Si no realizaste este registro o tienes dudas, ${contactLine(branding)}
+              ${SUPPORT_LINE}
             </p>
           </td>
         </tr>
@@ -927,7 +929,7 @@ export function buildVerificationEmail(name: string, verificationUrl: string, br
           <p style="color:#9ca3af;font-size:12px;margin:0;">Este enlace es de un solo uso. Si no creaste esta cuenta, ignora este correo.</p>
         </td></tr>
         <tr><td style="background:${LIGHT_GREEN};padding:16px 32px;text-align:center;">
-          <p style="margin:0;color:${GRAY};font-size:12px;">Sistema de registro alpino — ${escapeHtml(branding.name)}</p>
+          <p style="margin:0;color:${GRAY};font-size:12px;">Sistema de registro alpino — ${escapeHtml(branding.name)}<br>${SUPPORT_LINE}</p>
         </td></tr>
       </table>
     </td></tr>
@@ -959,7 +961,7 @@ export function buildPasswordResetEmail(name: string, resetUrl: string, branding
           <p style="color:#9ca3af;font-size:12px;margin:0;">Si no solicitaste restablecer tu contraseña, ignora este correo. Tu contraseña no cambiará.</p>
         </td></tr>
         <tr><td style="background:${LIGHT_GREEN};padding:16px 32px;text-align:center;">
-          <p style="margin:0;color:${GRAY};font-size:12px;">Sistema de registro alpino — ${escapeHtml(branding.name)}</p>
+          <p style="margin:0;color:${GRAY};font-size:12px;">Sistema de registro alpino — ${escapeHtml(branding.name)}<br>${SUPPORT_LINE}</p>
         </td></tr>
       </table>
     </td></tr>

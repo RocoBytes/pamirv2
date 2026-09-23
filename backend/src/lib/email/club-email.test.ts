@@ -1,7 +1,7 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildClubSender, sendClubEmail } from './club-email.js';
-import { MAIL_FROM } from '../config.js';
+import { MAIL_FROM, PLATFORM_SUPPORT_EMAIL } from '../config.js';
 import type { OrganizationSummary } from '../../types/index.js';
 import type { EmailProvider } from './email-provider.js';
 
@@ -55,7 +55,7 @@ describe('buildClubSender', () => {
 });
 
 describe('sendClubEmail', () => {
-  it('kind="notificacion" envía desde la dirección de notificaciones, con el nombre del club y el reply-to del contacto', async () => {
+  it('kind="notificacion" envía desde la dirección de notificaciones, con el nombre del club y el reply-to del soporte de RIALA', async () => {
     const send = mock.fn(() => Promise.resolve({ id: 'sent-1' }));
     const provider: EmailProvider = { send };
 
@@ -75,7 +75,7 @@ describe('sendClubEmail', () => {
     assert.equal(send.mock.calls.length, 1);
     const [message] = send.mock.calls[0]!.arguments;
     assert.equal(message.from, `"Club El Montañista" <${MAIL_FROM.notificacion}>`);
-    assert.equal(message.replyTo, 'contacto@elmontanista.cl');
+    assert.equal(message.replyTo, PLATFORM_SUPPORT_EMAIL);
     assert.equal(message.to, 'socio@ejemplo.cl');
     assert.equal(message.subject, 'Asunto');
     assert.equal(message.html, '<p>hola</p>');
@@ -96,7 +96,7 @@ describe('sendClubEmail', () => {
     assert.equal(message.from, `"Club El Montañista" <${MAIL_FROM.alerta}>`);
   });
 
-  it('omite el reply-to cuando el contacto del club no es un email válido', async () => {
+  it('usa el soporte de RIALA como reply-to aunque el contacto del club no sea un email válido', async () => {
     const send = mock.fn(() => Promise.resolve({ id: 'sent-2' }));
     const provider: EmailProvider = { send };
 
@@ -107,6 +107,6 @@ describe('sendClubEmail', () => {
     );
 
     const [message] = send.mock.calls[0]!.arguments;
-    assert.equal(message.replyTo, undefined);
+    assert.equal(message.replyTo, 'contacto@riala.cl');
   });
 });

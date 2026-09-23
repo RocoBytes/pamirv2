@@ -42,12 +42,25 @@ function assertMentionsClub(html: string): void {
   assert.equal(html.includes(branding.name), true, 'debe mencionar el nombre del club');
 }
 
-function assertHasContactLine(html: string): void {
-  assert.equal(html.includes(branding.contactEmail), true, 'debe incluir el correo de contacto del club');
+function assertHasSupportLine(html: string): void {
+  assert.equal(html.includes('contacto@riala.cl'), true, 'debe incluir el correo de soporte de RIALA');
+  assert.equal(html.includes('El equipo de RIALA'), true, 'debe incluir el nombre del equipo de soporte de RIALA');
 }
 
-function assertNoContactLine(html: string): void {
-  assert.equal(html.includes(branding.contactEmail), false, 'no debe incluir un correo de contacto');
+// El pie fijo ya no muestra el contacto del club — salvo en
+// buildCierreNotificationEmail, que además tiene su propio bloque de
+// feedback ("¿algo que agregar o corregir?", ver feedbackCierreBlock) que
+// sigue invitando a escribir al contacto del club para corregir ese cierre
+// puntual: es un llamado distinto al pie de soporte.
+function assertFooterOmitsClubContact(html: string): void {
+  assert.equal(html.includes(branding.contactEmail), false, 'no debe incluir el correo de contacto del club');
+}
+
+// El bloque de feedback del cierre nombra al club y no invita a responder el
+// correo: el Reply-To es el soporte de RIALA, no el club.
+function assertCierreFeedbackPointsToClub(html: string): void {
+  assert.equal(html.includes(branding.contactEmail), true, 'debe incluir el correo de contacto del club');
+  assert.equal(/responde directamente este correo/i.test(html), false, 'no debe invitar a responder el correo');
 }
 
 // ─── Fixtures mínimas y válidas por tipo de parámetro ─────────────────────────
@@ -156,21 +169,24 @@ describe('email-templates — branding por club en cada builder', () => {
   it('buildSalidaNotificationEmail', () => {
     const html = buildSalidaNotificationEmail('Juan Soto', salida, branding);
     assertMentionsClub(html);
-    assertHasContactLine(html);
+    assertHasSupportLine(html);
+    assertFooterOmitsClubContact(html);
     assertNoPamir(html);
   });
 
   it('buildCierreNotificationEmail (sin evaluación)', () => {
     const html = buildCierreNotificationEmail('Juan Soto', salida, cierre, branding);
     assertMentionsClub(html);
-    assertHasContactLine(html);
+    assertHasSupportLine(html);
+    assertCierreFeedbackPointsToClub(html);
     assertNoPamir(html);
   });
 
   it('buildCierreNotificationEmail (con evaluación)', () => {
     const html = buildCierreNotificationEmail('Juan Soto', salida, cierre, branding, 'https://app.elmontanista.cl?evaluacion=tok');
     assertMentionsClub(html);
-    assertHasContactLine(html);
+    assertHasSupportLine(html);
+    assertCierreFeedbackPointsToClub(html);
     assert.equal(html.includes('https://app.elmontanista.cl?evaluacion=tok'), true);
     assertNoPamir(html);
   });
@@ -178,44 +194,50 @@ describe('email-templates — branding por club en cada builder', () => {
   it('buildConfirmationEmail', () => {
     const html = buildConfirmationEmail(integrante, branding);
     assertMentionsClub(html);
-    assertHasContactLine(html);
+    assertHasSupportLine(html);
+    assertFooterOmitsClubContact(html);
     assertNoPamir(html);
   });
 
   it('buildAlertaSalidaEmail', () => {
     const html = buildAlertaSalidaEmail(alertaSalida, branding);
     assertMentionsClub(html);
-    assertHasContactLine(html);
+    assertHasSupportLine(html);
+    assertFooterOmitsClubContact(html);
     assertNoPamir(html);
   });
 
   it('buildRecordatorioCierreEmail', () => {
     const html = buildRecordatorioCierreEmail(alertaSalida, branding);
     assertMentionsClub(html);
-    assertHasContactLine(html);
+    assertHasSupportLine(html);
+    assertFooterOmitsClubContact(html);
     assertNoPamir(html);
   });
 
   it('buildSaludSalidaEmail', () => {
     const html = buildSaludSalidaEmail('Cerro Plomo', 'Ana Pérez', participantesSalud, branding);
     assertMentionsClub(html);
-    assertHasContactLine(html);
+    assertHasSupportLine(html);
+    assertFooterOmitsClubContact(html);
     assert.equal(html.includes(branding.name), true);
     assertNoPamir(html);
   });
 
-  it('buildVerificationEmail (sin línea de contacto)', () => {
+  it('buildVerificationEmail (con línea de soporte fija de RIALA)', () => {
     const html = buildVerificationEmail('Juan Soto', 'https://app.elmontanista.cl?verify=tok', branding);
     assertMentionsClub(html);
-    assertNoContactLine(html);
+    assertHasSupportLine(html);
+    assertFooterOmitsClubContact(html);
     assert.equal(html.includes('https://app.elmontanista.cl?verify=tok'), true);
     assertNoPamir(html);
   });
 
-  it('buildPasswordResetEmail (sin línea de contacto)', () => {
+  it('buildPasswordResetEmail (con línea de soporte fija de RIALA)', () => {
     const html = buildPasswordResetEmail('Juan Soto', 'https://app.elmontanista.cl?reset=tok', branding);
     assertMentionsClub(html);
-    assertNoContactLine(html);
+    assertHasSupportLine(html);
+    assertFooterOmitsClubContact(html);
     assert.equal(html.includes('https://app.elmontanista.cl?reset=tok'), true);
     assertNoPamir(html);
   });
@@ -223,7 +245,8 @@ describe('email-templates — branding por club en cada builder', () => {
   it('buildInvitationEmail', () => {
     const html = buildInvitationEmail(invitationData, branding);
     assertMentionsClub(html);
-    assertHasContactLine(html);
+    assertHasSupportLine(html);
+    assertFooterOmitsClubContact(html);
     assert.equal(html.includes(invitationData.inviteUrl), true);
     assertNoPamir(html);
   });
@@ -249,7 +272,8 @@ describe('email-templates — branding por club en cada builder', () => {
   it('buildEventoInscripcionConfirmadaEmail usa branding.frontendUrl en el CTA', () => {
     const html = buildEventoInscripcionConfirmadaEmail('Juan Soto', evento, inscripcion, branding);
     assertMentionsClub(html);
-    assertHasContactLine(html);
+    assertHasSupportLine(html);
+    assertFooterOmitsClubContact(html);
     assert.equal(html.includes(branding.frontendUrl), true);
     assertNoPamir(html);
   });
@@ -257,7 +281,8 @@ describe('email-templates — branding por club en cada builder', () => {
   it('buildEventoSeleccionadoEmail usa branding.frontendUrl en el CTA', () => {
     const html = buildEventoSeleccionadoEmail('Juan Soto', eventoLifecycle, branding);
     assertMentionsClub(html);
-    assertHasContactLine(html);
+    assertHasSupportLine(html);
+    assertFooterOmitsClubContact(html);
     assert.equal(html.includes(branding.frontendUrl), true);
     assertNoPamir(html);
   });
@@ -265,7 +290,8 @@ describe('email-templates — branding por club en cada builder', () => {
   it('buildEventoNoSeleccionadoEmail usa branding.frontendUrl en el CTA', () => {
     const html = buildEventoNoSeleccionadoEmail('Juan Soto', eventoLifecycle, { cupos: 10, postulantes: 20 }, branding);
     assertMentionsClub(html);
-    assertHasContactLine(html);
+    assertHasSupportLine(html);
+    assertFooterOmitsClubContact(html);
     assert.equal(html.includes(branding.frontendUrl), true);
     assertNoPamir(html);
   });
@@ -273,7 +299,8 @@ describe('email-templates — branding por club en cada builder', () => {
   it('buildEventoCanceladoEmail usa branding.frontendUrl en el CTA', () => {
     const html = buildEventoCanceladoEmail('Juan Soto', eventoLifecycle, branding);
     assertMentionsClub(html);
-    assertHasContactLine(html);
+    assertHasSupportLine(html);
+    assertFooterOmitsClubContact(html);
     assert.equal(html.includes(branding.frontendUrl), true);
     assertNoPamir(html);
   });
