@@ -524,8 +524,10 @@ model CategoriaEvento {
 }
 
 // Gestores por categoría: cada gestor crea y administra eventos solo de sus
-// categorías asignadas (el rol ADMIN mantiene acceso total). Las asignaciones
-// se administran por SQL directo en esta iteración.
+// categorías asignadas. El rol ADMIN mantiene acceso total y el rol LIDER
+// gestiona todas las categorías del club sin necesitar una fila acá (ver
+// lib/gestores-eventos.ts); las asignaciones de esta tabla son para gestores
+// no-LIDER y se administran por SQL directo en esta iteración.
 model GestorCategoria {
   id             Int      @id @default(autoincrement())
   organizationId String   @map("organization_id")

@@ -13,6 +13,14 @@ export function canInvite(user: { rol?: string | null } | null | undefined): boo
   return user?.rol === 'ADMIN' || user?.rol === 'LIDER';
 }
 
+// Un LIDER gestiona todas las categorías de eventos de su club (crear, editar,
+// publicar, cancelar y finalizar cualquier evento con categoría), a
+// diferencia de un gestor común, que solo gestiona las categorías que se le
+// asignaron a mano en gestores_categoria (ver lib/gestores-eventos.ts).
+export function gestionaTodasLasCategorias(user: { rol?: string | null } | null | undefined): boolean {
+  return user?.rol === 'LIDER';
+}
+
 // Regla única de gestión de una salida (editar, editar integrantes, cerrar,
 // subir GPX/pronóstico): el admin siempre puede; si no es admin, solo el
 // dueño registrado puede. Una salida sin dueño (userId null — legada o cuyo

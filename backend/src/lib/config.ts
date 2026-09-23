@@ -106,6 +106,12 @@ export function resolveMailFrom(env: Record<string, string | undefined>): Record
 // arranque del proceso en vez de fallar silenciosamente en el primer envío.
 export const MAIL_FROM: Record<EmailKind, string> = resolveMailFrom(process.env);
 
+// Contacto de soporte de la plataforma, igual para todos los clubes: es el
+// Reply-To de todo correo saliente y la dirección del pie de cada correo. Los
+// correos de notificación no esperan respuesta; quien tenga un problema
+// escribe al equipo de RIALA, no al club.
+export const PLATFORM_SUPPORT_EMAIL = 'contacto@riala.cl';
+
 export interface MailAccount {
   address: string;
   user: string;

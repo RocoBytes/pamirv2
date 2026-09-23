@@ -1,5 +1,5 @@
 import { emailField } from '../auth-fields.js';
-import { MAIL_FROM } from '../config.js';
+import { MAIL_FROM, PLATFORM_SUPPORT_EMAIL } from '../config.js';
 import { getEmailProvider } from './get-email-provider.js';
 function sanitizeDisplayName(name) {
     // Quita CR, LF, comillas y barras invertidas: una entrada como
@@ -29,17 +29,17 @@ export function buildClubSender(org, address) {
     const displayName = sanitizeDisplayName(org.name);
     return { from: displayName ? `"${displayName}" <${parsedAddress.data}>` : parsedAddress.data };
 }
-// Envía un correo "como" el club: el nombre visible y el reply-to se derivan
-// siempre de la organización, nunca del llamador; la dirección remitente
-// depende solo de `kind`, nunca del club ni de la actividad. provider es
+// Envía un correo "como" el club: el nombre visible se deriva siempre de la
+// organización, nunca del llamador; la dirección remitente depende solo de
+// `kind`, nunca del club ni de la actividad. El reply-to es siempre el soporte
+// de la plataforma (PLATFORM_SUPPORT_EMAIL), nunca el contacto del club: una
+// respuesta a una notificación llega al equipo de RIALA. provider es
 // inyectable para que los tests no dependan del entorno ni de la red.
 export async function sendClubEmail(org, params, provider = getEmailProvider(params.kind)) {
     const { from } = buildClubSender(org, MAIL_FROM[params.kind]);
-    const contactParsed = emailField.safeParse(org.contactEmail);
-    const replyTo = contactParsed.success ? contactParsed.data : undefined;
     const result = await provider.send({
         from,
-        replyTo,
+        replyTo: PLATFORM_SUPPORT_EMAIL,
         to: params.to,
         subject: params.subject,
         html: params.html,

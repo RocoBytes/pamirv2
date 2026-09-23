@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/jwt.js';
 import { isAdmin, canInvite } from '../lib/authz.js';
+import { categoriasGestionadas } from '../lib/gestores-eventos.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 import { isOrganizationSuspended, CLUB_SUSPENDIDO_MENSAJE } from '../lib/organization-status.js';
 export async function authMiddleware(req, res, next) {
@@ -100,8 +101,10 @@ export function requireCanInvite(req, res, next) {
     next();
 }
 // Gestión de eventos por categoría: el ADMIN pasa siempre (gestorCategoriaIds
-// null = sin restricción); un gestor pasa con sus categorías asignadas en
-// req.gestorCategoriaIds. Asignar un gestor es un INSERT en gestores_categoria.
+// null = sin restricción); un LIDER gestiona todas las categorías del club;
+// cualquier otro gestor pasa con sus categorías asignadas en
+// req.gestorCategoriaIds. Asignar un gestor no-LIDER es un INSERT en
+// gestores_categoria (ver lib/gestores-eventos.ts).
 export async function requireGestorEventos(req, res, next) {
     if (!req.user) {
         res.status(403).json({ error: 'Acceso restringido a gestores de eventos' });
@@ -112,15 +115,12 @@ export async function requireGestorEventos(req, res, next) {
         return next();
     }
     try {
-        const filas = await prisma.gestorCategoria.findMany({
-            where: { usuarioId: req.user.id },
-            select: { categoriaId: true },
-        });
-        if (filas.length === 0) {
+        const categorias = await categoriasGestionadas(req.user);
+        if (categorias.length === 0) {
             res.status(403).json({ error: 'Acceso restringido a gestores de eventos' });
             return;
         }
-        req.gestorCategoriaIds = filas.map((f) => f.categoriaId);
+        req.gestorCategoriaIds = categorias.map((c) => c.categoriaId);
         next();
     }
     catch (error) {
