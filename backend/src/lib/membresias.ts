@@ -7,6 +7,7 @@ export const MEMBRESIA_CLUBS = [
   'SOCIO_ANDINO_PAMIR',
   'SOCIO_EL_MONTANISTA',
   'SOCIO_ANDINO_TESTING',
+  'SOCIO_RIALA',
   'SOCIO_OTRO_CLUB',
   'POSTULANTE_CLUB',
   'NO_PERTENECE',
@@ -33,6 +34,7 @@ export const MEMBRESIAS_PROPIAS = [
   'SOCIO_ANDINO_PAMIR',
   'SOCIO_EL_MONTANISTA',
   'SOCIO_ANDINO_TESTING',
+  'SOCIO_RIALA',
 ] as const;
 
 export type MembresiaPropia = (typeof MEMBRESIAS_PROPIAS)[number];

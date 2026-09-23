@@ -6,7 +6,7 @@ import { PasswordInput } from './ui/PasswordInput'
 import { Checkbox } from './ui/Checkbox'
 import { ClubLogo } from './ClubLogo'
 import { AuthVisualPanel } from './auth/AuthVisualPanel'
-import { clubDisplayName } from '../lib/club-brand'
+import { clubDisplayName, PLATFORM_LOGO_FULL, PLATFORM_NAME } from '../lib/club-brand'
 import { clubPreferido } from '../lib/club-preferido'
 import { useIsDesktop } from '../hooks/useMediaQuery'
 import { forgotPassword, resetPassword, consultarInvitacion, aceptarInvitacion, fetchMarcaClub } from '../lib/api'
@@ -393,9 +393,20 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
             {view === 'login' && (
               <>
                 <div className="flex flex-col items-start gap-4">
-                  <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shrink-0 overflow-hidden">
-                    <ClubLogo org={logoOrg} alt="" className="w-9 h-9 object-contain" />
-                  </div>
+                  {/* Sin club resuelto (ni ?club=, ni invitación): la marca de la
+                      PLATAFORMA (RIALA), no el tile+logo de un club. Con club
+                      resuelto, el tile de siempre. */}
+                  {logoOrg ? (
+                    <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shrink-0 overflow-hidden">
+                      <ClubLogo org={logoOrg} alt="" className="w-9 h-9 object-contain" />
+                    </div>
+                  ) : (
+                    <img
+                      src={PLATFORM_LOGO_FULL}
+                      alt={PLATFORM_NAME}
+                      className="h-24 sm:h-28 w-auto object-contain"
+                    />
+                  )}
                   <div className="flex flex-col gap-2">
                     <p className="text-label-caps uppercase tracking-[0.05em] text-secondary">
                       Registro de salidas y expediciones

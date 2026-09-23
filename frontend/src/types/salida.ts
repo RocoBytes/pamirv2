@@ -108,6 +108,7 @@ export type MembresiaClub =
   | 'SOCIO_ANDINO_PAMIR'
   | 'SOCIO_EL_MONTANISTA'
   | 'SOCIO_ANDINO_TESTING'
+  | 'SOCIO_RIALA'
   | 'SOCIO_OTRO_CLUB'
   | 'POSTULANTE_CLUB'
   | 'NO_PERTENECE'
@@ -250,6 +251,7 @@ export const CLUB_BADGE_LABELS: Record<MembresiaClub, string> = {
   SOCIO_ANDINO_PAMIR: 'ACP',
   SOCIO_EL_MONTANISTA: 'CAEM',
   SOCIO_ANDINO_TESTING: 'CAT',
+  SOCIO_RIALA: 'RIALA',
   SOCIO_OTRO_CLUB: 'SOC',
   POSTULANTE_CLUB: 'POST',
   NO_PERTENECE: 'NA',
@@ -262,6 +264,7 @@ export const CLUB_FILTER_LABELS: Record<MembresiaClub, string> = {
   SOCIO_ANDINO_PAMIR: 'Socio Andino Club Pamir',
   SOCIO_EL_MONTANISTA: 'Socio Club El Montañista',
   SOCIO_ANDINO_TESTING: 'Socio Club Andino Testing',
+  SOCIO_RIALA: 'Socio RIALA',
   SOCIO_OTRO_CLUB: 'Socio otro club',
   POSTULANTE_CLUB: 'Postulante a un club',
   NO_PERTENECE: 'No pertenece',
