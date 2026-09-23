@@ -795,6 +795,24 @@ async function postJsonAuth(
   return { status: res.status, body };
 }
 
+// Como postJsonAuth, pero con method PATCH — lo necesita el check de cambio
+// de rol (ver runRoleChangeMembresiaChecks), la primera vez que este archivo
+// prueba PATCH /api/admin/users/:id/rol.
+async function patchJsonAuth(
+  baseUrl: string,
+  token: string,
+  urlPath: string,
+  payload: unknown,
+): Promise<{ status: number; body: unknown }> {
+  const res = await fetch(`${baseUrl}${urlPath}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => undefined);
+  return { status: res.status, body };
+}
+
 // Fecha calendario (YYYY-MM-DD) desplazada `dias` desde ahora — usada para
 // armar la ficha del evento operativo del club nuevo (ver runTenantCliChecks)
 // sin acoplarse a la fecha en que corra la suite.
@@ -2236,6 +2254,30 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
   });
 }
 
+// ─── Cambio de rol y Membresia ──────────────────────────────────────────────
+
+async function runRoleChangeMembresiaChecks(baseUrl: string, seedA: OrgSeed): Promise<void> {
+  const tokenA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+
+  await check(
+    'PATCH /api/admin/users/:id/rol actualiza también la Membresia del usuario (mismo club, mismo rol nuevo)',
+    async () => {
+      const res = await patchJsonAuth(baseUrl, tokenA, `/api/admin/users/${seedA.socioUserId}/rol`, { rol: 'LIDER' });
+      assert.equal(res.status, 200);
+      const body = res.body as { rol: string };
+      assert.equal(body.rol, 'LIDER');
+
+      const membresia = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: seedA.socioUserId } },
+        }),
+      );
+      assert.ok(membresia);
+      assert.equal(membresia?.rol, 'LIDER');
+    },
+  );
+}
+
 // ─── Orquestación ──────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -2294,6 +2336,7 @@ async function main(): Promise<void> {
     await runFileDownloadChecks(started.baseUrl, seedA, seedB);
     await runClubLogoChecks(started.baseUrl, seedA, seedB);
     await runTenantCliChecks(started.baseUrl, seedA, seedB);
+    await runRoleChangeMembresiaChecks(started.baseUrl, seedA);
   } catch (err) {
     results.push({
       label: 'ejecución general del script (fuera de un check individual)',

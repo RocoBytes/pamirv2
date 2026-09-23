@@ -879,11 +879,25 @@ export async function updateUserRol(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const updated = await prisma.user.update({
-      where: { id },
-      data: { rol: parsed.data.rol },
-      select: { id: true, email: true, name: true, rol: true, emailVerified: true, createdAt: true },
-    });
+    const organizationId = requireOrganizationId();
+    const [updated] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id },
+        data: { rol: parsed.data.rol },
+        select: { id: true, email: true, name: true, rol: true, emailVerified: true, createdAt: true },
+      }),
+      // Dual write: el rol de una cuenta EN ESTE club vive también en su
+      // Membresia — ver schema.prisma. `existing` (arriba) ya probó, vía el
+      // aislamiento por club de User.findUnique, que `id` pertenece al club
+      // vigente, así que esta fila ya existe (todo alta la crea — ver
+      // invitaciones.repo.prisma.ts / codigos-qr.repo.prisma.ts /
+      // create-user.ts). Se usa `update` (no `upsert`): si faltara sería un
+      // bug real que conviene que falle ruidoso, no que se tape en silencio.
+      prisma.membresia.update({
+        where: { organizationId_usuarioId: { organizationId, usuarioId: id } },
+        data: { rol: parsed.data.rol },
+      }),
+    ]);
     res.json(updated);
   } catch (error) {
     console.error('[updateUserRol]', error);
