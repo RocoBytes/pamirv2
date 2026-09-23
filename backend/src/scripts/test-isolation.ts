@@ -1010,6 +1010,14 @@ async function runHttpChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): P
       assert.equal(creado?.organizationId, seedA.organizationId);
       assert.equal(creado?.rol, 'ADMIN');
       assert.equal(creado?.emailVerified, true);
+
+      const membresia = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: creado!.id } },
+        }),
+      );
+      assert.ok(membresia);
+      assert.equal(membresia?.rol, 'ADMIN');
     },
   );
 
@@ -1025,6 +1033,82 @@ async function runHttpChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): P
     const body = res.body as { invitaciones: { email: string }[] };
     assert.equal(body.invitaciones.some((i) => i.email === email), false);
   });
+
+  await check(
+    'dos invitaciones pendientes para el mismo correo: la transacción que pierde la carrera de User.email no deja una Membresia huérfana',
+    async () => {
+      const email = `race-invite-${RANDOM_SUFFIX}@iso-test.local`;
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      const invitacion1 = await runAsPlatform(() =>
+        prisma.invitacion.create({
+          data: {
+            organizationId: seedA.organizationId,
+            email,
+            rol: 'SOCIO',
+            tokenHash: randomUUID().replace(/-/g, ''),
+            expiresAt,
+            invitadoPorId: seedA.adminUserId,
+          },
+        }),
+      );
+      const invitacion2 = await runAsPlatform(() =>
+        prisma.invitacion.create({
+          data: {
+            organizationId: seedA.organizationId,
+            email,
+            rol: 'LIDER',
+            tokenHash: randomUUID().replace(/-/g, ''),
+            expiresAt,
+            invitadoPorId: seedA.adminUserId,
+          },
+        }),
+      );
+
+      // acceptInvitacion corre siempre dentro de runAsPlatform en producción
+      // (así lo invoca el controller en aceptarInvitacion) — acá se preserva
+      // ese mismo contexto para las dos llamadas directas y concurrentes.
+      const [primero, segundo] = await runAsPlatform(() =>
+        Promise.all([
+          invitacionesRepoPrisma.acceptInvitacion({
+            invitacionId: invitacion1.id,
+            organizationId: seedA.organizationId,
+            email,
+            name: 'Primero',
+            passwordHash: 'hashed:primero',
+            rol: 'SOCIO',
+            now,
+          }),
+          invitacionesRepoPrisma.acceptInvitacion({
+            invitacionId: invitacion2.id,
+            organizationId: seedA.organizationId,
+            email,
+            name: 'Segundo',
+            passwordHash: 'hashed:segundo',
+            rol: 'LIDER',
+            now,
+          }),
+        ]),
+      );
+
+      // Exactamente una de las dos transacciones gana la carrera del unique
+      // de User.email; la otra vuelve null (ver el catch de P2002 en
+      // invitaciones.repo.prisma.ts) sin dejar rastro.
+      const ganadores = [primero, segundo].filter((r) => r !== null);
+      assert.equal(ganadores.length, 1);
+
+      const creado = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+      assert.ok(creado);
+
+      const membresias = await runAsPlatform(() => prisma.membresia.findMany({ where: { usuarioId: creado!.id } }));
+      // Si el dual write viviera fuera de la transacción de Prisma, este
+      // assert es el que lo detectaría: una Membresia "huérfana" de la
+      // transacción que perdió la carrera de User.email.
+      assert.equal(membresias.length, 1);
+      assert.equal(membresias[0]?.rol, creado?.rol);
+    },
+  );
 
   // ─── Puente multi-club: la membresía de una ficha nueva la decide el servidor ──
   // El formulario de registro ya no pregunta a qué club dice pertenecer la
@@ -1428,6 +1512,14 @@ async function runQrDirectoChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
       assert.equal(creado?.organizationId, seedA.organizationId);
       assert.equal(creado?.rol, 'SOCIO');
       assert.equal(creado?.emailVerified, true);
+
+      const membresia = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: creado!.id } },
+        }),
+      );
+      assert.ok(membresia);
+      assert.equal(membresia?.rol, 'SOCIO');
 
       const login = await postJson(baseUrl, '/api/auth/login', { email: emailNuevo, password: 'password123' });
       assert.equal(login.status, 200);

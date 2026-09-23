@@ -116,6 +116,10 @@ export const codigosQrRepoPrisma: CodigosQrRepo = {
           data: { organizationId, email, name, passwordHash, rol, emailVerified: true },
           select: { id: true, email: true, name: true, rol: true },
         });
+        // Dual write — mismo motivo que invitaciones.repo.prisma.ts.
+        await tx.membresia.create({
+          data: { organizationId, usuarioId: user.id, rol },
+        });
 
         await tx.codigoQrInvitacion.update({
           where: { id: codigoQrId },
