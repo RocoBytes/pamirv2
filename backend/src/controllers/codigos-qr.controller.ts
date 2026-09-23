@@ -1,12 +1,15 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import {
   crearCodigoQr as crearCodigoQrService,
   listarCodigosQr as listarCodigosQrService,
   verCodigoQr as verCodigoQrService,
   revocarCodigoQr as revocarCodigoQrService,
+  estadoCodigoQr as estadoCodigoQrService,
   consultarCodigoQr as consultarCodigoQrService,
   solicitarInvitacionQr as solicitarInvitacionQrService,
+  registrarConQrDirecto as registrarConQrDirectoService,
   type CodigosQrDeps,
 } from '../services/codigos-qr.service.js';
 import type { Requester, ServiceResult } from '../services/invitaciones.service.js';
@@ -14,6 +17,7 @@ import { codigosQrRepoPrisma } from '../services/codigos-qr.repo.prisma.js';
 import { sendClubEmail } from '../lib/email/club-email.js';
 import { buildInvitationEmail, brandingFor } from '../lib/email-templates.js';
 import { subjectInvitacion } from '../lib/email/subjects.js';
+import { SALT_ROUNDS } from '../lib/auth-fields.js';
 import { FRONTEND_URL } from '../lib/config.js';
 import { requireJwtSecret } from '../lib/jwt.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
@@ -43,6 +47,7 @@ function buildDeps(organization: OrganizationSummary): CodigosQrDeps {
       suspended: false,
     }),
     withOrganization: async (organizationId, fn) => runWithOrganization(organizationId, fn),
+    hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
     jwtSecret: requireJwtSecret(),
@@ -78,6 +83,7 @@ function buildPublicDeps(): CodigosQrDeps {
       return { brand: toPublicOrganizationBrand(org), suspended: isOrganizationSuspended(org.status) };
     },
     withOrganization: async (organizationId, fn) => runWithOrganization(organizationId, fn),
+    hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
     jwtSecret: requireJwtSecret(),
@@ -123,6 +129,7 @@ const tokenField = z.string().trim().min(1, 'El token es requerido').max(200, 'T
 export async function crearCodigoQr(req: Request, res: Response): Promise<void> {
   try {
     const result = await crearCodigoQrService(buildDeps(req.user!.organization), toRequester(req), {
+      modo: req.body?.modo,
       duracion: req.body?.duracion,
       maxUsos: req.body?.maxUsos,
       etiqueta: req.body?.etiqueta,
@@ -169,6 +176,19 @@ export async function revocarCodigoQr(req: Request, res: Response): Promise<void
   }
 }
 
+// GET /api/invitaciones/qr/:id/estado — lo que polea la pantalla de quien
+// generó un QR directo, esperando a que alguien lo escanee.
+export async function estadoCodigoQr(req: Request, res: Response): Promise<void> {
+  try {
+    const id = req.params['id'] as string;
+    const result = await estadoCodigoQrService(buildDeps(req.user!.organization), toRequester(req), id);
+    respond(res, result);
+  } catch (error) {
+    console.error('[estadoCodigoQr]', error);
+    res.status(500).json({ error: 'Error al consultar el estado del código QR' });
+  }
+}
+
 // ─── Endpoints públicos (montados bajo /api/qr) ────────────────────────────────
 // El token siempre viaja en el body, nunca en la URL, para que no quede en
 // los logs de acceso — mismo motivo que las invitaciones individuales.
@@ -209,5 +229,31 @@ export async function solicitarInvitacionQr(req: Request, res: Response): Promis
   } catch (error) {
     console.error('[solicitarInvitacionQr]', error);
     res.status(500).json({ error: 'Error al solicitar la invitación' });
+  }
+}
+
+// POST /api/qr/registrar — contraparte DIRECTO de solicitarInvitacionQr: da
+// de alta la cuenta en el acto, sin correo de por medio.
+export async function registrarConQrDirecto(req: Request, res: Response): Promise<void> {
+  const parsedToken = tokenField.safeParse(req.body?.token);
+  if (!parsedToken.success) {
+    res.status(400).json({ error: parsedToken.error.issues[0]?.message ?? 'Token inválido' });
+    return;
+  }
+  try {
+    // Público: el usuario nuevo hereda el organizationId del QR, no de ningún
+    // contexto previo — corre en contexto de plataforma, igual que aceptar
+    // una invitación individual.
+    const result = await runAsPlatform(() =>
+      registrarConQrDirectoService(buildPublicDeps(), parsedToken.data, {
+        name: req.body?.name,
+        email: req.body?.email,
+        password: req.body?.password,
+      }),
+    );
+    respond(res, result);
+  } catch (error) {
+    console.error('[registrarConQrDirecto]', error);
+    res.status(500).json({ error: 'Error al registrar la cuenta' });
   }
 }

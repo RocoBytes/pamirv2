@@ -9,6 +9,7 @@ import type { AddressInfo } from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import assert from 'node:assert/strict';
+import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.js';
 import { verifyDbTargetOrExit } from '../lib/db-target-guard.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
@@ -25,6 +26,7 @@ import {
 import { codigosQrRepoPrisma } from '../services/codigos-qr.repo.prisma.js';
 import { generateInviteToken } from '../lib/invitaciones.js';
 import { cifrarTokenQr } from '../lib/codigos-qr.js';
+import { SALT_ROUNDS } from '../lib/auth-fields.js';
 import { requireJwtSecret } from '../lib/jwt.js';
 import { isOrganizationSuspended } from '../lib/organization-status.js';
 import { toPublicOrganizationBrand } from '../lib/serializers/organization.js';
@@ -1108,6 +1110,7 @@ function buildFakeCodigosQrDeps(capturedEmails: SendCodigoQrInvitationEmailParam
       return { brand: toPublicOrganizationBrand(org), suspended: isOrganizationSuspended(org.status) };
     },
     withOrganization: (organizationId, fn) => runWithOrganization(organizationId, fn),
+    hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
     now: () => new Date(),
     frontendUrl: 'https://iso-test.local',
     jwtSecret: requireJwtSecret(),
@@ -1310,6 +1313,134 @@ async function runQrChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Pro
         prisma.organization.update({ where: { id: seedB.organizationId }, data: { status: 'ACTIVE' } }),
       );
     }
+  });
+}
+
+// ─── QR directo ("QR directo" — registro en el acto, sin correo) ──────────────
+// runQrChecks deja a B de vuelta ACTIVE al terminar (try/finally de su último
+// check), así que esta sección no necesita reactivarlo ella misma.
+
+async function runQrDirectoChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
+  const tokenA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+  const tokenB = signToken({ userId: seedB.adminUserId, email: seedB.adminEmail });
+
+  let qrIdA = '';
+  let qrTokenA = '';
+
+  await check('ADMIN A crea un QR directo: modo DIRECTO, 1 uso', async () => {
+    const creado = await postJsonAuth(baseUrl, tokenA, '/api/invitaciones/qr', { modo: 'DIRECTO' });
+    assert.equal(creado.status, 201);
+    const body = creado.body as {
+      codigo: { id: string; modo: string; maxUsos: number; usosRestantes: number };
+      qrUrl: string;
+    };
+    assert.equal(body.codigo.modo, 'DIRECTO');
+    assert.equal(body.codigo.maxUsos, 1);
+    assert.equal(body.codigo.usosRestantes, 1);
+    qrIdA = body.codigo.id;
+    qrTokenA = body.qrUrl.split('#qr=')[1] ?? '';
+    assert.ok(qrTokenA.length > 0);
+  });
+
+  await check('un código CORREO en POST /api/qr/registrar da 404 (no lo conoce)', async () => {
+    const creadoCorreo = await postJsonAuth(baseUrl, tokenA, '/api/invitaciones/qr', {});
+    assert.equal(creadoCorreo.status, 201);
+    const tokenCorreo = (creadoCorreo.body as { qrUrl: string }).qrUrl.split('#qr=')[1] ?? '';
+
+    const res = await postJson(baseUrl, '/api/qr/registrar', {
+      token: tokenCorreo,
+      name: 'No Debería',
+      email: `qr-directo-correo-${RANDOM_SUFFIX}@iso-test.local`,
+      password: 'password123',
+    });
+    assert.equal(res.status, 404);
+  });
+
+  await check('un código DIRECTO en POST /api/qr/solicitar da 404 (nunca mintea invitación por correo)', async () => {
+    const res = await postJson(baseUrl, '/api/qr/solicitar', {
+      token: qrTokenA,
+      email: `qr-directo-solicitar-${RANDOM_SUFFIX}@iso-test.local`,
+    });
+    assert.equal(res.status, 404);
+  });
+
+  await check('B (admin) no puede leer el estado del código directo de A (404, sin revelar existencia)', async () => {
+    const res = await getJson(baseUrl, tokenB, `/api/invitaciones/qr/${qrIdA}/estado`);
+    assert.equal(res.status, 404);
+  });
+
+  await check('GET estado antes de escanear: ACTIVO, registrado null', async () => {
+    const res = await getJson(baseUrl, tokenA, `/api/invitaciones/qr/${qrIdA}/estado`);
+    assert.equal(res.status, 200);
+    const body = res.body as { estado: string; registrado: unknown };
+    assert.equal(body.estado, 'ACTIVO');
+    assert.equal(body.registrado, null);
+  });
+
+  await check('registrar con un email que ya tiene cuenta da 409 y NO consume el uso', async () => {
+    const res = await postJson(baseUrl, '/api/qr/registrar', {
+      token: qrTokenA,
+      name: 'Ya Existe',
+      email: seedA.socioEmail,
+      password: 'password123',
+    });
+    assert.equal(res.status, 409);
+
+    const estado = await getJson(baseUrl, tokenA, `/api/invitaciones/qr/${qrIdA}/estado`);
+    assert.equal((estado.body as { estado: string }).estado, 'ACTIVO');
+  });
+
+  const emailNuevo = `qr-directo-nuevo-${RANDOM_SUFFIX}@iso-test.local`;
+
+  await check(
+    'registrar con el QR directo de A crea un SOCIO verificado en A, en el acto, que puede iniciar sesión',
+    async () => {
+      const res = await postJson(baseUrl, '/api/qr/registrar', {
+        token: qrTokenA,
+        name: 'Directo Nuevo',
+        email: emailNuevo,
+        password: 'password123',
+      });
+      assert.equal(res.status, 201);
+      assert.deepEqual(res.body, { ok: true });
+
+      const creado = await runAsPlatform(() => prisma.user.findUnique({ where: { email: emailNuevo } }));
+      assert.ok(creado);
+      assert.equal(creado?.organizationId, seedA.organizationId);
+      assert.equal(creado?.rol, 'SOCIO');
+      assert.equal(creado?.emailVerified, true);
+
+      const login = await postJson(baseUrl, '/api/auth/login', { email: emailNuevo, password: 'password123' });
+      assert.equal(login.status, 200);
+      const org = (login.body as { user: { organization?: { slug: string } } }).user.organization;
+      assert.equal(org?.slug, SLUG_A);
+    },
+  );
+
+  await check('el panel de quien invitó ve AGOTADO con el nombre/email de quien se registró', async () => {
+    const res = await getJson(baseUrl, tokenA, `/api/invitaciones/qr/${qrIdA}/estado`);
+    assert.equal(res.status, 200);
+    const body = res.body as { estado: string; registrado: { name: string; email: string } | null };
+    assert.equal(body.estado, 'AGOTADO');
+    assert.equal(body.registrado?.name, 'Directo Nuevo');
+    assert.equal(body.registrado?.email, emailNuevo);
+  });
+
+  await check('un segundo registro sobre el mismo código directo (ya agotado) da 410', async () => {
+    const res = await postJson(baseUrl, '/api/qr/registrar', {
+      token: qrTokenA,
+      name: 'Otra Persona',
+      email: `qr-directo-segunda-${RANDOM_SUFFIX}@iso-test.local`,
+      password: 'password123',
+    });
+    assert.equal(res.status, 410);
+  });
+
+  await check('un código directo ya agotado deja de listarse en GET /api/invitaciones/qr', async () => {
+    const listado = await getJson(baseUrl, tokenA, '/api/invitaciones/qr');
+    assert.equal(listado.status, 200);
+    const codigos = (listado.body as { codigos: { id: string }[] }).codigos;
+    assert.equal(codigos.some((c) => c.id === qrIdA), false);
   });
 }
 
@@ -2046,6 +2177,9 @@ async function main(): Promise<void> {
     // (el último paso de runHttpChecks lo deja SUSPENDED) — mismo motivo que
     // runFileDownloadChecks más abajo.
     await runQrChecks(started.baseUrl, seedA, seedB);
+    // DESPUÉS de runQrChecks: reutiliza sus mismos seeds/tokens y deja a B
+    // ACTIVE tal como runQrChecks lo dejó.
+    await runQrDirectoChecks(started.baseUrl, seedA, seedB);
     await runFileDownloadChecks(started.baseUrl, seedA, seedB);
     await runClubLogoChecks(started.baseUrl, seedA, seedB);
     await runTenantCliChecks(started.baseUrl, seedA, seedB);

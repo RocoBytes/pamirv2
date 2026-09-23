@@ -6,8 +6,10 @@ import {
   listarCodigosQr,
   verCodigoQr,
   revocarCodigoQr,
+  estadoCodigoQr,
   consultarCodigoQr,
   solicitarInvitacionQr,
+  registrarConQrDirecto,
   MENSAJE_SOLICITUD_GENERICA,
   type CodigosQrDeps,
   type CodigosQrRepo,
@@ -16,7 +18,7 @@ import {
   type SendCodigoQrInvitationEmailParams,
 } from './codigos-qr.service.js';
 import type { InvitacionRow, Requester } from './invitaciones.service.js';
-import { cifrarTokenQr } from '../lib/codigos-qr.js';
+import { cifrarTokenQr, QR_DIRECTO_TTL_MS } from '../lib/codigos-qr.js';
 
 // ─── Fake repo (en memoria, sin Prisma) ────────────────────────────────────────
 
@@ -26,6 +28,7 @@ interface FakeUser {
   email: string;
   name: string;
   rol: RolUsuario;
+  emailVerified: boolean;
 }
 
 function createFakeRepo(seedUsers: FakeUser[] = []): {
@@ -55,6 +58,8 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
         revocadoAt: null,
         createdAt: new Date(),
         creadoPorId: data.creadoPorId,
+        modo: data.modo,
+        registradoUsuarioId: null,
       };
       codigos.push(row);
       return row;
@@ -78,7 +83,7 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
     },
     async findUserById(id) {
       const u = users.find((x) => x.id === id);
-      return u ? { id: u.id, name: u.name, rol: u.rol } : null;
+      return u ? { id: u.id, name: u.name, rol: u.rol, email: u.email } : null;
     },
     async findUserByEmail(email) {
       const u = users.find((x) => x.email === email);
@@ -112,6 +117,31 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
       invitaciones.push(row);
       return row;
     },
+    async registrarUsuarioQrDirecto({ codigoQrId, organizationId, email, name, passwordHash, rol, now }) {
+      void passwordHash; // el fake repo no modela el hash — solo el servicio le pasa uno.
+      const codigo = codigos.find((c) => c.id === codigoQrId);
+      if (
+        !codigo ||
+        codigo.modo !== 'DIRECTO' ||
+        codigo.revocadoAt !== null ||
+        codigo.expiresAt <= now ||
+        codigo.usosRestantes <= 0
+      ) {
+        return { kind: 'agotado' };
+      }
+      // Misma carrera que la violación P2002 del repo real: otra request para
+      // el MISMO email ya ganó, entre el chequeo previo del servicio y acá.
+      if (users.some((u) => u.email === email)) {
+        return { kind: 'email-en-uso' };
+      }
+
+      codigo.usosRestantes -= 1;
+      const user: FakeUser = { id: nextId('user'), organizationId, email, name, rol, emailVerified: true };
+      users.push(user);
+      codigo.registradoUsuarioId = user.id;
+
+      return { kind: 'ok', user: { id: user.id, email: user.email, name: user.name, rol: user.rol } };
+    },
   };
 
   return { repo, users, codigos, invitaciones };
@@ -131,10 +161,10 @@ const BRAND_ORG_1: OrganizacionPublicaConEstado = {
 
 function createDeps(overrides: Partial<CodigosQrDeps> = {}, extraUsers: FakeUser[] = []) {
   const seedUsers: FakeUser[] = [
-    { id: ADMIN.id, organizationId: ADMIN.organizationId, email: 'admin@club.cl', name: ADMIN.name, rol: 'ADMIN' },
-    { id: LIDER.id, organizationId: LIDER.organizationId, email: 'lider@club.cl', name: LIDER.name, rol: 'LIDER' },
-    { id: OTRO_LIDER.id, organizationId: OTRO_LIDER.organizationId, email: 'lider2@club.cl', name: OTRO_LIDER.name, rol: 'LIDER' },
-    { id: SOCIO.id, organizationId: SOCIO.organizationId, email: 'socio@club.cl', name: SOCIO.name, rol: 'SOCIO' },
+    { id: ADMIN.id, organizationId: ADMIN.organizationId, email: 'admin@club.cl', name: ADMIN.name, rol: 'ADMIN', emailVerified: true },
+    { id: LIDER.id, organizationId: LIDER.organizationId, email: 'lider@club.cl', name: LIDER.name, rol: 'LIDER', emailVerified: true },
+    { id: OTRO_LIDER.id, organizationId: OTRO_LIDER.organizationId, email: 'lider2@club.cl', name: OTRO_LIDER.name, rol: 'LIDER', emailVerified: true },
+    { id: SOCIO.id, organizationId: SOCIO.organizationId, email: 'socio@club.cl', name: SOCIO.name, rol: 'SOCIO', emailVerified: true },
     ...extraUsers,
   ];
   const { repo, users, codigos, invitaciones } = createFakeRepo(seedUsers);
@@ -152,6 +182,7 @@ function createDeps(overrides: Partial<CodigosQrDeps> = {}, extraUsers: FakeUser
       withOrgCalls.push(organizationId);
       return fn();
     },
+    hashPassword: async (password) => `hashed:${password}`,
     now: () => NOW,
     frontendUrl: 'https://andinoclubpamir.app',
     jwtSecret: JWT_SECRET,
@@ -385,7 +416,7 @@ describe('consultarCodigoQr', () => {
     if (!result.ok) assert.equal(result.status, 404);
   });
 
-  it('devuelve EXACTAMENTE { organization, expiresAt } — nunca usos ni contadores', async () => {
+  it('devuelve EXACTAMENTE { organization, expiresAt, modo } — nunca usos ni contadores', async () => {
     const { deps } = createDeps();
     const creado = await crearCodigoQr(deps, ADMIN, {});
     assert.equal(creado.ok, true);
@@ -395,9 +426,10 @@ describe('consultarCodigoQr', () => {
     const result = await consultarCodigoQr(deps, token);
     assert.equal(result.ok, true);
     if (!result.ok) return;
-    assert.deepEqual(Object.keys(result.body).sort(), ['expiresAt', 'organization']);
+    assert.deepEqual(Object.keys(result.body).sort(), ['expiresAt', 'modo', 'organization']);
     assert.deepEqual(result.body.organization, BRAND_ORG_1.brand);
     assert.equal(result.body.expiresAt.getTime(), creado.body.codigo.expiresAt.getTime());
+    assert.equal(result.body.modo, 'CORREO');
   });
 
   it('un código revocado da 410', async () => {
@@ -540,7 +572,7 @@ describe('solicitarInvitacionQr', () => {
 
   it('cuenta existente / invitación pendiente / email nuevo: exactamente la misma respuesta 202 (deepEqual)', async () => {
     const { deps, users, invitaciones } = createDeps({}, [
-      { id: 'existing-1', organizationId: 'org-1', email: 'existe@club.cl', name: 'Ya Existe', rol: 'SOCIO' },
+      { id: 'existing-1', organizationId: 'org-1', email: 'existe@club.cl', name: 'Ya Existe', rol: 'SOCIO', emailVerified: true },
     ]);
     void users;
     const creado = await crearCodigoQr(deps, ADMIN, { maxUsos: 200 });
@@ -680,5 +712,403 @@ describe('solicitarInvitacionQr', () => {
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.status, 410);
     assert.equal(invitaciones.length, 0);
+  });
+});
+
+// ─── Modo DIRECTO ("QR directo") ────────────────────────────────────────────────
+
+describe('crearCodigoQr — modo DIRECTO', () => {
+  it('fuerza TTL de 15 minutos y 1 uso, sin importar duracion/maxUsos del body', async () => {
+    const { deps } = createDeps();
+    const result = await crearCodigoQr(deps, ADMIN, { modo: 'DIRECTO', duracion: '7d', maxUsos: 200 });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.body.codigo.modo, 'DIRECTO');
+    assert.equal(result.body.codigo.maxUsos, 1);
+    assert.equal(result.body.codigo.usosRestantes, 1);
+    assert.equal(result.body.codigo.expiresAt.getTime(), NOW.getTime() + QR_DIRECTO_TTL_MS);
+  });
+
+  it('un modo inválido rechaza con 400', async () => {
+    const { deps } = createDeps();
+    const result = await crearCodigoQr(deps, ADMIN, { modo: 'OTRO' });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 400);
+  });
+
+  it('sin modo en el body, el comportamiento sigue siendo CORREO', async () => {
+    const { deps } = createDeps();
+    const result = await crearCodigoQr(deps, ADMIN, {});
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.body.codigo.modo, 'CORREO');
+  });
+});
+
+describe('listarCodigosQr — modo DIRECTO', () => {
+  it('un código DIRECTO ya agotado deja de listarse; uno todavía ACTIVO sí se lista', async () => {
+    const { deps } = createDeps();
+    const activo = await crearCodigoQr(deps, ADMIN, { modo: 'DIRECTO' });
+    const agotado = await crearCodigoQr(deps, ADMIN, { modo: 'DIRECTO' });
+    assert.equal(activo.ok, true);
+    assert.equal(agotado.ok, true);
+    if (!activo.ok || !agotado.ok) return;
+    const tokenAgotado = agotado.body.qrUrl.split('#qr=')[1] ?? '';
+    const registrado = await registrarConQrDirecto(deps, tokenAgotado, {
+      name: 'Se Agota',
+      email: 'se-agota@club.cl',
+      password: 'password123',
+    });
+    assert.equal(registrado.ok, true);
+
+    const listado = await listarCodigosQr(deps, ADMIN);
+    assert.equal(listado.ok, true);
+    if (!listado.ok) return;
+    const ids = listado.body.codigos.map((c) => c.id);
+    assert.ok(ids.includes(activo.body.codigo.id));
+    assert.equal(ids.includes(agotado.body.codigo.id), false);
+  });
+
+  it('un código CORREO se lista en cualquier estado, como siempre', async () => {
+    const { deps } = createDeps();
+    const creado = await crearCodigoQr(deps, ADMIN, {});
+    assert.equal(creado.ok, true);
+    if (!creado.ok) return;
+    await revocarCodigoQr(deps, ADMIN, creado.body.codigo.id);
+
+    const listado = await listarCodigosQr(deps, ADMIN);
+    assert.equal(listado.ok, true);
+    if (!listado.ok) return;
+    assert.ok(listado.body.codigos.some((c) => c.id === creado.body.codigo.id));
+  });
+});
+
+describe('estadoCodigoQr', () => {
+  it('un SOCIO no puede consultar (403)', async () => {
+    const { deps } = createDeps();
+    const creado = await crearCodigoQr(deps, ADMIN, { modo: 'DIRECTO' });
+    assert.equal(creado.ok, true);
+    if (!creado.ok) return;
+    const result = await estadoCodigoQr(deps, SOCIO, creado.body.codigo.id);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 403);
+  });
+
+  it('LIDER no puede consultar el código de otro LIDER (404, no revela existencia)', async () => {
+    const { deps } = createDeps();
+    const creado = await crearCodigoQr(deps, LIDER, { modo: 'DIRECTO' });
+    assert.equal(creado.ok, true);
+    if (!creado.ok) return;
+    const result = await estadoCodigoQr(deps, OTRO_LIDER, creado.body.codigo.id);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 404);
+  });
+
+  it('un id inexistente da 404', async () => {
+    const { deps } = createDeps();
+    const result = await estadoCodigoQr(deps, ADMIN, 'no-existe');
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 404);
+  });
+
+  it('mientras nadie escanea, estado ACTIVO y registrado null', async () => {
+    const { deps } = createDeps();
+    const creado = await crearCodigoQr(deps, ADMIN, { modo: 'DIRECTO' });
+    assert.equal(creado.ok, true);
+    if (!creado.ok) return;
+    const result = await estadoCodigoQr(deps, ADMIN, creado.body.codigo.id);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.body.estado, 'ACTIVO');
+    assert.equal(result.body.registrado, null);
+  });
+
+  it('tras un registro exitoso, estado AGOTADO y registrado con nombre/email — SIN exigir que siga ACTIVO', async () => {
+    const { deps } = createDeps();
+    const creado = await crearCodigoQr(deps, ADMIN, { modo: 'DIRECTO' });
+    assert.equal(creado.ok, true);
+    if (!creado.ok) return;
+    const token = creado.body.qrUrl.split('#qr=')[1] ?? '';
+
+    const registrado = await registrarConQrDirecto(deps, token, {
+      name: 'Nueva Persona',
+      email: 'nueva-persona@club.cl',
+      password: 'password123',
+    });
+    assert.equal(registrado.ok, true);
+
+    const result = await estadoCodigoQr(deps, ADMIN, creado.body.codigo.id);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.body.estado, 'AGOTADO');
+    assert.deepEqual(result.body.registrado, { name: 'Nueva Persona', email: 'nueva-persona@club.cl' });
+  });
+});
+
+describe('solicitarInvitacionQr — modo DIRECTO', () => {
+  it('un token DIRECTO da 404, como si fuera desconocido — nunca mintea', async () => {
+    const { deps, invitaciones } = createDeps();
+    const creado = await crearCodigoQr(deps, ADMIN, { modo: 'DIRECTO' });
+    assert.equal(creado.ok, true);
+    if (!creado.ok) return;
+    const token = creado.body.qrUrl.split('#qr=')[1] ?? '';
+
+    const result = await solicitarInvitacionQr(deps, token, { email: 'no-deberia-mintear@club.cl' });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 404);
+    assert.equal(invitaciones.length, 0);
+  });
+});
+
+describe('consultarCodigoQr — modo DIRECTO', () => {
+  it('devuelve modo: DIRECTO para un código directo', async () => {
+    const { deps } = createDeps();
+    const creado = await crearCodigoQr(deps, ADMIN, { modo: 'DIRECTO' });
+    assert.equal(creado.ok, true);
+    if (!creado.ok) return;
+    const token = creado.body.qrUrl.split('#qr=')[1] ?? '';
+
+    const result = await consultarCodigoQr(deps, token);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.body.modo, 'DIRECTO');
+  });
+});
+
+describe('registrarConQrDirecto', () => {
+  async function crearDirecto(deps: CodigosQrDeps, requester: Requester = ADMIN) {
+    const creado = await crearCodigoQr(deps, requester, { modo: 'DIRECTO' });
+    assert.equal(creado.ok, true);
+    if (!creado.ok) throw new Error('no se pudo crear el código DIRECTO');
+    return { id: creado.body.codigo.id, token: creado.body.qrUrl.split('#qr=')[1] ?? '' };
+  }
+
+  it('un token de modo CORREO da 404, como si fuera desconocido', async () => {
+    const { deps, users } = createDeps();
+    const creado = await crearCodigoQr(deps, ADMIN, {});
+    assert.equal(creado.ok, true);
+    if (!creado.ok) return;
+    const token = creado.body.qrUrl.split('#qr=')[1] ?? '';
+
+    const result = await registrarConQrDirecto(deps, token, {
+      name: 'Cualquiera',
+      email: 'cualquiera@club.cl',
+      password: 'password123',
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 404);
+    assert.equal(users.some((u) => u.email === 'cualquiera@club.cl'), false);
+  });
+
+  it('un token desconocido da 404', async () => {
+    const { deps } = createDeps();
+    const result = await registrarConQrDirecto(deps, 'token-inexistente', {
+      name: 'Cualquiera',
+      email: 'cualquiera@club.cl',
+      password: 'password123',
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 404);
+  });
+
+  it('camino feliz: crea un SOCIO en el club del QR, emailVerified true, y fija registradoUsuarioId', async () => {
+    const { deps, users, codigos } = createDeps();
+    const { id, token } = await crearDirecto(deps);
+
+    const result = await registrarConQrDirecto(deps, token, {
+      name: 'Persona Nueva',
+      email: 'persona-nueva@club.cl',
+      password: 'password123',
+    });
+    assert.equal(result.ok, true);
+    if (result.ok) assert.deepEqual(result.body, { ok: true });
+
+    const creado = users.find((u) => u.email === 'persona-nueva@club.cl');
+    assert.ok(creado);
+    assert.equal(creado?.organizationId, ADMIN.organizationId);
+    assert.equal(creado?.rol, 'SOCIO');
+    assert.equal(creado?.emailVerified, true);
+
+    const codigo = codigos.find((c) => c.id === id);
+    assert.equal(codigo?.usosRestantes, 0);
+    assert.equal(codigo?.registradoUsuarioId, creado?.id);
+  });
+
+  it('un segundo registro sobre el mismo código (ya agotado) da 410', async () => {
+    const { deps } = createDeps();
+    const { token } = await crearDirecto(deps);
+
+    const primero = await registrarConQrDirecto(deps, token, {
+      name: 'Primera',
+      email: 'primera@club.cl',
+      password: 'password123',
+    });
+    assert.equal(primero.ok, true);
+
+    const segundo = await registrarConQrDirecto(deps, token, {
+      name: 'Segunda',
+      email: 'segunda@club.cl',
+      password: 'password123',
+    });
+    assert.equal(segundo.ok, false);
+    if (!segundo.ok) assert.equal(segundo.status, 410);
+  });
+
+  it('un email ya registrado da 409 y no consume el uso', async () => {
+    const { deps, codigos } = createDeps({}, [
+      {
+        id: 'existing-2',
+        organizationId: 'org-1',
+        email: 'ya-existe@club.cl',
+        name: 'Ya Existe',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
+    ]);
+    const { id, token } = await crearDirecto(deps);
+
+    const result = await registrarConQrDirecto(deps, token, {
+      name: 'Otra Persona',
+      email: 'ya-existe@club.cl',
+      password: 'password123',
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.status, 409);
+      assert.match(result.error, /Inicia sesión/);
+    }
+
+    const codigo = codigos.find((c) => c.id === id);
+    assert.equal(codigo?.usosRestantes, 1);
+    assert.equal(codigo?.registradoUsuarioId, null);
+  });
+
+  it('nombre/email/contraseña inválidos rechazan con 400 y no consumen el uso', async () => {
+    const { deps, codigos } = createDeps();
+    const { id, token } = await crearDirecto(deps);
+
+    const sinNombre = await registrarConQrDirecto(deps, token, {
+      name: '',
+      email: 'valido@club.cl',
+      password: 'password123',
+    });
+    assert.equal(sinNombre.ok, false);
+    if (!sinNombre.ok) assert.equal(sinNombre.status, 400);
+
+    const emailInvalido = await registrarConQrDirecto(deps, token, {
+      name: 'Alguien',
+      email: 'no-es-un-email',
+      password: 'password123',
+    });
+    assert.equal(emailInvalido.ok, false);
+    if (!emailInvalido.ok) assert.equal(emailInvalido.status, 400);
+
+    const passwordCorta = await registrarConQrDirecto(deps, token, {
+      name: 'Alguien',
+      email: 'valido@club.cl',
+      password: '123',
+    });
+    assert.equal(passwordCorta.ok, false);
+    if (!passwordCorta.ok) assert.equal(passwordCorta.status, 400);
+
+    const codigo = codigos.find((c) => c.id === id);
+    assert.equal(codigo?.usosRestantes, 1);
+  });
+
+  it('una carrera perdida por el único uso da 410', async () => {
+    const { deps } = createDeps();
+    const { token } = await crearDirecto(deps);
+
+    const depsQueAgota: CodigosQrDeps = {
+      ...deps,
+      repo: {
+        ...deps.repo,
+        async registrarUsuarioQrDirecto() {
+          return { kind: 'agotado' };
+        },
+      },
+    };
+
+    const result = await registrarConQrDirecto(depsQueAgota, token, {
+      name: 'Pierde La Carrera',
+      email: 'pierde-carrera@club.cl',
+      password: 'password123',
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 410);
+  });
+
+  it('una carrera perdida contra otra request para el MISMO email (unique violation) da 409', async () => {
+    const { deps } = createDeps();
+
+    // El chequeo previo (findUserByEmail) pasa como si el email estuviera
+    // libre, pero registrarUsuarioQrDirecto detecta el choque al escribir —
+    // misma carrera que P2002 en el repo Prisma real.
+    const depsSinChequeoPrevio: CodigosQrDeps = {
+      ...deps,
+      repo: {
+        ...deps.repo,
+        async findUserByEmail() {
+          return null;
+        },
+      },
+    };
+
+    const { token: token1 } = await crearDirecto(deps);
+    const primero = await registrarConQrDirecto(depsSinChequeoPrevio, token1, {
+      name: 'Primera',
+      email: 'choque@club.cl',
+      password: 'password123',
+    });
+    assert.equal(primero.ok, true);
+
+    const { token: token2 } = await crearDirecto(deps);
+    const segundo = await registrarConQrDirecto(depsSinChequeoPrevio, token2, {
+      name: 'Segunda',
+      email: 'choque@club.cl',
+      password: 'password123',
+    });
+    assert.equal(segundo.ok, false);
+    if (!segundo.ok) assert.equal(segundo.status, 409);
+  });
+
+  it('un código revocado da 410', async () => {
+    const { deps } = createDeps();
+    const { id, token } = await crearDirecto(deps);
+    await revocarCodigoQr(deps, ADMIN, id);
+
+    const result = await registrarConQrDirecto(deps, token, {
+      name: 'Cualquiera',
+      email: 'revocado@club.cl',
+      password: 'password123',
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 410);
+  });
+
+  it('un código expirado da 410', async () => {
+    const { deps } = createDeps();
+    const { token } = await crearDirecto(deps);
+    const depsFuturo: CodigosQrDeps = { ...deps, now: () => new Date(NOW.getTime() + QR_DIRECTO_TTL_MS + 1) };
+
+    const result = await registrarConQrDirecto(depsFuturo, token, {
+      name: 'Cualquiera',
+      email: 'expirado@club.cl',
+      password: 'password123',
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 410);
+  });
+
+  it('withOrganization se llama con el club del QR', async () => {
+    const { deps, withOrgCalls } = createDeps();
+    const { token } = await crearDirecto(deps);
+
+    await registrarConQrDirecto(deps, token, {
+      name: 'Alguien',
+      email: 'org-check@club.cl',
+      password: 'password123',
+    });
+    assert.deepEqual(withOrgCalls, [ADMIN.organizationId]);
   });
 });

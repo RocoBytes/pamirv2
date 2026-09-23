@@ -17,6 +17,7 @@ const {
   verifiedUserOrIpKey,
   isAuthSubpathWithOwnLimit,
   isOwnRateLimitFamily,
+  isQrEstadoPath,
 } = await import('./rate-limits.js');
 
 // `Request` de mentira: solo lo mínimo que leen las funciones puras de este
@@ -141,6 +142,16 @@ describe('isOwnRateLimitFamily', () => {
     assert.equal(isOwnRateLimitFamily(fakeReq({ path: '/qr/solicitar' }) as never), true);
   });
 
+  it('true para GET .../invitaciones/qr/:id/estado (relativo a /api)', () => {
+    assert.equal(isOwnRateLimitFamily(fakeReq({ path: '/invitaciones/qr/abc-123/estado' }) as never), true);
+  });
+
+  it('false para el resto de /api/invitaciones/qr/*', () => {
+    assert.equal(isOwnRateLimitFamily(fakeReq({ path: '/invitaciones/qr' }) as never), false);
+    assert.equal(isOwnRateLimitFamily(fakeReq({ path: '/invitaciones/qr/abc-123' }) as never), false);
+    assert.equal(isOwnRateLimitFamily(fakeReq({ path: '/invitaciones/qr/abc-123/revocar' }) as never), false);
+  });
+
   it('false para el resto de /api', () => {
     assert.equal(isOwnRateLimitFamily(fakeReq({ path: '/invitaciones' }) as never), false);
     assert.equal(isOwnRateLimitFamily(fakeReq({ path: '/salidas' }) as never), false);
@@ -149,5 +160,22 @@ describe('isOwnRateLimitFamily', () => {
   it('no confunde un prefijo parecido (p.ej. "/authx") con la familia real', () => {
     assert.equal(isOwnRateLimitFamily(fakeReq({ path: '/authx' }) as never), false);
     assert.equal(isOwnRateLimitFamily(fakeReq({ path: '/qrcode' }) as never), false);
+  });
+});
+
+describe('isQrEstadoPath', () => {
+  it('true para /qr/:id/estado (relativo a /api/invitaciones)', () => {
+    assert.equal(isQrEstadoPath(fakeReq({ path: '/qr/abc-123/estado' }) as never), true);
+  });
+
+  it('false para el resto de /qr/*', () => {
+    assert.equal(isQrEstadoPath(fakeReq({ path: '/qr' }) as never), false);
+    assert.equal(isQrEstadoPath(fakeReq({ path: '/qr/abc-123' }) as never), false);
+    assert.equal(isQrEstadoPath(fakeReq({ path: '/qr/abc-123/revocar' }) as never), false);
+  });
+
+  it('false para el resto de /api/invitaciones', () => {
+    assert.equal(isQrEstadoPath(fakeReq({ path: '/' }) as never), false);
+    assert.equal(isQrEstadoPath(fakeReq({ path: '/abc-123/revocar' }) as never), false);
   });
 });

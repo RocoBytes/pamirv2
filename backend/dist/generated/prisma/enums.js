@@ -47,3 +47,7 @@ export const OrganizationStatus = {
     ACTIVE: 'ACTIVE',
     SUSPENDED: 'SUSPENDED'
 };
+export const ModoCodigoQr = {
+    CORREO: 'CORREO',
+    DIRECTO: 'DIRECTO'
+};

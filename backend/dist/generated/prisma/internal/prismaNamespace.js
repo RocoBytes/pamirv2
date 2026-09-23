@@ -161,7 +161,9 @@ export const CodigoQrInvitacionScalarFieldEnum = {
     expiresAt: 'expiresAt',
     revocadoAt: 'revocadoAt',
     createdAt: 'createdAt',
-    creadoPorId: 'creadoPorId'
+    creadoPorId: 'creadoPorId',
+    modo: 'modo',
+    registradoUsuarioId: 'registradoUsuarioId'
 };
 export const SalidaScalarFieldEnum = {
     id: 'id',
