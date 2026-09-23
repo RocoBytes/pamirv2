@@ -168,25 +168,43 @@ async function run(): Promise<void> {
   const passwordHash = await bcrypt.hash(passwordResult.data, SALT_ROUNDS);
 
   if (!existing) {
-    await prisma.user.create({
-      data: { organizationId: organization.id, email, name, passwordHash, rol, emailVerified: true },
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { organizationId: organization.id, email, name, passwordHash, rol, emailVerified: true },
+      });
+      await tx.membresia.create({
+        data: { organizationId: organization.id, usuarioId: user.id, rol },
+      });
     });
     console.log(`[create-user] Usuario creado: email="${email}" rol="${rol}" org="${org}"`);
     return;
   }
 
-  await prisma.user.update({
-    where: { email },
-    data: {
-      name,
-      passwordHash,
-      rol,
-      emailVerified: true,
-      verificationToken: null,
-      verificationTokenExpiry: null,
-      resetToken: null,
-      resetTokenExpiry: null,
-    },
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.update({
+      where: { email },
+      data: {
+        name,
+        passwordHash,
+        rol,
+        emailVerified: true,
+        verificationToken: null,
+        verificationTokenExpiry: null,
+        resetToken: null,
+        resetTokenExpiry: null,
+      },
+    });
+    // upsert (no update): --force es una herramienta de reparación operativa
+    // (ver su descripción en create-user-args.ts, "actualizarlo") — a
+    // diferencia de PATCH /admin/users/:id/rol (admin.controller.ts), que
+    // falla ruidoso si la Membresia falta, acá se prefiere autosanar: una
+    // fila que falte (backfill incompleto, borrado a mano) no debe bloquear
+    // al operador que está tratando de arreglar justamente ese usuario.
+    await tx.membresia.upsert({
+      where: { organizationId_usuarioId: { organizationId: organization.id, usuarioId: user.id } },
+      create: { organizationId: organization.id, usuarioId: user.id, rol },
+      update: { rol },
+    });
   });
   console.log(`[create-user] Usuario actualizado: email="${email}" rol="${rol}"`);
 }

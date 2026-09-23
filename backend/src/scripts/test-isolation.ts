@@ -8,6 +8,7 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
+import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.js';
@@ -2278,6 +2279,117 @@ async function runRoleChangeMembresiaChecks(baseUrl: string, seedA: OrgSeed): Pr
   );
 }
 
+// ─── CLI create-user ─────────────────────────────────────────────────────────
+
+interface CreateUserCliResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+// Corre create-user.ts como proceso real (misma DATABASE_URL, guardada por
+// su propio db:guard). stdin no es una TTY en un proceso hijo con stdio en
+// pipe, así que readPassword() toma la rama de una sola línea (ver
+// create-user.ts, readLineFromStdin): ni confirmación ni eco oculto, una
+// línea con la contraseña basta.
+function runCreateUserCli(args: string[], password: string): Promise<CreateUserCliResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('npx', ['tsx', 'src/scripts/create-user.ts', ...args], {
+      cwd: process.cwd(),
+      env: process.env,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.on('error', reject);
+    child.on('close', (code) => resolve({ code, stdout, stderr }));
+    child.stdin.write(`${password}\n`);
+    child.stdin.end();
+  });
+}
+
+async function runCreateUserCliChecks(seedA: OrgSeed): Promise<void> {
+  await check('CLI create-user: un usuario nuevo obtiene exactamente una Membresia con su rol y club', async () => {
+    const email = `cli-nuevo-${RANDOM_SUFFIX}@iso-test.local`;
+    const result = await runCreateUserCli(
+      ['--email', email, '--name', 'CLI Nuevo', '--org', SLUG_A, '--rol', 'LIDER'],
+      'password123',
+    );
+    assert.equal(result.code, 0, `stderr: ${result.stderr}`);
+
+    const user = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+    assert.ok(user);
+    const membresias = await runAsPlatform(() => prisma.membresia.findMany({ where: { usuarioId: user!.id } }));
+    assert.equal(membresias.length, 1);
+    assert.equal(membresias[0]?.organizationId, seedA.organizationId);
+    assert.equal(membresias[0]?.rol, 'LIDER');
+  });
+
+  await check('CLI create-user --force: cambia el rol y también actualiza la Membresia existente', async () => {
+    const email = `cli-force-${RANDOM_SUFFIX}@iso-test.local`;
+    const primero = await runCreateUserCli(
+      ['--email', email, '--name', 'CLI Force', '--org', SLUG_A, '--rol', 'SOCIO'],
+      'password123',
+    );
+    assert.equal(primero.code, 0, `stderr: ${primero.stderr}`);
+
+    const segundo = await runCreateUserCli(
+      ['--email', email, '--name', 'CLI Force', '--org', SLUG_A, '--rol', 'ADMIN', '--force'],
+      'password123',
+    );
+    assert.equal(segundo.code, 0, `stderr: ${segundo.stderr}`);
+
+    const user = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+    assert.ok(user);
+    const membresia = await runAsPlatform(() =>
+      prisma.membresia.findUnique({
+        where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: user!.id } },
+      }),
+    );
+    assert.ok(membresia);
+    assert.equal(membresia?.rol, 'ADMIN');
+  });
+
+  await check(
+    'CLI create-user --force autosana una Membresia faltante (fila borrada a mano) en vez de fallar (Review Focus #5)',
+    async () => {
+      const email = `cli-force-autosana-${RANDOM_SUFFIX}@iso-test.local`;
+      const primero = await runCreateUserCli(
+        ['--email', email, '--name', 'CLI Autosana', '--org', SLUG_A, '--rol', 'SOCIO'],
+        'password123',
+      );
+      assert.equal(primero.code, 0, `stderr: ${primero.stderr}`);
+
+      const user = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+      assert.ok(user);
+      await runAsPlatform(() =>
+        prisma.membresia.delete({
+          where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: user!.id } },
+        }),
+      );
+
+      const segundo = await runCreateUserCli(
+        ['--email', email, '--name', 'CLI Autosana', '--org', SLUG_A, '--rol', 'LIDER', '--force'],
+        'password123',
+      );
+      assert.equal(segundo.code, 0, `stderr: ${segundo.stderr}`);
+
+      const membresia = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: user!.id } },
+        }),
+      );
+      assert.ok(membresia);
+      assert.equal(membresia?.rol, 'LIDER');
+    },
+  );
+}
+
 // ─── Orquestación ──────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -2337,6 +2449,15 @@ async function main(): Promise<void> {
     await runClubLogoChecks(started.baseUrl, seedA, seedB);
     await runTenantCliChecks(started.baseUrl, seedA, seedB);
     await runRoleChangeMembresiaChecks(started.baseUrl, seedA);
+    await runCreateUserCliChecks(seedA);
+
+    await check(
+      'invariante global: todo usuario de la base tiene al menos una Membresia (ningún alta se saltó el dual write) (Review Focus #1)',
+      async () => {
+        const huerfanos = await runAsPlatform(() => prisma.user.count({ where: { membresias: { none: {} } } }));
+        assert.equal(huerfanos, 0);
+      },
+    );
   } catch (err) {
     results.push({
       label: 'ejecución general del script (fuera de un check individual)',
