@@ -82,8 +82,8 @@ jobs:
           context: ./backend
           push: true
           tags: |
-            ghcr.io/rocobytes/pamir-backend:latest
-            ghcr.io/rocobytes/pamir-backend:${{ steps.meta.outputs.tag }}
+            ghcr.io/rocobytes/riala-backend:latest
+            ghcr.io/rocobytes/riala-backend:${{ steps.meta.outputs.tag }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
@@ -95,8 +95,8 @@ jobs:
           context: ./frontend
           push: true
           tags: |
-            ghcr.io/rocobytes/pamir-frontend:latest
-            ghcr.io/rocobytes/pamir-frontend:${{ steps.meta.outputs.tag }}
+            ghcr.io/rocobytes/riala-frontend:latest
+            ghcr.io/rocobytes/riala-frontend:${{ steps.meta.outputs.tag }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
@@ -120,8 +120,23 @@ jobs:
     env:
       TAG: ${{ needs.images.outputs.tag }}
       VPS: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate DEPLOY_DIR
+        run: |
+          if [ -z "$DEPLOY_DIR" ]; then
+            echo "::error::The DEPLOY_DIR repository variable is not set. It must point to an absolute path on the shared server (for example /home/<user>/riala)."
+            exit 1
+          fi
+          case "$DEPLOY_DIR" in
+            /*) ;;
+            *)
+              echo "::error::DEPLOY_DIR must be an absolute path, got: $DEPLOY_DIR"
+              exit 1
+              ;;
+          esac
 
       - name: Load the SSH credentials
         run: |
@@ -146,33 +161,37 @@ jobs:
 
       - name: Sync the deployment files
         run: |
-          scp -i ~/.ssh/id_deploy deploy/docker-compose.yml "$VPS:/opt/pamir/docker-compose.yml"
-          scp -i ~/.ssh/id_deploy deploy/check-alertas.sh "$VPS:/opt/pamir/bin/check-alertas.sh"
-          ssh -i ~/.ssh/id_deploy "$VPS" "chmod +x /opt/pamir/bin/check-alertas.sh"
+          # The target server has no SFTP subsystem, so scp fails against it;
+          # streaming the file through an ssh command works and needs nothing
+          # extra on the server side.
+          ssh -i ~/.ssh/id_deploy "$VPS" "mkdir -p '$DEPLOY_DIR/bin'"
+          ssh -i ~/.ssh/id_deploy "$VPS" "cat > '$DEPLOY_DIR/docker-compose.yml'" < deploy/docker-compose.yml
+          ssh -i ~/.ssh/id_deploy "$VPS" "cat > '$DEPLOY_DIR/bin/check-alertas.sh'" < deploy/check-alertas.sh
+          ssh -i ~/.ssh/id_deploy "$VPS" "chmod +x '$DEPLOY_DIR/bin/check-alertas.sh'"
 
-      - name: Pin this release in /opt/pamir/.env
+      - name: Pin this release in the deploy .env
         run: |
           ssh -i ~/.ssh/id_deploy "$VPS" "
             set -eu
-            cd /opt/pamir
+            cd '$DEPLOY_DIR'
             # Refuse to continue if the env file is not there. Without this the
             # grep below fails, '|| true' swallows it, .env.next is left empty,
-            # and the mv replaces every production secret with one PAMIR_TAG line.
+            # and the mv replaces every production secret with one RIALA_TAG line.
             test -f .env
             # \`grep -v\` exits non-zero when it selects no lines at all — an
-            # empty .env, or one holding only PAMIR_TAG= lines — so its status
+            # empty .env, or one holding only RIALA_TAG= lines — so its status
             # must not abort the step...
-            grep -v '^PAMIR_TAG=' .env > .env.next || true
+            grep -v '^RIALA_TAG=' .env > .env.next || true
             # ...and \`test -s\` below is what actually catches that case: an
             # empty result means we are about to wipe the file.
             test -s .env.next
-            echo 'PAMIR_TAG=$TAG' >> .env.next
+            echo 'RIALA_TAG=$TAG' >> .env.next
             mv .env.next .env
             chmod 600 .env
           "
 
       - name: Pull the new images
-        run: ssh -i ~/.ssh/id_deploy "$VPS" "cd /opt/pamir && docker compose pull"
+        run: ssh -i ~/.ssh/id_deploy "$VPS" "cd '$DEPLOY_DIR' && docker compose pull"
 
       # The running containers are still serving at this point, and everything
       # after this step is either irreversible (migrations) or user-visible
@@ -189,15 +208,15 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_deploy "$VPS" "
             set -eu
-            cd /opt/pamir
+            cd '$DEPLOY_DIR'
             set +e
-            docker compose run --rm --no-deps -T backend timeout 15 node dist/index.js > /tmp/pamir-preflight.log 2>&1
+            docker compose run --rm --no-deps -T backend timeout 15 node dist/index.js > /tmp/riala-preflight.log 2>&1
             code=\$?
             set -e
             if [ \$code -ne 124 ]; then
               echo 'The new image cannot start with this environment. Nothing was migrated and nothing was rolled.'
               echo '--- startup output ---'
-              tail -20 /tmp/pamir-preflight.log
+              tail -20 /tmp/riala-preflight.log
               exit 1
             fi
             echo 'The new image starts cleanly against the production environment.'
@@ -209,24 +228,27 @@ jobs:
         # point of this step is to print the list into the log.
         run: |
           ssh -i ~/.ssh/id_deploy "$VPS" \
-            "cd /opt/pamir && docker compose run --rm migrate npx prisma migrate status" || true
+            "cd '$DEPLOY_DIR' && docker compose run --rm migrate npx prisma migrate status" || true
 
       - name: Apply migrations
-        run: ssh -i ~/.ssh/id_deploy "$VPS" "cd /opt/pamir && docker compose run --rm migrate"
+        run: ssh -i ~/.ssh/id_deploy "$VPS" "cd '$DEPLOY_DIR' && docker compose run --rm migrate"
 
       - name: Roll the containers
         run: |
           ssh -i ~/.ssh/id_deploy "$VPS" "
             set -eu
-            cd /opt/pamir
+            cd '$DEPLOY_DIR'
             docker compose up -d --remove-orphans
-            docker image prune -f
+            # Host-wide \`docker image prune -f\` would delete other projects'
+            # dangling images on this shared server. Scope the prune to images
+            # this stack's Dockerfiles label.
+            docker image prune -f --filter label=cl.riala.stack=riala
           "
 
       - name: Verify the deployment is healthy
         run: |
           for i in 1 2 3 4 5 6 7 8 9 10; do
-            if curl -fsS --connect-timeout 5 --max-time 10 https://andinoclubpamir.app/api/health; then
+            if curl -fsS --connect-timeout 5 --max-time 10 https://riala.cl/api/health; then
               echo "healthy after ${i} attempt(s)"
               exit 0
             fi
