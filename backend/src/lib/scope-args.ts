@@ -12,9 +12,10 @@ import { TenantContextError, type TenantStore } from './tenant-context.js';
 
 export { TenantContextError };
 
-// Los 16 modelos de negocio: toda fila pertenece a exactamente un club.
+// Los 17 modelos de negocio: toda fila pertenece a exactamente un club.
 export const TENANT_MODELS = [
   'User',
+  'Membresia',
   'DashboardLayout',
   'Invitacion',
   'CodigoQrInvitacion',
