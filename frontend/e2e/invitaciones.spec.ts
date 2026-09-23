@@ -198,6 +198,8 @@ test.describe('Invitar — LIDER', () => {
     ).toBeVisible()
     await expect(page.getByRole('button', { name: 'Copiar enlace' })).toBeVisible()
     await expect(page.getByRole('cell', { name: 'candidato@example.com', exact: true })).toBeVisible()
+    // El QR codifica el mismo enlace de un solo uso que ya se muestra arriba.
+    await expect(page.getByAltText('Código QR de la invitación')).toBeVisible()
   })
 })
 
