@@ -577,7 +577,15 @@ Add to the end of `.github/workflows/deploy.yml`:
           ssh -i ~/.ssh/id_deploy "$VPS" "
             set -eu
             cd /opt/pamir
+            # Refuse to continue if the env file is not there. Without this the
+            # grep below fails, '|| true' swallows it, .env.next is left empty,
+            # and the mv replaces every production secret with one PAMIR_TAG line.
+            test -f .env
+            # grep -v exits non-zero when nothing matches, the normal case on a
+            # first deploy, so its status must not abort the step...
             grep -v '^PAMIR_TAG=' .env > .env.next || true
+            # ...but an empty result means we are about to wipe the file.
+            test -s .env.next
             echo 'PAMIR_TAG=$TAG' >> .env.next
             mv .env.next .env
             chmod 600 .env
@@ -622,7 +630,30 @@ Add to the end of `.github/workflows/deploy.yml`:
 
 The order matters: `docker compose pull` runs before the migration steps so that `migrate` executes the newly built image, not the one already on disk.
 
-- [ ] **Step 2: Lint the workflow**
+- [ ] **Step 2: Harden the images job's branch guard**
+
+Task 5's review raised this as Minor, but it stops being minor once the deploy job
+above exists. The `images` job is gated only by `if: github.event_name != 'pull_request'`,
+which is also true for `workflow_dispatch` on *any* branch. Two consequences now: a manual
+dispatch from a feature branch publishes `:latest` from non-main code, and `deploy` (which
+declares `needs: images`) could then put that build into production. `:latest` matters
+because `deploy/docker-compose.yml` falls back to it whenever `PAMIR_TAG` is unset.
+
+In `.github/workflows/deploy.yml`, change the `images` job's condition from:
+
+```yaml
+    if: github.event_name != 'pull_request'
+```
+
+to:
+
+```yaml
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+```
+
+Change nothing else about that job.
+
+- [ ] **Step 3: Lint the workflow**
 
 ```bash
 actionlint .github/workflows/deploy.yml
@@ -630,9 +661,9 @@ actionlint .github/workflows/deploy.yml
 
 Expected: no output, exit 0.
 
-- [ ] **Step 3: Verify all four jobs are defined**
+- [ ] **Step 4: Verify all four jobs are defined**
 
-`actionlint` already parsed the file in Step 2, so this only confirms the job set.
+`actionlint` already parsed the file in Step 3, so this only confirms the job set.
 Do not reach for PyYAML: it is not installed in this machine's system Python, and
 installing it is not worth a four-line check.
 
@@ -644,7 +675,7 @@ done
 
 Expected: all four print `ok`.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add .github/workflows/deploy.yml
