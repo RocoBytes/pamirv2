@@ -635,24 +635,47 @@ Los contenedores son 100% stateless.
 
 ### CI/CD (GitHub Actions)
 
-Cada push a `main` dispara [.github/workflows/deploy.yml](.github/workflows/deploy.yml):
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) define el pipeline. Ningún
+push a `main` despliega por sí solo: publica imágenes nuevas, pero el despliegue queda
+en espera hasta que una persona lo aprueba.
 
-1. Construye `ghcr.io/rocobytes/pamir-backend` y `ghcr.io/rocobytes/pamir-frontend`
-   (tags `latest` + SHA del commit) y las publica en GHCR.
-2. Por SSH copia [deploy/docker-compose.yml](deploy/docker-compose.yml) a
-   `/opt/pamir/` y ejecuta:
-   ```bash
-   docker compose pull
-   docker compose run --rm migrate   # prisma migrate deploy contra Neon
-   docker compose up -d --remove-orphans
-   ```
+1. **Cada push y cada pull request** corren los jobs `verify-backend` y
+   `verify-frontend` (lint, tests y build de ambos paquetes).
+2. **Solo los push a `main`** además construyen y publican
+   `ghcr.io/rocobytes/pamir-backend` y `ghcr.io/rocobytes/pamir-frontend` en GHCR,
+   con los tags `latest` y `sha-<commit>`. Los pull requests nunca publican; un
+   `workflow_dispatch` manual solo publica si se ejecuta sobre `main`.
+3. El job de despliegue espera entonces la aprobación del entorno `production` de
+   GitHub y no toca el VPS hasta que un revisor la concede. Con esa aprobación:
+   - escribe el `PAMIR_TAG` de esta imagen en `/opt/pamir/.env`,
+   - hace `docker compose pull` de las imágenes nuevas,
+   - imprime las migraciones pendientes (`prisma migrate status`),
+   - las aplica,
+   - levanta los contenedores (`docker compose up -d --remove-orphans`),
+   - y verifica `/api/health` antes de darse por terminado.
 
-Secrets requeridos en GitHub: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`,
-`VPS_KNOWN_HOSTS`. El frontend se construye **sin** `VITE_API_URL`: el SPA usa
-`/api` relativo (same-origin).
+La aprobación se dispara antes de que el job arranque, así que quien aprueba **no** ve
+todavía ese listado de `prisma migrate status`: se imprime recién después, dentro del
+job. Para aprobar con conocimiento real de qué migraciones se van a aplicar, antes de
+aprobar hay que conectarse por SSH al VPS y correr:
 
-**Rollback**: fija el tag del SHA anterior en `/opt/pamir/docker-compose.yml`
-y `docker compose up -d`.
+```bash
+cd /opt/pamir && docker compose run --rm migrate npx prisma migrate status
+```
+
+El frontend se construye **sin** `VITE_API_URL`: el SPA usa `/api` relativo
+(same-origin).
+
+Configuración que el pipeline no puede crear por sí mismo:
+
+- Secrets del entorno `production`: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`.
+- Un entorno `production` en GitHub con un revisor obligatorio.
+- `/opt/pamir/.env` debe existir de antemano con los secrets reales; el paso de
+  despliegue se niega a continuar si no lo encuentra, para no arriesgarse a
+  sobrescribirlo.
+
+**Rollback**: por SSH al VPS, fija `PAMIR_TAG` en `/opt/pamir/.env` a un tag
+`sha-` anterior y corre `docker compose up -d`.
 
 ### Layout en el VPS
 

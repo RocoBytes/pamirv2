@@ -1,0 +1,208 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      # Required before the build: `npm run build` is a bare `tsc`, and on a
+      # clean runner the generated Prisma client does not exist yet.
+      - run: npx prisma generate
+
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  verify-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  images:
+    needs: [verify-backend, verify-frontend]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        run: echo "tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ghcr.io/rocobytes/pamir-backend:latest
+            ghcr.io/rocobytes/pamir-backend:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      # Built with no VITE_API_URL on purpose: the SPA falls back to a
+      # relative /api, served same-origin by this image's own nginx.
+      - name: Build and push the frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ghcr.io/rocobytes/pamir-frontend:latest
+            ghcr.io/rocobytes/pamir-frontend:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  deploy:
+    needs: images
+    runs-on: ubuntu-latest
+    # Bounds a stalled ssh/scp/curl call: without this, it would run to the
+    # 360-minute default while holding the deploy-production concurrency
+    # group below, queuing every later deployment behind it.
+    timeout-minutes: 20
+    # Requires a reviewer on the `production` environment. The job queues
+    # here and touches nothing until a human approves it.
+    environment: production
+    # Scoped to this job alone. At workflow level this would also queue the
+    # verify jobs, and a run parked on the approval above would hold the
+    # group — GitHub only auto-fails an unactioned approval after 30 days,
+    # so one slow approver could freeze all CI for the repository.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      TAG: ${{ needs.images.outputs.tag }}
+      VPS: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load the SSH credentials
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
+          printf '%s\n' "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_deploy ~/.ssh/known_hosts
+          # BatchMode/ConnectTimeout bound a stalled connection attempt.
+          # ServerAliveInterval/ServerAliveCountMax additionally bound a
+          # mid-transfer stall, which ConnectTimeout alone does not cover —
+          # that matters for the long-running `migrate deploy` step below.
+          # Applies to every ssh/scp in this job; restrictive permissions
+          # keep it consistent with the key and known_hosts files above.
+          cat > ~/.ssh/config <<'EOF'
+          Host *
+            BatchMode yes
+            ConnectTimeout 10
+            ServerAliveInterval 15
+            ServerAliveCountMax 4
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Sync the deployment files
+        run: |
+          scp -i ~/.ssh/id_deploy deploy/docker-compose.yml "$VPS:/opt/pamir/docker-compose.yml"
+          scp -i ~/.ssh/id_deploy deploy/check-alertas.sh "$VPS:/opt/pamir/bin/check-alertas.sh"
+          ssh -i ~/.ssh/id_deploy "$VPS" "chmod +x /opt/pamir/bin/check-alertas.sh"
+
+      - name: Pin this release in /opt/pamir/.env
+        run: |
+          ssh -i ~/.ssh/id_deploy "$VPS" "
+            set -eu
+            cd /opt/pamir
+            # Refuse to continue if the env file is not there. Without this the
+            # grep below fails, '|| true' swallows it, .env.next is left empty,
+            # and the mv replaces every production secret with one PAMIR_TAG line.
+            test -f .env
+            # \`grep -v\` exits non-zero when it selects no lines at all — an
+            # empty .env, or one holding only PAMIR_TAG= lines — so its status
+            # must not abort the step...
+            grep -v '^PAMIR_TAG=' .env > .env.next || true
+            # ...and \`test -s\` below is what actually catches that case: an
+            # empty result means we are about to wipe the file.
+            test -s .env.next
+            echo 'PAMIR_TAG=$TAG' >> .env.next
+            mv .env.next .env
+            chmod 600 .env
+          "
+
+      - name: Pull the new images
+        run: ssh -i ~/.ssh/id_deploy "$VPS" "cd /opt/pamir && docker compose pull"
+
+      - name: Report pending migrations
+        # `prisma migrate status` exits 1 when migrations are pending. That is
+        # the expected, informative case, so it must not fail the job — the
+        # point of this step is to print the list into the log.
+        run: |
+          ssh -i ~/.ssh/id_deploy "$VPS" \
+            "cd /opt/pamir && docker compose run --rm migrate npx prisma migrate status" || true
+
+      - name: Apply migrations
+        run: ssh -i ~/.ssh/id_deploy "$VPS" "cd /opt/pamir && docker compose run --rm migrate"
+
+      - name: Roll the containers
+        run: |
+          ssh -i ~/.ssh/id_deploy "$VPS" "
+            set -eu
+            cd /opt/pamir
+            docker compose up -d --remove-orphans
+            docker image prune -f
+          "
+
+      - name: Verify the deployment is healthy
+        run: |
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS --connect-timeout 5 --max-time 10 https://andinoclubpamir.app/api/health; then
+              echo "healthy after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "attempt ${i} failed; retrying"
+            sleep 5
+          done
+          echo "backend never became healthy"
+          exit 1
