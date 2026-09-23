@@ -581,10 +581,12 @@ Add to the end of `.github/workflows/deploy.yml`:
             # grep below fails, '|| true' swallows it, .env.next is left empty,
             # and the mv replaces every production secret with one PAMIR_TAG line.
             test -f .env
-            # grep -v exits non-zero when nothing matches, the normal case on a
-            # first deploy, so its status must not abort the step...
+            # \`grep -v\` exits non-zero when it selects no lines at all — an
+            # empty .env, or one holding only PAMIR_TAG= lines — so its status
+            # must not abort the step...
             grep -v '^PAMIR_TAG=' .env > .env.next || true
-            # ...but an empty result means we are about to wipe the file.
+            # ...and \`test -s\` below is what actually catches that case: an
+            # empty result means we are about to wipe the file.
             test -s .env.next
             echo 'PAMIR_TAG=$TAG' >> .env.next
             mv .env.next .env
@@ -753,7 +755,7 @@ These must exist before Task 6's deploy job can succeed. The pipeline cannot cre
 
 | Setting | Where |
 |---------|-------|
-| `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS` | Repository secrets |
+| `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS` | Environment secrets on the `production` environment (not repository secrets — a repository secret is readable by any job in any workflow, and only the `deploy` job's environment gate would limit that) |
 | Environment `production` with a required reviewer | Repository settings → Environments |
 | GHCR packages linked to this repository | Package settings, so `GITHUB_TOKEN` may push |
 

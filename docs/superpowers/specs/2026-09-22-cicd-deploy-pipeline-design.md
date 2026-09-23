@@ -158,12 +158,17 @@ not block the production deploy path.
 
 Because production trails `main` by 43 commits, the first run will apply a backlog against
 the live Neon database. Splitting the step in two — `migrate status` to report, then
-`migrate deploy` to apply — means the human approving the deployment sees the exact list of
-pending migrations in the job log before anything is written.
+`migrate deploy` to apply — guarantees that nothing is written before the pending list is
+printed. It does **not** put that list in front of the approver: both steps run inside the
+`production`-gated `deploy` job, and the environment gate fires before the job starts, so the
+approver has already clicked Approve by the time `migrate status` prints. For a genuinely
+informed approval, the approver must ssh to the VPS and run
+`cd /opt/pamir && docker compose run --rm migrate npx prisma migrate status` before approving.
 
 `backend/prisma/migrations/` holds 29 migration directories, the most recent being
 `20260922120000_add_organization_logo`. How many are unapplied in production is unknown from
-outside and will be revealed by the first `migrate status` run.
+outside and will be revealed by the first `migrate status` run — or, before approving, by that
+manual `migrate status` check.
 
 ## Rollback
 
@@ -185,6 +190,13 @@ Created by the repository owner; the pipeline cannot provision them.
 | `VPS_SSH_KEY` | Private key for that user |
 | `VPS_KNOWN_HOSTS` | Pinned host key, so the deploy never blindly trusts an unknown server |
 
+These four must be **environment secrets on the `production` environment**, not repository
+secrets. A repository secret is readable by any job in any workflow in the repository,
+including one added on a same-repository branch; only the `deploy` job is gated, so a
+repository secret's exposure is not limited by that gate at all. The `deploy` job already
+declares `environment: production`, so every `${{ secrets.VPS_* }}` reference resolves
+unchanged, and no other job in the repository can read them.
+
 Plus a GitHub Environment named `production` with the owner as required reviewer, and GHCR
 packages linked to the repository so `GITHUB_TOKEN` is allowed to push.
 
@@ -192,7 +204,7 @@ packages linked to the repository so `GITHUB_TOKEN` is allowed to push.
 
 | Risk | Mitigation |
 |------|-----------|
-| First deploy applies a large migration backlog | `migrate status` reported before approval |
+| First deploy applies a large migration backlog | `migrate status` runs before `migrate deploy` inside the gated job, guaranteeing nothing is written before it prints — but the approver does not see that printout before approving (see Migration safety); the approver must run `prisma migrate status` on the VPS by hand first |
 | Unverified assumption that tests pass in a clean environment | The plan must run the suite with no local `.env` present; some tests may read environment variables |
 | `riala.cl` zone is not Full (strict) | Out of scope here, but flagged: the origin certificate does not cover `riala.cl`, so that leg is not validating. Owner to review in the Cloudflare panel |
-| SSH key stored in GitHub | Scope the deploy user to what it needs; the approval gate limits when it can be used |
+| SSH key stored in GitHub | Scope the deploy user to what it needs; stored as an environment secret on `production`, so only the gated `deploy` job can read it and the approval gate limits when it is used |

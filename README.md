@@ -654,12 +654,21 @@ en espera hasta que una persona lo aprueba.
    - levanta los contenedores (`docker compose up -d --remove-orphans`),
    - y verifica `/api/health` antes de darse por terminado.
 
+La aprobación se dispara antes de que el job arranque, así que quien aprueba **no** ve
+todavía ese listado de `prisma migrate status`: se imprime recién después, dentro del
+job. Para aprobar con conocimiento real de qué migraciones se van a aplicar, antes de
+aprobar hay que conectarse por SSH al VPS y correr:
+
+```bash
+cd /opt/pamir && docker compose run --rm migrate npx prisma migrate status
+```
+
 El frontend se construye **sin** `VITE_API_URL`: el SPA usa `/api` relativo
 (same-origin).
 
 Configuración que el pipeline no puede crear por sí mismo:
 
-- Secrets del repositorio: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`.
+- Secrets del entorno `production`: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`.
 - Un entorno `production` en GitHub con un revisor obligatorio.
 - `/opt/pamir/.env` debe existir de antemano con los secrets reales; el paso de
   despliegue se niega a continuar si no lo encuentra, para no arriesgarse a
