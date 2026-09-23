@@ -15,11 +15,7 @@ import { prisma } from '../lib/prisma.js';
 import { verifyDbTargetOrExit as guardVerifyDbTargetOrExit } from '../lib/db-target-guard.js';
 import { runAsPlatform } from '../lib/tenant-context.js';
 import { deleteStoredFileBestEffort } from '../lib/storage/delete-best-effort.js';
-const OLD_SLUG = 'pamir';
-const NEW_SLUG = 'riala';
-const NEW_NAME = 'RIALA';
-const NEW_SHORT_NAME = 'RIALA';
-const NEW_MEMBRESIA_PROPIA = 'SOCIO_RIALA';
+import { NEW_MEMBRESIA_PROPIA, NEW_NAME, NEW_SHORT_NAME, NEW_SLUG, OLD_SLUG, planRebrand, } from './rebrand-house-club-plan.js';
 // Defensa en profundidad: npm run oneoff:rebrand-house-club ya ejecuta el
 // guard como pre-hook, pero este script también puede invocarse directamente
 // con tsx. Mismo patrón que create-user.ts/tenant.ts.
@@ -30,37 +26,6 @@ function verifyDbTargetOrExit() {
         failureMessage: '[rebrand-house-club] Comando abortado: DATABASE_URL no coincide con la base de datos de v2 declarada en ' +
             'backend/db-target.json. Si esto corre en el contenedor de producción, define ALLOW_ANY_DB_TARGET=1.',
     });
-}
-/**
- * Pura (sin Prisma ni storage): decide qué cambia dado el estado actual leído
- * de la base. Separada de main() para poder probarla sin base de datos —
- * mismo patrón que membresiaParaNuevaFicha en lib/integrante-membresia.ts.
- */
-export function planRebrand({ pamirOrg, rialaExists }) {
-    if (!pamirOrg) {
-        return rialaExists ? { kind: 'already-applied' } : { kind: 'pamir-not-found' };
-    }
-    const changes = [];
-    if (pamirOrg.slug !== NEW_SLUG) {
-        changes.push({ campo: 'slug', antes: pamirOrg.slug, despues: NEW_SLUG });
-    }
-    if (pamirOrg.name !== NEW_NAME) {
-        changes.push({ campo: 'name', antes: pamirOrg.name, despues: NEW_NAME });
-    }
-    if (pamirOrg.shortName !== NEW_SHORT_NAME) {
-        changes.push({
-            campo: 'shortName',
-            antes: pamirOrg.shortName ?? '(sin nombre corto)',
-            despues: NEW_SHORT_NAME,
-        });
-    }
-    if (pamirOrg.membresiaPropia !== NEW_MEMBRESIA_PROPIA) {
-        changes.push({ campo: 'membresiaPropia', antes: pamirOrg.membresiaPropia, despues: NEW_MEMBRESIA_PROPIA });
-    }
-    if (pamirOrg.logoObjectKey !== null) {
-        changes.push({ campo: 'logoObjectKey', antes: pamirOrg.logoObjectKey, despues: '(borrado)' });
-    }
-    return { kind: 'plan', changes };
 }
 function printPlan(plan) {
     if (plan.kind === 'already-applied') {

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { planRebrand } from './rebrand-house-club.js';
+import { planRebrand } from './rebrand-house-club-plan.js';
 
 const PAMIR_HOY = {
   slug: 'pamir',
