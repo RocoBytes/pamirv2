@@ -3,6 +3,7 @@ import type { Route } from '@playwright/test'
 import {
   setAuth,
   mockHasIntegrante,
+  mockNoIntegrante,
   mockSalidas,
   MOCK_ADMIN,
   MOCK_LIDER,
@@ -31,6 +32,8 @@ function mockCodigo(overrides: Record<string, unknown> = {}) {
     createdAt: new Date().toISOString(),
     estado: 'ACTIVO',
     creadoPor: { id: MOCK_ADMIN.id, name: MOCK_ADMIN.name },
+    modo: 'CORREO',
+    registrado: null,
     ...overrides,
   }
 }
@@ -113,6 +116,77 @@ test.describe('QR del club — ADMIN', () => {
     await page.getByRole('button', { name: 'Sí, revocar' }).click()
     await expect.poll(() => revocarLlamado).toBe(true)
     await expect(page.getByText('Revocado')).toBeVisible()
+  })
+
+  test('QR directo: panel con QR y cuenta regresiva, cambia solo a AGOTADO con quien se registró, y "Generar otro" crea uno nuevo', async ({ page }) => {
+    let crearCount = 0
+    let estadoCount = 0
+
+    await page.route('**/api/invitaciones/qr', async (route: Route) => {
+      const req = route.request()
+      if (req.method() === 'GET') {
+        await route.fulfill({ status: 200, json: { codigos: [] } })
+        return
+      }
+      if (req.method() === 'POST') {
+        crearCount += 1
+        expect(req.postDataJSON()).toEqual({ modo: 'DIRECTO' })
+        const codigo = mockCodigo({
+          id: `qr-directo-${crearCount}`,
+          modo: 'DIRECTO',
+          maxUsos: 1,
+          usosRestantes: 1,
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        })
+        await route.fulfill({
+          status: 201,
+          json: { codigo, qrUrl: `http://localhost:5174/#qr=directo-token-${crearCount}` },
+        })
+        return
+      }
+      await route.continue()
+    })
+
+    // El primer código pasa a AGOTADO con "registrado" en su primer poll (a
+    // los 4s); el segundo (creado por "Generar otro") se mantiene ACTIVO.
+    await page.route('**/api/invitaciones/qr/qr-directo-1/estado', (route: Route) => {
+      estadoCount += 1
+      void route.fulfill({
+        status: 200,
+        json: {
+          estado: 'AGOTADO',
+          registrado: { name: 'Persona Nueva', email: 'nueva@example.com' },
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        },
+      })
+    })
+    await page.route('**/api/invitaciones/qr/qr-directo-2/estado', (route: Route) => {
+      void route.fulfill({
+        status: 200,
+        json: {
+          estado: 'ACTIVO',
+          registrado: null,
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        },
+      })
+    })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Invitar al club' }).click()
+    await page.getByRole('tab', { name: 'QR del club' }).click()
+
+    await page.getByRole('button', { name: 'QR directo (1 persona)' }).click()
+    await expect(page.getByAltText('QR directo')).toBeVisible()
+    await expect(page.getByText(/Vence en \d{2}:\d{2}/)).toBeVisible()
+
+    // Poleado cada 4s — se detecta el cambio a AGOTADO sin recargar ni hacer clic.
+    await expect(page.getByText('¡Listo! Persona Nueva se unió a')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('nueva@example.com')).toBeVisible()
+    await expect.poll(() => estadoCount).toBeGreaterThan(0)
+
+    await page.getByRole('button', { name: 'Generar otro QR directo' }).click()
+    await expect(page.getByAltText('QR directo')).toBeVisible()
+    await expect.poll(() => crearCount).toBe(2)
   })
 })
 
@@ -201,5 +275,100 @@ test.describe('QR del club — landing pública', () => {
     await page.goto('/#qr=tokLimitado')
 
     await expect(page.getByText('Demasiados intentos. Espera unos minutos e inténtalo de nuevo.')).toBeVisible()
+  })
+})
+
+test.describe('QR directo — landing pública (registro en el acto)', () => {
+  function mockConsultarDirecto() {
+    return (route: Route) => {
+      void route.fulfill({
+        status: 200,
+        json: { organization: QR_BRAND, expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), modo: 'DIRECTO' },
+      })
+    }
+  }
+
+  async function llenarFormulario(page: import('@playwright/test').Page) {
+    await page.getByLabel('Nombre completo').fill('Persona Directa')
+    await page.getByLabel('Correo electrónico').fill('nueva-directo@example.com')
+    await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('password123')
+    await page.getByRole('textbox', { name: 'Confirmar contraseña', exact: true }).fill('password123')
+  }
+
+  test('camino feliz: se registra, inicia sesión y entra a la app', async ({ page }) => {
+    await page.route('**/api/qr/consultar', mockConsultarDirecto())
+    let registrarBody: unknown = null
+    await page.route('**/api/qr/registrar', (route: Route) => {
+      registrarBody = route.request().postDataJSON()
+      void route.fulfill({ status: 201, json: { ok: true } })
+    })
+    await page.route('**/api/auth/login', (route: Route) => {
+      void route.fulfill({
+        status: 200,
+        json: {
+          user: {
+            id: 'user-directo-001',
+            email: 'nueva-directo@example.com',
+            name: 'Persona Directa',
+            rol: 'SOCIO',
+            gestorCategorias: [],
+            organization: PAMIR_ORG,
+          },
+          token: 'mock-jwt-directo',
+        },
+      })
+    })
+    await mockNoIntegrante(page)
+    await mockSalidas(page)
+
+    await page.goto('/#qr=tokDirecto')
+
+    await expect(page.getByRole('heading', { name: /Únete a/ })).toBeVisible()
+    await llenarFormulario(page)
+    await page.getByRole('button', { name: 'Unirme ahora' }).click()
+
+    await expect.poll(() => registrarBody).toEqual({
+      token: 'tokDirecto',
+      name: 'Persona Directa',
+      email: 'nueva-directo@example.com',
+      password: 'password123',
+    })
+
+    // Login automático con las mismas credenciales, sin token de sesión en la
+    // respuesta de /registrar — aterriza directo en la app (dashboard).
+    await expect(page.getByText('Completa tu registro').first()).toBeVisible()
+  })
+
+  test('409 (correo ya registrado) ofrece iniciar sesión', async ({ page }) => {
+    await page.route('**/api/qr/consultar', mockConsultarDirecto())
+    await page.route('**/api/qr/registrar', (route: Route) => {
+      void route.fulfill({ status: 409, json: { error: 'Ya existe una cuenta con ese correo. Inicia sesión.' } })
+    })
+
+    await page.goto('/#qr=tokConflicto')
+    await llenarFormulario(page)
+    await page.getByRole('button', { name: 'Unirme ahora' }).click()
+
+    await expect(page.getByText('Ya existe una cuenta con ese correo')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
+  })
+
+  test('las contraseñas que no coinciden se detectan sin llamar al backend', async ({ page }) => {
+    await page.route('**/api/qr/consultar', mockConsultarDirecto())
+    let registrarLlamado = false
+    await page.route('**/api/qr/registrar', (route: Route) => {
+      registrarLlamado = true
+      void route.fulfill({ status: 201, json: { ok: true } })
+    })
+
+    await page.goto('/#qr=tokMismatch')
+    await page.getByLabel('Nombre completo').fill('Alguien')
+    await page.getByLabel('Correo electrónico').fill('alguien@example.com')
+    await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('password123')
+    await page.getByRole('textbox', { name: 'Confirmar contraseña', exact: true }).fill('otraClave123')
+    await page.getByRole('button', { name: 'Unirme ahora' }).click()
+
+    await expect(page.getByText('Las contraseñas no coinciden')).toBeVisible()
+    expect(registrarLlamado).toBe(false)
   })
 })

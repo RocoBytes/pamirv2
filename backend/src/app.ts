@@ -10,6 +10,7 @@ import {
   verifiedUserOrIpKey,
   isAuthSubpathWithOwnLimit,
   isOwnRateLimitFamily,
+  isQrEstadoPath,
 } from './lib/rate-limits.js';
 
 const app: Application = express();
@@ -103,16 +104,34 @@ app.use('/api/auth', rateLimit({
 
 // Límite específico para invitaciones autenticadas (ADMIN/LIDER, envían
 // correo) — cubre también /api/invitaciones/qr/* (gestión del QR reusable).
+// GET .../qr/:id/estado queda afuera (ver isQrEstadoPath): tiene su propio
+// límite, más abajo.
 app.use('/api/invitaciones', rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 60,
+  skip: isQrEstadoPath,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes de invitaciones, intenta más tarde' },
 }));
 
-// QR público (consultar/solicitar): amplio por IP + fino por token del QR
-// (para /solicitar, que es el que efectivamente mintea una invitación).
+// GET /api/invitaciones/qr/:id/estado: lo polea la pantalla de quien generó
+// un QR directo cada pocos segundos mientras espera un escaneo — límite
+// propio y amplio, por usuario autenticado (no por IP: varios ADMIN/LIDER
+// del mismo recinto no deben ahogarse entre sí). Ver isQrEstadoPath/
+// isOwnRateLimitFamily en lib/rate-limits.ts para las dos exenciones que lo
+// sacan de las familias de arriba y de la general de "/api" más abajo.
+app.use('/api/invitaciones/qr/:id/estado', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  keyGenerator: verifiedUserOrIpKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes, intenta más tarde' },
+}));
+
+// QR público (consultar/solicitar/registrar): amplio por IP + fino por token
+// del QR para el endpoint que efectivamente consume un uso.
 app.use('/api/qr', rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
@@ -123,6 +142,18 @@ app.use('/api/qr', rateLimit({
 app.use('/api/qr/solicitar', rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 400,
+  keyGenerator: qrTokenKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes para este código QR, intenta más tarde' },
+}));
+// Un QR directo sirve UNA sola vez: un tope mucho más bajo que /solicitar
+// (que mintea invitaciones repetibles) alcanza de sobra para el uso legítimo
+// (unos pocos intentos fallidos de contraseña/email) y frena cualquier
+// intento de fuerza bruta contra un token capturado.
+app.use('/api/qr/registrar', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
   keyGenerator: qrTokenKey,
   standardHeaders: true,
   legacyHeaders: false,

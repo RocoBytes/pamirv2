@@ -2,6 +2,7 @@
 // negocio (codigos-qr.service.ts) por la misma razón que invitaciones.repo.
 // prisma.ts: así el servicio se puede probar con un repositorio en memoria.
 import { prisma } from '../lib/prisma.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { runAsPlatform } from '../lib/tenant-context.js';
 import type { CodigosQrRepo, CodigoQrConCreador } from './codigos-qr.service.js';
 
@@ -35,7 +36,7 @@ export const codigosQrRepoPrisma: CodigosQrRepo = {
   },
 
   async findUserById(id) {
-    return prisma.user.findUnique({ where: { id }, select: { id: true, name: true, rol: true } });
+    return prisma.user.findUnique({ where: { id }, select: { id: true, name: true, rol: true, email: true } });
   },
 
   // SIEMPRE en contexto de plataforma, sin importar el contexto del llamador:
@@ -85,5 +86,52 @@ export const codigosQrRepoPrisma: CodigosQrRepo = {
         },
       });
     });
+  },
+
+  async registrarUsuarioQrDirecto({ codigoQrId, organizationId, email, name, passwordHash, rol, now }) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        // Update condicional, igual que mintInvitacion: solo decrementa si el
+        // código sigue siendo DIRECTO, activo y con su único uso disponible.
+        // count !== 1 significa que otra request ya lo consumió (o lo revocó)
+        // entre verificarVigenciaQr y este punto.
+        const { count } = await tx.codigoQrInvitacion.updateMany({
+          where: {
+            id: codigoQrId,
+            modo: 'DIRECTO',
+            revocadoAt: null,
+            expiresAt: { gt: now },
+            usosRestantes: { gt: 0 },
+          },
+          data: { usosRestantes: { decrement: 1 } },
+        });
+        if (count !== 1) {
+          return { kind: 'agotado' };
+        }
+
+        // Mismo shape que acceptInvitacion (acá arriba): mismo costo de
+        // bcrypt, mismos campos, emailVerified true — el QR de un solo uso,
+        // mostrado en persona, reemplaza el paso de verificación por correo.
+        const user = await tx.user.create({
+          data: { organizationId, email, name, passwordHash, rol, emailVerified: true },
+          select: { id: true, email: true, name: true, rol: true },
+        });
+
+        await tx.codigoQrInvitacion.update({
+          where: { id: codigoQrId },
+          data: { registradoUsuarioId: user.id },
+        });
+
+        return { kind: 'ok', user };
+      });
+    } catch (error) {
+      // P2002: violación del unique de User.email — otra request ganó la
+      // carrera para el mismo correo entre el chequeo previo del servicio y
+      // este punto. La transacción ya revirtió el decremento de usosRestantes.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return { kind: 'email-en-uso' };
+      }
+      throw error;
+    }
   },
 };

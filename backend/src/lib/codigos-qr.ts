@@ -23,6 +23,13 @@ export const QR_MAX_USOS_TOPE = 200;
 
 export const QR_ETIQUETA_MAX = 80;
 
+// Un QR "directo" (ModoCodigoQr.DIRECTO) sirve para dar de alta a UNA sola
+// persona en el momento (evento, seminario en la puerta): a diferencia del QR
+// reusable, su duración y su tope de usos nunca se negocian con el cliente —
+// siempre 15 minutos y un único uso — ver crearCodigoQr en el servicio.
+export const QR_DIRECTO_TTL_MS = 15 * 60 * 1000;
+export const QR_DIRECTO_MAX_USOS = 1;
+
 export type EstadoCodigoQr = 'ACTIVO' | 'EXPIRADO' | 'AGOTADO' | 'REVOCADO';
 
 interface CodigoQrEstadoInput {

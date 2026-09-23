@@ -59,8 +59,26 @@ export function verifiedUserOrIpKey(req) {
 export function isAuthSubpathWithOwnLimit(req) {
     return req.path === '/login' || req.path.startsWith('/invitaciones/');
 }
+// GET /api/invitaciones/qr/:id/estado: lo polea la pantalla de quien generó
+// un QR directo mientras espera que alguien lo escanee, cada pocos segundos.
+// El límite de 60/15min pensado para gestionar invitaciones (crear, listar,
+// revocar) ahogaría ese polling en cualquier evento con más de un puñado de
+// personas registrándose — queda afuera de esa familia y de la de "/api"
+// (ver isOwnRateLimitFamily) con su propio límite, más amplio, en app.ts.
+const QR_ESTADO_SUBPATH_RE = /^\/qr\/[^/]+\/estado$/;
+export function isQrEstadoPath(req) {
+    return QR_ESTADO_SUBPATH_RE.test(req.path);
+}
+// Mismo patrón que arriba, pero relativo al punto de montaje de "/api" (no al
+// de "/api/invitaciones"): lo usa isOwnRateLimitFamily.
+const QR_ESTADO_FROM_API_RE = /^\/invitaciones\/qr\/[^/]+\/estado$/;
 // Para el limitador general de "/api" (300, por usuario o IP): /auth y /qr
-// tienen sus propias familias de límites — mismo motivo que arriba.
+// tienen sus propias familias de límites, y GET .../qr/:id/estado también
+// (ver arriba) — mismo motivo que isAuthSubpathWithOwnLimit.
 export function isOwnRateLimitFamily(req) {
-    return req.path === '/auth' || req.path.startsWith('/auth/') || req.path === '/qr' || req.path.startsWith('/qr/');
+    return (req.path === '/auth' ||
+        req.path.startsWith('/auth/') ||
+        req.path === '/qr' ||
+        req.path.startsWith('/qr/') ||
+        QR_ESTADO_FROM_API_RE.test(req.path));
 }

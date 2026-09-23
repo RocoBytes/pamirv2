@@ -78,6 +78,9 @@ const PUBLIC_ROUTES: PublicRouteEntry[] = [
   // individual — ver codigos-qr.controller.ts.
   { method: 'POST', path: '/api/qr/consultar' },
   { method: 'POST', path: '/api/qr/solicitar' },
+  // QR directo: da de alta la cuenta en el acto, sin sesión previa (es el
+  // mecanismo para CREAR la cuenta) — mismo motivo que /api/qr/solicitar.
+  { method: 'POST', path: '/api/qr/registrar' },
 ];
 
 function joinPath(prefix: string, routePath: string): string {

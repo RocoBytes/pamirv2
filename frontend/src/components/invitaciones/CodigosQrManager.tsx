@@ -11,11 +11,14 @@ import {
   Printer,
   Maximize,
   X,
+  UserPlus,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react'
 
-import { listarCodigosQr, crearCodigoQr, verCodigoQr, revocarCodigoQr } from '../../lib/api'
+import { listarCodigosQr, crearCodigoQr, verCodigoQr, revocarCodigoQr, estadoCodigoQr } from '../../lib/api'
 import type { CodigoQr, EstadoCodigoQr, QrDuracion } from '../../types/codigo-qr'
-import { QR_DURACION_LABELS, ESTADO_CODIGO_QR_LABELS } from '../../types/codigo-qr'
+import { QR_DURACION_LABELS, ESTADO_CODIGO_QR_LABELS, MODO_CODIGO_QR_LABELS } from '../../types/codigo-qr'
 import type { Rol } from '../../types/invitacion'
 import { useOrganization } from '../../hooks/useOrganization'
 import { renderQrSvg, renderQrPngDataUrl, buildQrFileName } from '../../lib/qr'
@@ -56,6 +59,23 @@ function EstadoBadge({ estado }: { estado: EstadoCodigoQr }) {
       {ESTADO_CODIGO_QR_LABELS[estado]}
     </span>
   )
+}
+
+function ModoBadge({ modo }: { modo: CodigoQr['modo'] }) {
+  return (
+    <span className="inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md bg-primary-fixed text-primary">
+      {MODO_CODIGO_QR_LABELS[modo]}
+    </span>
+  )
+}
+
+// mm:ss — nunca negativo (el servidor decide la vigencia real; esto es solo
+// el conteo visual mientras se polea el estado).
+function formatCountdown(msRestantes: number): string {
+  const totalSeconds = Math.max(0, Math.floor(msRestantes / 1000))
+  const mm = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
+  const ss = String(totalSeconds % 60).padStart(2, '0')
+  return `${mm}:${ss}`
 }
 
 // ─── Overlay a pantalla completa (Proyectar / Imprimir) ────────────────────────
@@ -130,6 +150,173 @@ function ProyeccionOverlay({ qrUrl, expiresAt, onClose }: ProyeccionOverlayProps
       </div>
     </div>,
     document.body,
+  )
+}
+
+// ─── Panel del QR directo (1 persona) ──────────────────────────────────────────
+// Poleado (GET .../qr/:id/estado) cada 4s mientras sigue ACTIVO, para que
+// quien lo generó vea en vivo el momento exacto en que alguien se registra —
+// sin recargar ni volver a hacer clic en nada. Se pausa mientras la pestaña
+// está oculta (retoma un poll inmediato al volver a estar visible) y se
+// detiene por completo en cualquier estado terminal o al desmontar.
+
+interface QrDirectoPanelProps {
+  codigo: CodigoQr
+  qrUrl: string
+  onGenerarOtro: () => void
+  onCerrar: () => void
+}
+
+const POLL_INTERVAL_MS = 4000
+
+function QrDirectoPanel({ codigo: codigoInicial, qrUrl, onGenerarOtro, onCerrar }: QrDirectoPanelProps) {
+  const { displayName } = useOrganization()
+  const expiresAtMs = new Date(codigoInicial.expiresAt).getTime()
+
+  const [estado, setEstado] = useState<EstadoCodigoQr>(codigoInicial.estado)
+  const [registrado, setRegistrado] = useState<CodigoQr['registrado']>(codigoInicial.registrado)
+  const [msRestantes, setMsRestantes] = useState(() => expiresAtMs - Date.now())
+  const [overlay, setOverlay] = useState(false)
+  const [confirmCancelar, setConfirmCancelar] = useState(false)
+  const [cancelando, setCancelando] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+
+  // Cuenta regresiva visual (1s) — la vigencia real siempre la decide el
+  // servidor; esto es puramente cosmético mientras se espera un escaneo.
+  useEffect(() => {
+    if (estado !== 'ACTIVO') return
+    const id = setInterval(() => setMsRestantes(expiresAtMs - Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [estado, expiresAtMs])
+
+  useEffect(() => {
+    if (estado !== 'ACTIVO') return
+    let cancelled = false
+
+    async function poll() {
+      if (document.visibilityState !== 'visible') return
+      try {
+        const result = await estadoCodigoQr(codigoInicial.id)
+        if (cancelled) return
+        setEstado(result.estado)
+        setRegistrado(result.registrado)
+      } catch {
+        // Un fallo de red puntual no corta el polling: se reintenta solo en
+        // el siguiente tick.
+      }
+    }
+
+    const id = setInterval(() => void poll(), POLL_INTERVAL_MS)
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') void poll()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      cancelled = true
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [estado, codigoInicial.id])
+
+  // Alguien más (otra pestaña, otro ADMIN) revocó este código mientras el
+  // panel seguía abierto: se cierra solo, igual que pide el diseño. El
+  // cierre por la propia acción "Cancelar" de este panel no pasa por acá —
+  // handleCancelar llama a onCerrar() directamente.
+  useEffect(() => {
+    if (estado === 'REVOCADO') onCerrar()
+  }, [estado, onCerrar])
+
+  async function handleCancelar() {
+    setCancelando(true)
+    setCancelError(null)
+    try {
+      await revocarCodigoQr(codigoInicial.id)
+      onCerrar()
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : 'No se pudo cancelar el código QR')
+      setCancelando(false)
+    }
+  }
+
+  if (estado === 'AGOTADO' && registrado) {
+    return (
+      <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-6 mb-5 flex flex-col items-center gap-3 text-center">
+        <CheckCircle2 size={40} className="text-emerald-600" />
+        <p className="text-lg font-bold text-slate-900">
+          ¡Listo! {registrado.name} se unió a {displayName}
+        </p>
+        <p className="text-sm text-on-surface-variant">{registrado.email}</p>
+        <Button onClick={onGenerarOtro} className="mt-2">
+          <UserPlus size={16} /> Generar otro QR directo
+        </Button>
+      </div>
+    )
+  }
+
+  if (estado === 'EXPIRADO' || (estado === 'AGOTADO' && !registrado)) {
+    return (
+      <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-6 mb-5 flex flex-col items-center gap-3 text-center">
+        <Clock size={36} className="text-amber-600" />
+        <p className="text-sm font-semibold text-slate-700">Este QR venció sin usarse</p>
+        <Button onClick={onGenerarOtro} className="mt-2">
+          <UserPlus size={16} /> Generar otro QR directo
+        </Button>
+      </div>
+    )
+  }
+
+  if (estado === 'REVOCADO') return null
+
+  return (
+    <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-5 mb-5 flex flex-col items-center gap-3 text-center">
+      {codigoInicial.etiqueta && <p className="text-sm font-semibold text-slate-700">{codigoInicial.etiqueta}</p>}
+      <QrCode value={qrUrl} size={240} alt="QR directo" className="rounded-xl bg-white p-2 border border-secondary/10" />
+      <p className="text-sm font-semibold text-primary">Vence en {formatCountdown(msRestantes)}</p>
+      <p className="text-xs text-on-surface-variant">Sirve una sola vez y se actualiza solo apenas alguien se registre.</p>
+
+      {cancelError && (
+        <p className="text-xs text-error" role="alert">
+          {cancelError}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
+        <Button size="sm" variant="secondary" onClick={() => setOverlay(true)}>
+          <Maximize size={14} /> Proyectar
+        </Button>
+        {!confirmCancelar && (
+          <Button size="sm" variant="secondary" onClick={() => setConfirmCancelar(true)} disabled={cancelando}>
+            <X size={14} /> Cancelar
+          </Button>
+        )}
+        {confirmCancelar && (
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-semibold text-slate-700">¿Confirmar?</p>
+            <button
+              type="button"
+              onClick={() => void handleCancelar()}
+              disabled={cancelando}
+              className="inline-flex items-center gap-1 bg-red-600 text-white text-xs font-semibold px-2.5 py-1 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              {cancelando ? <Loader2 size={12} className="animate-spin" /> : 'Sí, cancelar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmCancelar(false)}
+              disabled={cancelando}
+              className="text-xs font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50"
+            >
+              Volver
+            </button>
+          </div>
+        )}
+      </div>
+
+      {overlay && (
+        <ProyeccionOverlay qrUrl={qrUrl} expiresAt={codigoInicial.expiresAt} onClose={() => setOverlay(false)} />
+      )}
+    </div>
   )
 }
 
@@ -230,6 +417,10 @@ export function CodigosQrManager({ rolActual }: CodigosQrManagerProps) {
 
   const [panel, setPanel] = useState<{ codigo: CodigoQr; qrUrl: string } | null>(null)
 
+  const [directoPanel, setDirectoPanel] = useState<{ codigo: CodigoQr; qrUrl: string } | null>(null)
+  const [creandoDirecto, setCreandoDirecto] = useState(false)
+  const [directoError, setDirectoError] = useState<string | null>(null)
+
   const [codigos, setCodigos] = useState<CodigoQr[] | null>(null)
   const [listError, setListError] = useState<string | null>(null)
 
@@ -282,6 +473,20 @@ export function CodigosQrManager({ rolActual }: CodigosQrManagerProps) {
     [duracion, maxUsos, etiqueta, load],
   )
 
+  const handleCrearDirecto = useCallback(async () => {
+    setDirectoError(null)
+    setCreandoDirecto(true)
+    try {
+      const result = await crearCodigoQr({ modo: 'DIRECTO' })
+      setDirectoPanel({ codigo: result.codigo, qrUrl: result.qrUrl })
+      await load()
+    } catch (err) {
+      setDirectoError(err instanceof Error ? err.message : 'No se pudo crear el QR directo')
+    } finally {
+      setCreandoDirecto(false)
+    }
+  }, [load])
+
   const handleVer = useCallback(async (id: string) => {
     setPendingId(id)
     setRowError((prev) => ({ ...prev, [id]: null }))
@@ -323,7 +528,39 @@ export function CodigosQrManager({ rolActual }: CodigosQrManagerProps) {
 
   return (
     <div>
-      {/* ── Formulario de creación ───────────────────────────────────────── */}
+      {/* ── QR directo (1 persona) ───────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 mb-5 flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <UserPlus size={16} className="text-primary" />
+          <h3 className="text-sm font-bold text-slate-900">QR directo (1 persona)</h3>
+        </div>
+        <p className="text-xs text-on-surface-variant">
+          Para registrar a alguien en el momento: sirve una vez y vence en 15 minutos.
+        </p>
+
+        {directoError && (
+          <p className="text-xs text-error" role="alert">
+            {directoError}
+          </p>
+        )}
+
+        <Button onClick={() => void handleCrearDirecto()} disabled={creandoDirecto} className="self-start">
+          {creandoDirecto ? <Loader2 size={16} className="animate-spin" /> : 'QR directo (1 persona)'}
+        </Button>
+      </div>
+
+      {directoPanel && (
+        <QrDirectoPanel
+          key={directoPanel.codigo.id}
+          codigo={directoPanel.codigo}
+          qrUrl={directoPanel.qrUrl}
+          onGenerarOtro={() => void handleCrearDirecto()}
+          onCerrar={() => setDirectoPanel(null)}
+        />
+      )}
+
+      {/* ── Formulario de creación (QR reutilizable) ─────────────────────── */}
+      <h3 className="text-sm font-bold text-slate-900 mb-3">QR reutilizable (seminarios)</h3>
       <form
         onSubmit={(e) => void handleCrear(e)}
         className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 mb-5 flex flex-col gap-3"
@@ -437,7 +674,10 @@ export function CodigosQrManager({ rolActual }: CodigosQrManagerProps) {
                       {c.usos} / {c.maxUsos} usos
                     </p>
                   </div>
-                  <EstadoBadge estado={c.estado} />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <ModoBadge modo={c.modo} />
+                    <EstadoBadge estado={c.estado} />
+                  </div>
                 </div>
                 <p className="text-xs text-on-surface-variant">Vence: {formatDate(c.expiresAt)}</p>
                 {mostrarCreador && (

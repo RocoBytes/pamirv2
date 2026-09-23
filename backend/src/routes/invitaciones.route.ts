@@ -11,6 +11,7 @@ import {
   listarCodigosQr,
   verCodigoQr,
   revocarCodigoQr,
+  estadoCodigoQr,
 } from '../controllers/codigos-qr.controller.js';
 
 const router = Router();
@@ -24,6 +25,10 @@ router.post('/qr', crearCodigoQr);
 router.get('/qr', listarCodigosQr);
 router.get('/qr/:id', verCodigoQr);
 router.post('/qr/:id/revocar', revocarCodigoQr);
+// Poleado por el panel de "QR directo" mientras espera un escaneo — exento
+// del limitador general de /api/invitaciones (ver app.ts) para no ahogar el
+// polling de un evento con mucha gente registrándose a la vez.
+router.get('/qr/:id/estado', estadoCodigoQr);
 
 router.post('/', crearInvitacion);
 router.get('/', listarInvitaciones);

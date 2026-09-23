@@ -57,6 +57,14 @@ enum OrganizationStatus {
   SUSPENDED
 }
 
+// CORREO: el QR reusable de siempre (pide una invitación por email). DIRECTO:
+// QR "de un solo uso" para un evento — quien lo escanea se registra en el
+// momento, sin paso de correo (ver ModoCodigoQr en codigos-qr.service.ts).
+enum ModoCodigoQr {
+  CORREO
+  DIRECTO
+}
+
 // ─── Multi-club ───────────────────────────────────────────────────────────────
 
 // Club de montaña (tenant). La app nació para un solo club (Andino Club
@@ -139,6 +147,9 @@ model User {
   invitacionesEnviadas Invitacion[]         @relation("InvitacionesEnviadas")
   invitacionAceptada   Invitacion?          @relation("InvitacionAceptada")
   codigosQrCreados     CodigoQrInvitacion[] @relation("CodigosQrCreados")
+  // El QR directo que dio de alta a este usuario (null para toda cuenta que
+  // nació por otro camino) — ver CodigoQrInvitacion.registradoUsuarioId.
+  codigoQrRegistro     CodigoQrInvitacion?  @relation("CodigoQrRegistro")
 
   @@index([organizationId])
   @@map("users")
@@ -216,22 +227,28 @@ model Invitacion {
 // mientras siga activo (ver verCodigoQr) — de ahí el cifrado reversible en
 // vez de solo un hash de un sentido.
 model CodigoQrInvitacion {
-  id             String     @id @default(uuid())
-  organizationId String     @map("organization_id")
-  tokenHash      String     @unique @map("token_hash")
-  tokenCifrado   String     @map("token_cifrado")
-  rol            RolUsuario @default(SOCIO)
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  tokenHash      String       @unique @map("token_hash")
+  tokenCifrado   String       @map("token_cifrado")
+  rol            RolUsuario   @default(SOCIO)
   etiqueta       String?
-  maxUsos        Int        @map("max_usos")
-  usosRestantes  Int        @map("usos_restantes")
-  expiresAt      DateTime   @map("expires_at")
-  revocadoAt     DateTime?  @map("revocado_at")
-  createdAt      DateTime   @default(now()) @map("created_at")
-  creadoPorId    String?    @map("creado_por_id")
+  maxUsos        Int          @map("max_usos")
+  usosRestantes  Int          @map("usos_restantes")
+  expiresAt      DateTime     @map("expires_at")
+  revocadoAt     DateTime?    @map("revocado_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  creadoPorId    String?      @map("creado_por_id")
+  modo           ModoCodigoQr @default(CORREO)
+  // Solo un código DIRECTO lo llena, y solo una vez (registrarConQrDirecto):
+  // el usuario que ese único uso dio de alta — ver codigos-qr.service.ts.
+  // Filas existentes (todas CORREO) quedan null.
+  registradoUsuarioId String? @unique @map("registrado_usuario_id")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  creadoPor    User?        @relation("CodigosQrCreados", fields: [creadoPorId], references: [id], onDelete: SetNull)
-  invitaciones Invitacion[]
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  creadoPor         User?        @relation("CodigosQrCreados", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  registradoUsuario User?        @relation("CodigoQrRegistro", fields: [registradoUsuarioId], references: [id], onDelete: SetNull)
+  invitaciones      Invitacion[]
 
   @@index([organizationId])
   @@index([creadoPorId])

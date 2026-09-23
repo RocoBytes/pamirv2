@@ -158,6 +158,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
         token={qrToken}
         isAuthenticated={isAuthenticated}
         onIrALaApp={() => setQrToken(null)}
+        onLogin={loginWithCredentials}
       />
     )
   }
