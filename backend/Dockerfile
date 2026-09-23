@@ -24,6 +24,9 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY prisma.config.ts ./
 COPY prisma ./prisma
+# Identifies images from this stack so the deploy can prune only its own
+# dangling images on the shared server, never other projects'.
+LABEL cl.riala.stack="riala"
 USER node
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \

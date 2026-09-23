@@ -12,12 +12,17 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# ── Etapa de runtime ──────────────────────────────────────────────────────────
-# nginx sirve el SPA, termina TLS (cert de origen de Cloudflare montado desde
-# /opt/pamir/certs) y proxea /api al contenedor del backend.
+# ── Runtime stage ─────────────────────────────────────────────────────────────
+# nginx serves the SPA and proxies /api to the backend container. It never
+# terminates TLS and mounts no certificates: it runs behind the server's
+# shared Traefik, which does that job and forwards plain HTTP over the
+# Docker network.
 FROM nginx:1.29-alpine AS runtime
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80 443
+# Identifies images from this stack so the deploy can prune only its own
+# dangling images on the shared server, never other projects'.
+LABEL cl.riala.stack="riala"
+EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD wget -q --spider http://127.0.0.1/healthz || exit 1

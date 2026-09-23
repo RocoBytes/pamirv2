@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-# Wrapper de cron para el chequeo de alarmas de cierre (CRÍTICO de seguridad).
-# Llama al backend por su puerto localhost-only para que CRON_SECRET nunca
-# transite por internet público ni quede en los access logs de nginx.
+# Cron wrapper for the closure alert check (SECURITY-CRITICAL).
+# Calls the backend through its localhost-only port so CRON_SECRET never
+# transits the public internet nor lands in nginx's access logs.
 #
-# Instalar en el VPS como /opt/pamir/bin/check-alertas.sh (chmod 700) e
-# invocar bajo flock para impedir solapamientos (el handler NO es seguro
-# ante concurrencia):
-#   */10 * * * * flock -n /opt/pamir/check-alertas.lock \
-#     /opt/pamir/bin/check-alertas.sh >> /opt/pamir/cron.log 2>&1
+# Install on the server as <DEPLOY_DIR>/bin/check-alertas.sh (chmod 700) and
+# invoke it under flock to prevent overlapping runs (the handler is NOT safe
+# under concurrency):
+#   */10 * * * * flock -n <DEPLOY_DIR>/check-alertas.lock \
+#     <DEPLOY_DIR>/bin/check-alertas.sh >> <DEPLOY_DIR>/cron.log 2>&1
 set -euo pipefail
 
-source <(grep -E '^CRON_SECRET=' /opt/pamir/.env)
+# The script lives at <DEPLOY_DIR>/bin/check-alertas.sh, so its own location
+# resolves the deploy directory without hardcoding a path.
+DEPLOY_DIR="${DEPLOY_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+BACKEND_PORT="${BACKEND_PORT:-3101}"
+
+source <(grep -E '^CRON_SECRET=' "$DEPLOY_DIR/.env")
 
 curl -fsS --max-time 300 \
-  "http://127.0.0.1:3001/api/cron/check-alertas?secret=${CRON_SECRET}"
+  "http://127.0.0.1:${BACKEND_PORT}/api/cron/check-alertas?secret=${CRON_SECRET}"
 echo
