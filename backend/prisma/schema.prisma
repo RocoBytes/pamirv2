@@ -92,6 +92,7 @@ model Organization {
   users                      User[]
   dashboardLayouts           DashboardLayout[]
   invitaciones               Invitacion[]
+  codigosQr                  CodigoQrInvitacion[]
   salidas                    Salida[]
   evaluacionTokens           EvaluacionToken[]
   evaluacionRespuestas       EvaluacionRespuesta[]
@@ -131,12 +132,13 @@ model User {
   salidas              Salida[]
   cierres              Cierre[]
   dashboardLayouts     DashboardLayout[]
-  eventosCreados       Evento[]          @relation("EventoCreador")
-  eventosFinalizados   Evento[]          @relation("EventoFinalizador")
+  eventosCreados       Evento[]             @relation("EventoCreador")
+  eventosFinalizados   Evento[]             @relation("EventoFinalizador")
   inscripciones        Inscripcion[]
   gestorCategorias     GestorCategoria[]
-  invitacionesEnviadas Invitacion[]      @relation("InvitacionesEnviadas")
-  invitacionAceptada   Invitacion?       @relation("InvitacionAceptada")
+  invitacionesEnviadas Invitacion[]         @relation("InvitacionesEnviadas")
+  invitacionAceptada   Invitacion?          @relation("InvitacionAceptada")
+  codigosQrCreados     CodigoQrInvitacion[] @relation("CodigosQrCreados")
 
   @@index([organizationId])
   @@map("users")
@@ -185,14 +187,55 @@ model Invitacion {
   revocadaAt           DateTime?  @map("revocada_at")
   createdAt            DateTime   @default(now()) @map("created_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  invitadoPor  User?        @relation("InvitacionesEnviadas", fields: [invitadoPorId], references: [id], onDelete: SetNull)
-  usuario      User?        @relation("InvitacionAceptada", fields: [usuarioId], references: [id], onDelete: SetNull)
+  // Código QR reusable que emitió esta invitación (null cuando nació de un
+  // envío individual por correo) — ver CodigoQrInvitacion abajo.
+  codigoQrId String? @map("codigo_qr_id")
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invitadoPor  User?               @relation("InvitacionesEnviadas", fields: [invitadoPorId], references: [id], onDelete: SetNull)
+  usuario      User?               @relation("InvitacionAceptada", fields: [usuarioId], references: [id], onDelete: SetNull)
+  codigoQr     CodigoQrInvitacion? @relation(fields: [codigoQrId], references: [id], onDelete: SetNull)
 
   @@index([email])
   @@index([invitadoPorId])
   @@index([organizationId])
+  @@index([codigoQrId])
   @@map("invitaciones")
+}
+
+// QR reusable de un club: a diferencia de Invitacion (un enlace personal de
+// un solo uso, atado a un email conocido de antemano), este código se
+// proyecta o imprime y cualquiera que lo escanee puede pedir SU PROPIA
+// invitación SOCIO (ver codigos-qr.service.ts, solicitarInvitacionQr). Cada
+// escaneo exitoso consume un uso (usosRestantes) y crea una fila Invitacion
+// normal — el QR nunca da de alta una cuenta directamente.
+//
+// tokenCifrado (no solo el hash) porque, a diferencia de una invitación por
+// correo, el token nunca vuelve a viajar por otro canal una vez creado: si
+// quien lo generó cierra la pantalla, debe poder RE-ABRIR el mismo QR
+// mientras siga activo (ver verCodigoQr) — de ahí el cifrado reversible en
+// vez de solo un hash de un sentido.
+model CodigoQrInvitacion {
+  id             String     @id @default(uuid())
+  organizationId String     @map("organization_id")
+  tokenHash      String     @unique @map("token_hash")
+  tokenCifrado   String     @map("token_cifrado")
+  rol            RolUsuario @default(SOCIO)
+  etiqueta       String?
+  maxUsos        Int        @map("max_usos")
+  usosRestantes  Int        @map("usos_restantes")
+  expiresAt      DateTime   @map("expires_at")
+  revocadoAt     DateTime?  @map("revocado_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  creadoPorId    String?    @map("creado_por_id")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  creadoPor    User?        @relation("CodigosQrCreados", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  invitaciones Invitacion[]
+
+  @@index([organizationId])
+  @@index([creadoPorId])
+  @@map("codigos_qr_invitacion")
 }
 
 model Salida {
