@@ -60,9 +60,9 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
     await expect(page.getByText('nuevo@example.com')).toBeVisible()
     await expect(page.getByText('Socio', { exact: true })).toBeVisible()
 
-    await page.getByPlaceholder('Nombre completo').fill('Nuevo Socio')
-    await page.getByPlaceholder('Contraseña (mín. 8 caracteres)').fill('password123')
-    await page.getByPlaceholder('Confirmar contraseña').fill('password123')
+    await page.getByLabel('Nombre completo').fill('Nuevo Socio')
+    await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('password123')
+    await page.getByRole('textbox', { name: 'Confirmar contraseña', exact: true }).fill('password123')
     await page.getByRole('button', { name: 'Crear cuenta' }).click()
 
     await expect(page.getByText('Completa tu registro').first()).toBeVisible()
@@ -102,9 +102,9 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
     await page.goto('/#invite=tok123')
     await expect(page.getByText('Admin Seguridad')).toBeVisible()
 
-    await page.getByPlaceholder('Nombre completo').fill('Nuevo Socio')
-    await page.getByPlaceholder('Contraseña (mín. 8 caracteres)').fill('password123')
-    await page.getByPlaceholder('Confirmar contraseña').fill('otraClave123')
+    await page.getByLabel('Nombre completo').fill('Nuevo Socio')
+    await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('password123')
+    await page.getByRole('textbox', { name: 'Confirmar contraseña', exact: true }).fill('otraClave123')
     await page.getByRole('button', { name: 'Crear cuenta' }).click()
 
     await expect(page.getByText('Las contraseñas no coinciden')).toBeVisible()
