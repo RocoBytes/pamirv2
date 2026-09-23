@@ -45,6 +45,7 @@ const ROUTERS: { prefix: string; modulePath: string }[] = [
   { prefix: '/invitaciones', modulePath: './invitaciones.route.js' },
   { prefix: '/organizacion', modulePath: './organizacion.route.js' },
   { prefix: '/clubes', modulePath: './clubes.route.js' },
+  { prefix: '/qr', modulePath: './qr-publico.route.js' },
 ];
 
 // Lista cerrada de rutas que SÍ pueden responder sin una sesión válida.
@@ -72,6 +73,11 @@ const PUBLIC_ROUTES: PublicRouteEntry[] = [
   // autenticar) necesitan poder pintarlos — ver clubes.controller.ts.
   { method: 'GET', path: '/api/clubes/:slug/marca' },
   { method: 'GET', path: '/api/clubes/:slug/logo' },
+  // QR reusable del club: consultar la marca antes de pedir la propia
+  // invitación es, a propósito, tan público como consultar una invitación
+  // individual — ver codigos-qr.controller.ts.
+  { method: 'POST', path: '/api/qr/consultar' },
+  { method: 'POST', path: '/api/qr/solicitar' },
 ];
 
 function joinPath(prefix: string, routePath: string): string {

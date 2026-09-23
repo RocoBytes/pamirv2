@@ -977,12 +977,31 @@ export interface InvitationEmailData {
   expiraEnDias: number;
 }
 
-export function buildInvitationEmail(data: InvitationEmailData, branding: OrgBranding): string {
+export interface InvitationEmailOptions {
+  // true cuando la invitación nació de solicitarInvitacionQr (alguien
+  // escaneó el QR reusable del club y pidió la suya): agrega un párrafo
+  // aclaratorio. Ausente (o false) deja el correo byte a byte igual que
+  // antes de este campo.
+  viaQr?: boolean;
+}
+
+export function buildInvitationEmail(
+  data: InvitationEmailData,
+  branding: OrgBranding,
+  opts: InvitationEmailOptions = {},
+): string {
   const inviteUrlSafe = escapeHtml(data.inviteUrl);
 
   const intro = `<p style="margin:0;color:#1f2937;font-size:15px;">
     <strong>${escapeHtml(data.invitadoPorNombre)}</strong> te invitó a crear una cuenta en el sistema de ${escapeHtml(branding.name)}.
-  </p>`;
+  </p>${
+    opts.viaQr
+      ? `
+  <p style="margin:10px 0 0;color:#1f2937;font-size:15px;">
+    Solicitaste esta invitación escaneando el código QR de ${escapeHtml(branding.name)}. Si no fuiste tú, puedes ignorar este correo.
+  </p>`
+      : ''
+  }`;
 
   const tabla = `${row('Rol asignado', data.rolLabel)}`;
 
