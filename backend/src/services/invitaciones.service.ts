@@ -583,6 +583,13 @@ export interface ConsultarInvitacionBody {
   // null cuando deps no expone getOrganizationBrand (dobles de prueba); el
   // controlador real (buildPublicDeps) siempre lo resuelve.
   organization: PublicOrganizationBrand | null;
+  // true si el email invitado ya tiene una cuenta RIALA (en este club o en
+  // otro). Solo se expone acá — la propia pantalla de quien SOSTIENE el
+  // token, consultando SU PROPIO email — nunca en una vista de admin (ver
+  // Global Constraints del plan de esta PR). Permite que la pantalla de
+  // aceptar invitación (PR 4b) muestre "inicia sesión" en vez de "crea tu
+  // cuenta" sin depender de que el correo lo haya dejado claro.
+  cuentaExistente: boolean;
 }
 
 export async function consultarInvitacion(
@@ -599,6 +606,7 @@ export async function consultarInvitacion(
   if (!('vigente' in vigencia)) return vigencia;
 
   const organization = deps.getOrganizationBrand ? await deps.getOrganizationBrand(inv.organizationId) : null;
+  const existing = await deps.repo.findAccountForOwnershipProof(inv.email);
 
   return {
     ok: true,
@@ -609,6 +617,7 @@ export async function consultarInvitacion(
       rolLabel: ROL_LABELS[inv.rol],
       invitadoPor: vigencia.inviter ? vigencia.inviter.name : PLATAFORMA_NOMBRE,
       organization,
+      cuentaExistente: existing !== null,
     },
   };
 }

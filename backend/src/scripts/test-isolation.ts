@@ -2840,6 +2840,24 @@ async function runAcceptJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: Or
     return new URL(inviteUrl).hash.replace('#invite=', '');
   }
 
+  await check(
+    'consultarInvitacion informa cuentaExistente según si el email invitado ya tiene cuenta',
+    async () => {
+      const tokenNueva = await invitarYObtenerToken(`joining-consulta-nueva-${RANDOM_SUFFIX}@iso-test.local`, 'SOCIO');
+      const nueva = await postJson(baseUrl, '/api/auth/invitaciones/consultar', { token: tokenNueva });
+      assert.equal(nueva.status, 200);
+      assert.equal((nueva.body as { cuentaExistente: boolean }).cuentaExistente, false);
+
+      // seedB.adminEmail ya tiene cuenta (ADMIN de B), pero todavía no es
+      // socia de A — mismo fixture que ya usan los checks de enumeración de
+      // runInviteJoiningChecks.
+      const tokenExistente = await invitarYObtenerToken(seedB.adminEmail, 'SOCIO');
+      const existente = await postJson(baseUrl, '/api/auth/invitaciones/consultar', { token: tokenExistente });
+      assert.equal(existente.status, 200);
+      assert.equal((existente.body as { cuentaExistente: boolean }).cuentaExistente, true);
+    },
+  );
+
   await check('aceptar con la contraseña correcta de la cuenta existente crea SOLO la Membresia en A, con el rol de la invitación', async () => {
     const token = await invitarYObtenerToken(emailExistenteEnB, 'LIDER');
     const res = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'Nombre Que Se Ignora', password: B_PASSWORD });

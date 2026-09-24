@@ -609,7 +609,34 @@ describe('consultarInvitacion', () => {
       assert.equal(result.body.rolLabel, 'Líder');
       assert.equal(result.body.invitadoPor, 'Ada Admin');
       assert.equal(result.body.organization, null);
+      assert.equal(result.body.cuentaExistente, false);
     }
+  });
+
+  it('consultarInvitacion informa cuentaExistente:true cuando el email invitado ya tiene cuenta', async () => {
+    const { deps } = createDeps({}, [
+      { id: 'existente-consulta', organizationId: 'otro-club', email: 'existente@example.com', name: 'X', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const creada = await crearInvitacion(deps, ADMIN, { email: 'existente@example.com' });
+    assert.equal(creada.ok, true);
+    if (!creada.ok) return;
+    const token = extractTokenFromInviteUrl(creada.body.inviteUrl);
+
+    const result = await consultarInvitacion(deps, token);
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.body.cuentaExistente, true);
+  });
+
+  it('consultarInvitacion informa cuentaExistente:false cuando el email invitado no tiene cuenta', async () => {
+    const { deps } = createDeps();
+    const creada = await crearInvitacion(deps, ADMIN, { email: 'sin-cuenta@example.com' });
+    assert.equal(creada.ok, true);
+    if (!creada.ok) return;
+    const token = extractTokenFromInviteUrl(creada.body.inviteUrl);
+
+    const result = await consultarInvitacion(deps, token);
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.body.cuentaExistente, false);
   });
 
   it('incluye la marca del club cuando deps expone getOrganizationBrand', async () => {
