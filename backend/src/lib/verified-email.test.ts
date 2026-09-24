@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import jwt from 'jsonwebtoken';
 
 // verified-email.ts importa lib/jwt.ts, que lanza al importarse si JWT_SECRET
 // no está definida (estos tests no cargan dotenv). Se fija ANTES y se importa
@@ -29,9 +30,20 @@ describe('verifiedEmailFromAuthHeader', () => {
     assert.equal(verifiedEmailFromAuthHeader({ headers: { authorization: 'Bearer not-a-real-jwt' } }), null);
   });
 
-  it('returns null for an expired or tampered token — signature verification, not just decoding', () => {
+  it('returns null for a tampered token — signature verification, not just decoding', () => {
     const token = signToken({ userId: 'user-1', email: 'ana@club.cl' });
     const tampered = token.slice(0, -1) + (token.endsWith('a') ? 'b' : 'a');
     assert.equal(verifiedEmailFromAuthHeader({ headers: { authorization: `Bearer ${tampered}` } }), null);
+  });
+
+  it('returns null for a genuinely expired token — same secret, but exp already in the past', () => {
+    // Firmado con jsonwebtoken directo (no signToken, que fuerza EXPIRES_IN =
+    // '7d') pero con el MISMO secreto que jwt.ts usa para firmar/verificar —
+    // expiresIn negativo pone `exp` en el pasado, así que verifyToken debe
+    // rechazarlo por expiración, no por firma inválida.
+    const expired = jwt.sign({ userId: 'user-1', email: 'ana@club.cl' }, process.env.JWT_SECRET!, {
+      expiresIn: -10,
+    });
+    assert.equal(verifiedEmailFromAuthHeader({ headers: { authorization: `Bearer ${expired}` } }), null);
   });
 });

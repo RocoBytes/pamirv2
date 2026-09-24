@@ -33,18 +33,23 @@ export const invitacionesRepoPrisma: InvitacionesRepo = {
     });
   },
 
-  // Una sola consulta de plataforma (ver Ruling 2 del plan de esta PR): si
-  // el email no tiene cuenta, membresias es irrelevante; si la tiene, el
-  // filtro anidado por organizationId ya resuelve "es socia de ESTE club"
-  // sin una segunda consulta.
+  // Dos consultas de plataforma SIEMPRE, lanzadas en paralelo (Promise.all,
+  // nunca una tras otra) sin importar si la cuenta existe (Ruling 2 del plan
+  // de esta PR): con el generador sin `relationJoins`, un `include`/`select`
+  // anidado sobre una relación es, por debajo, una segunda consulta que
+  // Prisma solo emite cuando la primera encontró una fila — eso es
+  // exactamente el canal de tiempo que el diseño prohíbe (el admin que
+  // invita podría medir "una consulta" vs. "dos consultas" y deducir si el
+  // correo tiene cuenta en otro club). Al crear ambas promesas antes de
+  // esperar cualquiera, las dos viajan siempre, exista o no la cuenta.
   async findAccountMembershipStatus(email, organizationId) {
     return runAsPlatform(async () => {
-      const user = await prisma.user.findUnique({
-        where: { email },
-        select: { id: true, membresias: { where: { organizationId }, select: { id: true } } },
-      });
+      const [user, membresia] = await Promise.all([
+        prisma.user.findUnique({ where: { email }, select: { id: true } }),
+        prisma.membresia.findFirst({ where: { organizationId, usuario: { email } }, select: { id: true } }),
+      ]);
       if (!user) return { cuentaExiste: false, esSocioDeEsteClub: false };
-      return { cuentaExiste: true, esSocioDeEsteClub: user.membresias.length > 0 };
+      return { cuentaExiste: true, esSocioDeEsteClub: membresia !== null };
     });
   },
 
