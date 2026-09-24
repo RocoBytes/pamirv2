@@ -16,7 +16,13 @@ const SLUG_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 // nombres que ya identifican otra cosa en la infraestructura (la propia
 // plataforma, subdominios técnicos, la marca del proveedor de correo).
 const PREFIJOS_RESERVADOS = ['iso-test-'];
-const SLUGS_RESERVADOS = ['platform', 'plataforma', 'admin', 'api', 'www', 'app', 'riala'];
+// assets/auth/brand: rutas estáticas reservadas del frontend multi-club (ver
+// docs/superpowers/specs/2026-09-23-multi-club-membership-design.md §3) — un
+// club con uno de estos slugs colisionaría con una ruta de nivel superior que
+// el SPA podría necesitar en el futuro, aunque nginx no la reserve hoy con su
+// propio location block (a diferencia de /api y /assets, que sí lo tienen —
+// ver frontend/nginx/default.conf).
+const SLUGS_RESERVADOS = ['platform', 'plataforma', 'admin', 'api', 'www', 'app', 'riala', 'assets', 'auth', 'brand'];
 
 export const USAGE = `Uso: tenant <comando> [flags]
 
