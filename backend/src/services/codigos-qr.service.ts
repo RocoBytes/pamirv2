@@ -27,13 +27,15 @@ import {
   type QrDuracion,
   type EstadoCodigoQr,
 } from '../lib/codigos-qr.js';
-import type {
-  UsuarioBasico,
-  InvitacionRow,
-  Requester,
-  ServiceResult,
-  AccountMembershipStatus,
-  AccountForOwnershipProof,
+import {
+  verificarPruebaDeCuentaExistente,
+  type UsuarioBasico,
+  type InvitacionRow,
+  type Requester,
+  type ServiceResult,
+  type AccountMembershipStatus,
+  type AccountForOwnershipProof,
+  type AuthProof,
 } from './invitaciones.service.js';
 
 // ─── Tipos del repositorio ──────────────────────────────────────────────────────
@@ -76,7 +78,7 @@ export interface CrearCodigoQrData {
 // más abajo): 'agotado' es la MISMA carrera perdida que mintInvitacion (el
 // código ya no estaba disponible al llegar a la transacción); 'email-en-uso'
 // es la violación de unicidad de User.email si otra request ganó la carrera
-// entre el chequeo previo (findUserByEmail) y este punto.
+// entre el chequeo previo (findAccountForOwnershipProof) y este punto.
 export type RegistrarQrDirectoResultado =
   | { kind: 'ok'; user: UsuarioBasico }
   | { kind: 'agotado' }
@@ -116,7 +118,6 @@ export interface CodigosQrRepo {
   // Incluye email (a diferencia de InvitacionesRepo.findUserById): lo necesita
   // registradoPublico para exponer quién se registró con un QR directo.
   findUserById(id: string): Promise<Pick<UsuarioBasico, 'id' | 'name' | 'rol' | 'email'> | null>;
-  findUserByEmail(email: string): Promise<UsuarioBasico | null>;
   // Igual contrato que en InvitacionesRepo — ver AccountMembershipStatus /
   // AccountForOwnershipProof (invitaciones.service.ts, Ruling 2).
   findAccountMembershipStatus(email: string, organizationId: string): Promise<AccountMembershipStatus>;
@@ -235,6 +236,9 @@ const MENSAJE_MODO_INVALIDO = 'Modo inválido';
 // ese correo"): acá quien registra está parado frente a la app, así que el
 // siguiente paso ("Inicia sesión") es información útil en el momento.
 const MENSAJE_CUENTA_EXISTENTE_QR_DIRECTO = 'Ya existe una cuenta con ese correo. Inicia sesión.';
+// Distinto del de aceptarInvitacion (invitaciones.service.ts): "invitación"
+// no describe un QR — ver Ruling 5 del plan de la PR de Joining.
+const MENSAJE_QR_OTRO_CORREO = 'Este código es para otro correo';
 export const MENSAJE_SOLICITUD_GENERICA =
   'Si el correo puede recibir una invitación, te llegará en unos minutos. Revisa también la carpeta de spam. ' +
   'Si ya tienes cuenta, inicia sesión.';
@@ -678,42 +682,75 @@ export async function registrarConQrDirecto(
   deps: CodigosQrDeps,
   token: string,
   body: { name?: unknown; email?: unknown; password?: unknown },
+  auth: AuthProof,
 ): Promise<ServiceResult<RegistrarConQrDirectoBody>> {
   const now = deps.now();
 
   // (1) Vigencia del token primero, igual que solicitarInvitacionQr — un
   // token desconocido O en modo CORREO se trata igual: no existe para este
-  // endpoint (nunca mezcla su 410 con el 404 de "no es un QR directo").
+  // endpoint.
   const vigencia = await verificarVigenciaQr(deps, token, now);
   if (!('vigente' in vigencia)) return vigencia;
   if (vigencia.qr.modo !== 'DIRECTO') {
     return { ok: false, status: 404, error: MENSAJE_TOKEN_INVALIDO };
   }
 
-  // (2) Mismas reglas y mensajes que aceptarInvitacion, para que la persona
-  // vea exactamente la misma validación en cualquiera de los dos caminos.
-  const nameParsed = nameField.safeParse(body.name);
-  if (!nameParsed.success) {
-    return { ok: false, status: 400, error: nameParsed.error.issues[0]?.message ?? 'Nombre inválido' };
-  }
   const emailParsed = emailField.safeParse(body.email);
   if (!emailParsed.success) {
     return { ok: false, status: 400, error: emailParsed.error.issues[0]?.message ?? 'Email inválido' };
   }
-  const passwordParsed = passwordField.safeParse(body.password);
-  if (!passwordParsed.success) {
-    return { ok: false, status: 400, error: passwordParsed.error.issues[0]?.message ?? 'Contraseña inválida' };
-  }
   const email = emailParsed.data.toLowerCase();
   const { qr } = vigencia;
 
-  // (3) Todo lo que sigue corre en el contexto de tenant del club del QR.
+  // (2) Todo lo que sigue corre en el contexto de tenant del club del QR.
   return deps.withOrganization(qr.organizationId, async (): Promise<ServiceResult<RegistrarConQrDirectoBody>> => {
-    // Chequeo previo (plataforma-wide, como en aceptarInvitacion): si ya hay
-    // cuenta con este correo, el único uso del código NUNCA se consume.
-    const existing = await deps.repo.findUserByEmail(email);
+    const existing = await deps.repo.findAccountForOwnershipProof(email);
+
     if (existing) {
-      return { ok: false, status: 409, error: MENSAJE_CUENTA_EXISTENTE_QR_DIRECTO };
+      // Cuenta existente (fase "Joining"): pide sign-in en vez de crear una
+      // cuenta — mismas reglas de prueba que aceptarInvitacion (Ruling 3 del
+      // plan de esta PR). name del body se ignora siempre.
+      let submittedPassword: string | undefined;
+      if (auth.verifiedEmail === null) {
+        const passwordParsed = passwordField.safeParse(body.password);
+        if (!passwordParsed.success) {
+          return { ok: false, status: 400, error: passwordParsed.error.issues[0]?.message ?? 'Contraseña inválida' };
+        }
+        submittedPassword = passwordParsed.data;
+      }
+
+      const prueba = await verificarPruebaDeCuentaExistente(deps, existing, auth, submittedPassword, {
+        correoDistinto: MENSAJE_QR_OTRO_CORREO,
+        // Reusa el texto de siempre: "Ya existe una cuenta con ese correo.
+        // Inicia sesión." también describe correctamente una contraseña
+        // incorrecta — la persona ya sabe que tiene cuenta (recibió/escaneó
+        // el QR sabiendo su propio correo), solo falta la contraseña.
+        contrasenaIncorrecta: MENSAJE_CUENTA_EXISTENTE_QR_DIRECTO,
+      });
+      if (!prueba.ok) return prueba;
+
+      const resultado = await deps.repo.registrarMembresiaQrDirectoExistente({
+        codigoQrId: qr.id,
+        organizationId: qr.organizationId,
+        usuarioId: existing.id,
+        rol: ROL_QR,
+        now,
+      });
+
+      if (resultado.kind === 'agotado') {
+        return { ok: false, status: 410, error: MENSAJE_NO_DISPONIBLE };
+      }
+      return { ok: true, status: 201, body: { ok: true } };
+    }
+
+    // Sin cuenta: el flujo de siempre.
+    const nameParsed = nameField.safeParse(body.name);
+    if (!nameParsed.success) {
+      return { ok: false, status: 400, error: nameParsed.error.issues[0]?.message ?? 'Nombre inválido' };
+    }
+    const passwordParsed = passwordField.safeParse(body.password);
+    if (!passwordParsed.success) {
+      return { ok: false, status: 400, error: passwordParsed.error.issues[0]?.message ?? 'Contraseña inválida' };
     }
 
     const passwordHash = await deps.hashPassword(passwordParsed.data);
@@ -729,14 +766,9 @@ export async function registrarConQrDirecto(
     });
 
     if (resultado.kind === 'agotado') {
-      // Carrera perdida por el único uso entre verificarVigenciaQr y este
-      // punto: mismo mensaje/estado que cualquier otro código no disponible.
       return { ok: false, status: 410, error: MENSAJE_NO_DISPONIBLE };
     }
     if (resultado.kind === 'email-en-uso') {
-      // Carrera perdida contra otra request concurrente para el MISMO email
-      // (el chequeo de arriba ya no alcanza a verla): el uso no se consumió,
-      // la transacción del repo revirtió el decremento.
       return { ok: false, status: 409, error: MENSAJE_CUENTA_EXISTENTE_QR_DIRECTO };
     }
 

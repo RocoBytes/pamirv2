@@ -39,18 +39,6 @@ export const codigosQrRepoPrisma: CodigosQrRepo = {
     return prisma.user.findUnique({ where: { id }, select: { id: true, name: true, rol: true, email: true } });
   },
 
-  // SIEMPRE en contexto de plataforma, sin importar el contexto del llamador:
-  // User.email es único en TODA la plataforma, no por club — mismo motivo que
-  // invitacionesRepoPrisma.findUserByEmail.
-  async findUserByEmail(email) {
-    return runAsPlatform(() =>
-      prisma.user.findUnique({
-        where: { email },
-        select: { id: true, email: true, name: true, rol: true },
-      }),
-    );
-  },
-
   // Dos consultas de plataforma SIEMPRE, lanzadas en paralelo (Promise.all,
   // nunca una tras otra) sin importar si la cuenta existe (Ruling 2 del plan
   // de esta PR): con el generador sin `relationJoins`, un `include`/`select`

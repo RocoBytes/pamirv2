@@ -1580,18 +1580,26 @@ async function runQrDirectoChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
     assert.equal(body.registrado, null);
   });
 
-  await check('registrar con un email que ya tiene cuenta da 409 y NO consume el uso', async () => {
-    const res = await postJson(baseUrl, '/api/qr/registrar', {
-      token: qrTokenA,
-      name: 'Ya Existe',
-      email: seedA.socioEmail,
-      password: 'password123',
-    });
-    assert.equal(res.status, 409);
+  await check(
+    'registrar con el email de una cuenta existente ya no da 409 (PR "Joining"): sin contraseña real que probar (seedA.socioEmail no tiene passwordHash), da 401 y NO consume el uso',
+    async () => {
+      const res = await postJson(baseUrl, '/api/qr/registrar', {
+        token: qrTokenA,
+        name: 'Ya Existe',
+        email: seedA.socioEmail,
+        password: 'password123',
+      });
+      // seedOrganization nunca le fija passwordHash al socio sembrado: es un
+      // mismatch garantizado (Ruling 3 del plan de la PR de Joining), así
+      // que cualquier contraseña enviada da 401, nunca 200/410 — ver
+      // runQrDirectoJoiningChecks más abajo para el camino con una
+      // contraseña real.
+      assert.equal(res.status, 401);
 
-    const estado = await getJson(baseUrl, tokenA, `/api/invitaciones/qr/${qrIdA}/estado`);
-    assert.equal((estado.body as { estado: string }).estado, 'ACTIVO');
-  });
+      const estado = await getJson(baseUrl, tokenA, `/api/invitaciones/qr/${qrIdA}/estado`);
+      assert.equal((estado.body as { estado: string }).estado, 'ACTIVO');
+    },
+  );
 
   const emailNuevo = `qr-directo-nuevo-${RANDOM_SUFFIX}@iso-test.local`;
 
@@ -2829,6 +2837,105 @@ async function runAcceptJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: Or
   });
 }
 
+// ─── registrarConQrDirecto con una cuenta existente (PR "Joining") ────────────
+
+async function runQrDirectoJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
+  const tokenAdminA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+
+  async function crearQrDirectoYObtenerToken(): Promise<string> {
+    const res = await postJsonAuth(baseUrl, tokenAdminA, '/api/invitaciones/qr', { modo: 'DIRECTO' });
+    assert.equal(res.status, 201);
+    const qrUrl = (res.body as { qrUrl: string }).qrUrl;
+    return new URL(qrUrl).hash.replace('#qr=', '');
+  }
+
+  async function crearCuentaEnB(email: string, password: string): Promise<{ id: string }> {
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    return runAsPlatform(() =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { organizationId: seedB.organizationId, email, name: 'Existente QR', passwordHash, rol: 'SOCIO', emailVerified: true },
+        });
+        await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+        return user;
+      }),
+    );
+  }
+
+  await check('QR directo con la contraseña correcta de una cuenta existente crea SOLO la Membresia en A y consume el único uso', async () => {
+    const email = `qr-directo-existe-${RANDOM_SUFFIX}@iso-test.local`;
+    const cuenta = await crearCuentaEnB(email, 'qr-directo-password');
+    const token = await crearQrDirectoYObtenerToken();
+
+    const res = await postJson(baseUrl, '/api/qr/registrar', { token, name: 'Se Ignora', email, password: 'qr-directo-password' });
+    assert.equal(res.status, 201);
+
+    const membresiaA = await runAsPlatform(() =>
+      prisma.membresia.findUnique({
+        where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: cuenta.id } },
+      }),
+    );
+    assert.ok(membresiaA);
+
+    // Un segundo intento contra el MISMO código (ya de un solo uso) da 410,
+    // aunque la contraseña sea correcta — el uso ya se consumió.
+    const segundo = await postJson(baseUrl, '/api/qr/registrar', { token, name: 'X', email, password: 'qr-directo-password' });
+    assert.equal(segundo.status, 410);
+  });
+
+  await check('QR directo con la contraseña incorrecta responde 401 y NO consume el uso', async () => {
+    const email = `qr-directo-mal-${RANDOM_SUFFIX}@iso-test.local`;
+    await crearCuentaEnB(email, 'la-correcta');
+    const token = await crearQrDirectoYObtenerToken();
+
+    const res = await postJson(baseUrl, '/api/qr/registrar', { token, name: 'X', email, password: 'la-incorrecta' });
+    assert.equal(res.status, 401);
+
+    // El uso sigue disponible: un segundo intento con la contraseña correcta
+    // funciona.
+    const segundo = await postJson(baseUrl, '/api/qr/registrar', { token, name: 'X', email, password: 'la-correcta' });
+    assert.equal(segundo.status, 201);
+  });
+
+  await check('QR directo con un Bearer de OTRO email responde 403 "Este código es para otro correo"', async () => {
+    const email = `qr-directo-mismatch-${RANDOM_SUFFIX}@iso-test.local`;
+    await crearCuentaEnB(email, 'x');
+    const token = await crearQrDirectoYObtenerToken();
+
+    const bearerAjeno = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
+    const res = await postJsonAuth(baseUrl, bearerAjeno, '/api/qr/registrar', { token, email });
+    assert.equal(res.status, 403);
+    assert.deepEqual(res.body, { error: 'Este código es para otro correo' });
+  });
+
+  await check('dos registros concurrentes con la MISMA cuenta existente y el MISMO código directo consumen el uso exactamente una vez', async () => {
+    const email = `qr-directo-race-${RANDOM_SUFFIX}@iso-test.local`;
+    const cuenta = await crearCuentaEnB(email, 'race-password');
+    const token = await crearQrDirectoYObtenerToken();
+
+    const [primero, segundo] = await Promise.all([
+      postJson(baseUrl, '/api/qr/registrar', { token, name: 'X', email, password: 'race-password' }),
+      postJson(baseUrl, '/api/qr/registrar', { token, name: 'X', email, password: 'race-password' }),
+    ]);
+    const statuses = [primero.status, segundo.status].sort();
+    assert.deepEqual(statuses, [201, 410]);
+
+    const membresias = await runAsPlatform(() => prisma.membresia.findMany({ where: { usuarioId: cuenta.id } }));
+    assert.equal(membresias.length, 2); // la de B (seed) + la nueva de A.
+  });
+
+  await check('QR directo sin cuenta existente sigue creando la cuenta nueva (regresión)', async () => {
+    // Email distinto del que usa runQrDirectoChecks más arriba
+    // ('qr-directo-nuevo-...'): ese ya deja una cuenta creada en A antes de
+    // que este check corra, así que reusar el mismo literal entraría por la
+    // rama de cuenta existente en vez de probar el camino sin cuenta.
+    const email = `qr-directo-nuevo-joining-${RANDOM_SUFFIX}@iso-test.local`;
+    const token = await crearQrDirectoYObtenerToken();
+    const res = await postJson(baseUrl, '/api/qr/registrar', { token, name: 'Persona Nueva', email, password: 'password123' });
+    assert.equal(res.status, 201);
+  });
+}
+
 // ─── CLI create-user ─────────────────────────────────────────────────────────
 
 interface CreateUserCliResult {
@@ -3060,6 +3167,7 @@ async function main(): Promise<void> {
     await runClubesFieldChecks(started.baseUrl, seedA, seedB);
     await runInviteJoiningChecks(started.baseUrl, seedA, seedB);
     await runAcceptJoiningChecks(started.baseUrl, seedA, seedB);
+    await runQrDirectoJoiningChecks(started.baseUrl, seedA, seedB);
 
     await check(
       'invariante global: todo usuario de la base tiene al menos una Membresia (ningún alta se saltó el dual write) (Review Focus #1)',
