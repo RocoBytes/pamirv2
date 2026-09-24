@@ -709,6 +709,51 @@ async function runCrossCuttingChecks(seedA: OrgSeed, seedB: OrgSeed): Promise<vo
       assert.equal(integrante?.id, seedA.integranteId);
     },
   );
+
+  await check(
+    'Invitacion.usuarioId ya no es @unique: la MISMA cuenta puede aparecer como usuarioId en dos invitaciones de clubes distintos (Ruling 1 del plan de la PR de Joining)',
+    async () => {
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      const invA = await runAsPlatform(() =>
+        prisma.invitacion.create({
+          data: {
+            organizationId: seedA.organizationId,
+            email: `migracion-usuario-id-${RANDOM_SUFFIX}@iso-test.local`,
+            rol: 'SOCIO',
+            tokenHash: randomUUID().replace(/-/g, ''),
+            expiresAt,
+            invitadoPorId: seedA.adminUserId,
+            usuarioId: seedA.adminUserId,
+          },
+        }),
+      );
+      const invB = await runAsPlatform(() =>
+        prisma.invitacion.create({
+          data: {
+            organizationId: seedB.organizationId,
+            email: `migracion-usuario-id-${RANDOM_SUFFIX}@iso-test.local`,
+            rol: 'SOCIO',
+            tokenHash: randomUUID().replace(/-/g, ''),
+            expiresAt,
+            invitadoPorId: seedB.adminUserId,
+            // Antes de la migración de esta PR, este segundo create hubiera
+            // fallado con P2002 (invitaciones_usuario_id_key): el mismo
+            // usuarioId ya estaba en invA.
+            usuarioId: seedA.adminUserId,
+          },
+        }),
+      );
+
+      assert.equal(invA.usuarioId, seedA.adminUserId);
+      assert.equal(invB.usuarioId, seedA.adminUserId);
+
+      await runAsPlatform(() =>
+        prisma.invitacion.deleteMany({ where: { id: { in: [invA.id, invB.id] } } }),
+      );
+    },
+  );
 }
 
 // ─── Verificaciones HTTP ───────────────────────────────────────────────────────
@@ -1006,6 +1051,10 @@ async function runHttpChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): P
     repo: invitacionesRepoPrisma,
     sendEmail: async () => {},
     hashPassword: async (password) => `hashed:${password}`,
+    // Fake consistente con el hashPassword de arriba (nunca se usa bcrypt
+    // real acá — mismo motivo que hashPassword: esta invitación de
+    // plataforma nunca pasa por el flujo HTTP de aceptar).
+    comparePassword: async (password, hash) => hash === `hashed:${password}`,
     now: () => new Date(),
     frontendUrl: 'https://iso-test.local',
   };
@@ -1247,6 +1296,9 @@ function buildFakeCodigosQrDeps(capturedEmails: SendCodigoQrInvitationEmailParam
     },
     withOrganization: (organizationId, fn) => runWithOrganization(organizationId, fn),
     hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
+    // Repositorio real por debajo (codigosQrRepoPrisma), así que la
+    // comparación también debe ser real bcrypt — no el fake de arriba.
+    comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: 'https://iso-test.local',
     jwtSecret: requireJwtSecret(),
@@ -2026,6 +2078,7 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
     repo: invitacionesRepoPrisma,
     sendEmail: async () => {},
     hashPassword: async (password) => `hashed:${password}`,
+    comparePassword: async (password, hash) => hash === `hashed:${password}`,
     now: () => new Date(),
     frontendUrl: 'https://iso-test-cli.local',
   };

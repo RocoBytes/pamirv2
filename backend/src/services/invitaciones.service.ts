@@ -83,6 +83,13 @@ export interface AceptarInvitacionInput {
 export interface InvitacionesRepo {
   findUserByEmail(email: string): Promise<UsuarioBasico | null>;
   findUserById(id: string): Promise<Pick<UsuarioBasico, 'id' | 'name' | 'rol'> | null>;
+  // Una sola consulta que responde "existe" y "ya es socia de ESTE club" a
+  // la vez — ver AccountMembershipStatus arriba (Ruling 2).
+  findAccountMembershipStatus(email: string, organizationId: string): Promise<AccountMembershipStatus>;
+  // Lo mínimo para verificar titularidad (incluye passwordHash) — separado
+  // de findUserByEmail para no exponer el hash a ningún llamador que no lo
+  // necesite.
+  findAccountForOwnershipProof(email: string): Promise<AccountForOwnershipProof | null>;
   revokePendingForEmail(email: string, now: Date): Promise<void>;
   createInvitacion(data: CrearInvitacionData): Promise<InvitacionRow>;
   findByTokenHash(tokenHash: string): Promise<InvitacionRow | null>;
@@ -93,6 +100,20 @@ export interface InvitacionesRepo {
   // solo si la invitación sigue pendiente y vigente (update condicional con
   // affected rows === 1). null = la invitación ya no estaba disponible (carrera).
   acceptInvitacion(input: AceptarInvitacionInput): Promise<UsuarioBasico | null>;
+  // Contraparte de acceptInvitacion para una cuenta YA EXISTENTE: crea SOLO
+  // la Membresia (nunca toca User), consumiendo la invitación en la misma
+  // transacción. true = se unió; false = la invitación ya no estaba
+  // disponible (carrera) — mismo contrato ok/null que acceptInvitacion,
+  // adaptado a que acá no hay un UsuarioBasico nuevo que devolver.
+  acceptInvitacionExistente(input: AceptarInvitacionExistenteInput): Promise<boolean>;
+}
+
+export interface AceptarInvitacionExistenteInput {
+  invitacionId: string;
+  organizationId: string;
+  usuarioId: string;
+  rol: RolUsuario;
+  now: Date;
 }
 
 // ─── Dependencias inyectadas ────────────────────────────────────────────────────
@@ -112,6 +133,11 @@ export interface InvitacionesDeps {
   // el controlador.
   sendEmail: (params: SendInvitationEmailParams) => Promise<void>;
   hashPassword: (password: string) => Promise<string>;
+  // Comparación de tiempo constante contra un hash ya guardado — usada solo
+  // por la rama de "cuenta existente" de aceptarInvitacion (ver
+  // verificarPruebaDeCuentaExistente). Igual patrón de inyección que
+  // hashPassword: el servicio nunca importa bcrypt directamente.
+  comparePassword: (password: string, hash: string) => Promise<boolean>;
   now: () => Date;
   frontendUrl: string;
   // Resuelve la marca pública (slug/name/shortName) de un club por su id.
@@ -130,6 +156,69 @@ export interface Requester {
   organizationId: string;
   name: string;
   rol: RolUsuario;
+}
+
+// ─── Prueba de titularidad de una cuenta existente (PR "Joining") ─────────────
+// Ver docs/superpowers/specs/2026-09-23-multi-club-membership-design.md §2
+// "Joining a club" y el plan de esta PR (Rulings 2, 3). Compartido por
+// aceptarInvitacion (este archivo) y registrarConQrDirecto
+// (codigos-qr.service.ts, que importa estos símbolos de acá).
+
+// Una consulta, dos datos: si la cuenta existe Y si ya es socia de ESTE
+// club — nunca dos consultas separadas (ver Ruling 2: una consulta extra
+// SOLO cuando la cuenta existe es un canal de tiempo que revela su
+// existencia al admin que invita, algo que el diseño prohíbe
+// explícitamente).
+export interface AccountMembershipStatus {
+  cuentaExiste: boolean;
+  // Solo tiene sentido cuando cuentaExiste es true.
+  esSocioDeEsteClub: boolean;
+}
+
+// Lo mínimo para verificar titularidad — nunca se expone fuera de la rama de
+// prueba de titularidad (nunca se mezcla con UsuarioBasico, que si se
+// serializa en una vista pública).
+export interface AccountForOwnershipProof {
+  id: string;
+  email: string;
+  passwordHash: string | null;
+}
+
+// Ya verificado por el controlador (lib/verified-email.ts) antes de llegar
+// acá — el servicio NUNCA decodifica un JWT él mismo.
+export interface AuthProof {
+  verifiedEmail: string | null;
+}
+
+export type OwnershipProofResult = { ok: true } | { ok: false; status: number; error: string };
+
+// Prueba que quien está aceptando/registrándose es dueño de una cuenta YA
+// EXISTENTE con este email: por Bearer (si coincide exactamente con el email
+// de la cuenta) o, si no hay Bearer, por contraseña (bcrypt, tiempo
+// constante — igual que login). Los mensajes se inyectan porque cada
+// endpoint usa su propio texto (ver Ruling 5 del plan de esta PR).
+export async function verificarPruebaDeCuentaExistente(
+  deps: { comparePassword: (password: string, hash: string) => Promise<boolean> },
+  account: AccountForOwnershipProof,
+  auth: AuthProof,
+  submittedPassword: string | undefined,
+  mensajes: { correoDistinto: string; contrasenaIncorrecta: string },
+): Promise<OwnershipProofResult> {
+  if (auth.verifiedEmail !== null) {
+    if (auth.verifiedEmail !== account.email) {
+      return { ok: false, status: 403, error: mensajes.correoDistinto };
+    }
+    return { ok: true };
+  }
+
+  if (!account.passwordHash || submittedPassword === undefined) {
+    return { ok: false, status: 401, error: mensajes.contrasenaIncorrecta };
+  }
+  const matches = await deps.comparePassword(submittedPassword, account.passwordHash);
+  if (!matches) {
+    return { ok: false, status: 401, error: mensajes.contrasenaIncorrecta };
+  }
+  return { ok: true };
 }
 
 // ─── Resultado discriminado ─────────────────────────────────────────────────────

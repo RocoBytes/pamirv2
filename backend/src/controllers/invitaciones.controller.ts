@@ -39,6 +39,11 @@ function buildDeps(organization: OrganizationSummary): InvitacionesDeps {
       });
     },
     hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
+    // Comparación de tiempo constante contra un hash ya guardado — la usa la
+    // rama de "cuenta existente" de aceptarInvitacion (buildPublicDeps más
+    // abajo). Se cablea acá también por uniformidad: InvitacionesDeps es una
+    // sola interfaz para ambos conjuntos de deps.
+    comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
   };
@@ -54,6 +59,9 @@ function buildPublicDeps(): InvitacionesDeps {
       throw new Error('[invitaciones] sendEmail no debe invocarse en un flujo público sin club conocido');
     },
     hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
+    // Prueba de titularidad de una cuenta existente (aceptarInvitacion) —
+    // ver verificarPruebaDeCuentaExistente en invitaciones.service.ts.
+    comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
     // Se llama dentro del runAsPlatform que ya envuelve a consultarInvitacion

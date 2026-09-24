@@ -33,6 +33,30 @@ export const invitacionesRepoPrisma: InvitacionesRepo = {
     });
   },
 
+  // Una sola consulta de plataforma (ver Ruling 2 del plan de esta PR): si
+  // el email no tiene cuenta, membresias es irrelevante; si la tiene, el
+  // filtro anidado por organizationId ya resuelve "es socia de ESTE club"
+  // sin una segunda consulta.
+  async findAccountMembershipStatus(email, organizationId) {
+    return runAsPlatform(async () => {
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true, membresias: { where: { organizationId }, select: { id: true } } },
+      });
+      if (!user) return { cuentaExiste: false, esSocioDeEsteClub: false };
+      return { cuentaExiste: true, esSocioDeEsteClub: user.membresias.length > 0 };
+    });
+  },
+
+  async findAccountForOwnershipProof(email) {
+    return runAsPlatform(() =>
+      prisma.user.findUnique({
+        where: { email },
+        select: { id: true, email: true, passwordHash: true },
+      }),
+    );
+  },
+
   async revokePendingForEmail(email, now) {
     await prisma.invitacion.updateMany({
       where: { email, aceptadaAt: null, revocadaAt: null, expiresAt: { gt: now } },
@@ -103,6 +127,40 @@ export const invitacionesRepoPrisma: InvitacionesRepo = {
       // transacción ya revirtió el update de aceptadaAt.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         return null;
+      }
+      throw error;
+    }
+  },
+
+  async acceptInvitacionExistente({ invitacionId, organizationId, usuarioId, rol, now }) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        // Mismo update condicional que acceptInvitacion: solo avanza si la
+        // invitación sigue pendiente y vigente.
+        const { count } = await tx.invitacion.updateMany({
+          where: { id: invitacionId, aceptadaAt: null, revocadaAt: null, expiresAt: { gt: now } },
+          data: { aceptadaAt: now },
+        });
+        if (count !== 1) {
+          return false;
+        }
+
+        // A diferencia de acceptInvitacion: NUNCA se toca User acá — solo la
+        // Membresia nueva (Ruling del plan de esta PR: la cuenta existente
+        // nunca se sobreescribe).
+        await tx.membresia.create({ data: { organizationId, usuarioId, rol } });
+        await tx.invitacion.update({ where: { id: invitacionId }, data: { usuarioId } });
+
+        return true;
+      });
+    } catch (error) {
+      // P2002: la Membresia (organizationId, usuarioId) ya existía — una
+      // carrera concurrente contra ESTA MISMA invitación (el update
+      // condicional de arriba solo protege el conteo de filas de
+      // Invitacion, no la unicidad de Membresia). La transacción ya revirtió
+      // el update de aceptadaAt.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return false;
       }
       throw error;
     }

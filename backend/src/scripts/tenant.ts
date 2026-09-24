@@ -64,6 +64,11 @@ const crearInvitacionAdmin: TenantsDeps['crearInvitacionAdmin'] = (organizationI
         });
       },
       hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
+      // Nunca se usa: esta invitación siempre se acepta por el flujo HTTP
+      // normal (aceptarInvitacion), que arma sus propias deps — se cablea
+      // igual que hashPassword porque InvitacionesDeps.comparePassword es
+      // un campo requerido, no porque este camino lo invoque.
+      comparePassword: (password, hash) => bcrypt.compare(password, hash),
       now: () => new Date(),
       frontendUrl: FRONTEND_URL,
     };

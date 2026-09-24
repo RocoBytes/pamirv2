@@ -48,6 +48,11 @@ function buildDeps(organization: OrganizationSummary): CodigosQrDeps {
     }),
     withOrganization: async (organizationId, fn) => runWithOrganization(organizationId, fn),
     hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
+    // Comparación de tiempo constante contra un hash ya guardado — la usa la
+    // rama de "cuenta existente" de registrarConQrDirecto (buildPublicDeps
+    // más abajo). Se cablea acá también por uniformidad: CodigosQrDeps es
+    // una sola interfaz para ambos conjuntos de deps.
+    comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
     jwtSecret: requireJwtSecret(),
@@ -84,6 +89,9 @@ function buildPublicDeps(): CodigosQrDeps {
     },
     withOrganization: async (organizationId, fn) => runWithOrganization(organizationId, fn),
     hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
+    // Prueba de titularidad de una cuenta existente (registrarConQrDirecto)
+    // — ver verificarPruebaDeCuentaExistente en invitaciones.service.ts.
+    comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
     jwtSecret: requireJwtSecret(),

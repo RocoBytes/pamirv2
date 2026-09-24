@@ -27,7 +27,14 @@ import {
   type QrDuracion,
   type EstadoCodigoQr,
 } from '../lib/codigos-qr.js';
-import type { UsuarioBasico, InvitacionRow, Requester, ServiceResult } from './invitaciones.service.js';
+import type {
+  UsuarioBasico,
+  InvitacionRow,
+  Requester,
+  ServiceResult,
+  AccountMembershipStatus,
+  AccountForOwnershipProof,
+} from './invitaciones.service.js';
 
 // ─── Tipos del repositorio ──────────────────────────────────────────────────────
 
@@ -110,12 +117,30 @@ export interface CodigosQrRepo {
   // registradoPublico para exponer quién se registró con un QR directo.
   findUserById(id: string): Promise<Pick<UsuarioBasico, 'id' | 'name' | 'rol' | 'email'> | null>;
   findUserByEmail(email: string): Promise<UsuarioBasico | null>;
+  // Igual contrato que en InvitacionesRepo — ver AccountMembershipStatus /
+  // AccountForOwnershipProof (invitaciones.service.ts, Ruling 2).
+  findAccountMembershipStatus(email: string, organizationId: string): Promise<AccountMembershipStatus>;
+  findAccountForOwnershipProof(email: string): Promise<AccountForOwnershipProof | null>;
   hasPendingInvitacion(email: string, now: Date): Promise<boolean>;
   mintInvitacion(input: MintInvitacionInput): Promise<InvitacionRow | null>;
-  // Consume el único uso de un código DIRECTO y crea el usuario SOCIO, en una
-  // sola transacción — ver registrarConQrDirecto.
   registrarUsuarioQrDirecto(input: RegistrarQrDirectoInput): Promise<RegistrarQrDirectoResultado>;
+  // Contraparte de registrarUsuarioQrDirecto para una cuenta YA EXISTENTE:
+  // crea solo la Membresia, consumiendo el único uso del código en la misma
+  // transacción — nunca crea ni modifica User.
+  registrarMembresiaQrDirectoExistente(
+    input: RegistrarMembresiaQrDirectoExistenteInput,
+  ): Promise<RegistrarQrDirectoExistenteResultado>;
 }
+
+export interface RegistrarMembresiaQrDirectoExistenteInput {
+  codigoQrId: string;
+  organizationId: string;
+  usuarioId: string;
+  rol: RolUsuario;
+  now: Date;
+}
+
+export type RegistrarQrDirectoExistenteResultado = { kind: 'ok' } | { kind: 'agotado' };
 
 // ─── Dependencias inyectadas ────────────────────────────────────────────────────
 
@@ -144,6 +169,7 @@ export interface CodigosQrDeps {
   // Solo lo usa registrarConQrDirecto (el QR reusable nunca da de alta una
   // cuenta directamente) — mismo cableado que InvitacionesDeps.hashPassword.
   hashPassword: (password: string) => Promise<string>;
+  comparePassword: (password: string, hash: string) => Promise<boolean>;
   now: () => Date;
   frontendUrl: string;
   jwtSecret: string;

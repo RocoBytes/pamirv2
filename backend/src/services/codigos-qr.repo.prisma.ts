@@ -51,6 +51,26 @@ export const codigosQrRepoPrisma: CodigosQrRepo = {
     );
   },
 
+  async findAccountMembershipStatus(email, organizationId) {
+    return runAsPlatform(async () => {
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true, membresias: { where: { organizationId }, select: { id: true } } },
+      });
+      if (!user) return { cuentaExiste: false, esSocioDeEsteClub: false };
+      return { cuentaExiste: true, esSocioDeEsteClub: user.membresias.length > 0 };
+    });
+  },
+
+  async findAccountForOwnershipProof(email) {
+    return runAsPlatform(() =>
+      prisma.user.findUnique({
+        where: { email },
+        select: { id: true, email: true, passwordHash: true },
+      }),
+    );
+  },
+
   async hasPendingInvitacion(email, now) {
     const pending = await prisma.invitacion.findFirst({
       where: { email, aceptadaAt: null, revocadaAt: null, expiresAt: { gt: now } },
@@ -134,6 +154,48 @@ export const codigosQrRepoPrisma: CodigosQrRepo = {
       // este punto. La transacción ya revirtió el decremento de usosRestantes.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         return { kind: 'email-en-uso' };
+      }
+      throw error;
+    }
+  },
+
+  async registrarMembresiaQrDirectoExistente({ codigoQrId, organizationId, usuarioId, rol, now }) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        // Mismo update condicional que registrarUsuarioQrDirecto: solo
+        // decrementa si el código sigue siendo DIRECTO, activo y con su
+        // único uso disponible.
+        const { count } = await tx.codigoQrInvitacion.updateMany({
+          where: {
+            id: codigoQrId,
+            modo: 'DIRECTO',
+            revocadoAt: null,
+            expiresAt: { gt: now },
+            usosRestantes: { gt: 0 },
+          },
+          data: { usosRestantes: { decrement: 1 } },
+        });
+        if (count !== 1) {
+          return { kind: 'agotado' as const };
+        }
+
+        // A diferencia de registrarUsuarioQrDirecto: NUNCA se crea ni
+        // modifica User acá — solo la Membresia nueva.
+        await tx.membresia.create({ data: { organizationId, usuarioId, rol } });
+        await tx.codigoQrInvitacion.update({ where: { id: codigoQrId }, data: { registradoUsuarioId: usuarioId } });
+
+        return { kind: 'ok' as const };
+      });
+    } catch (error) {
+      // P2002 defensivo: la Membresia (organizationId, usuarioId) ya
+      // existía — mismo motivo que en acceptInvitacionExistente. El update
+      // condicional de arriba ya serializa el único uso del código, así que
+      // esta rama es prácticamente inalcanzable en la práctica, pero se
+      // mantiene por el mismo motivo que el resto de los catches P2002 de
+      // este archivo: fallar cerrado, nunca dejar un uso consumido sin una
+      // Membresia (o viceversa).
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return { kind: 'agotado' as const };
       }
       throw error;
     }
