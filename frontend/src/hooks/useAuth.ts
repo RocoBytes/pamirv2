@@ -2,8 +2,9 @@ import { useState, useCallback, useEffect } from 'react'
 import type { User, AuthState } from '../types/salida'
 import { establishSession, loadAuth, clearAuth, isAuthRemembered } from '../lib/storage'
 import { setAuthToken } from '../lib/auth-token'
-import { loginWithCredentials, fetchMe, ApiError } from '../lib/api'
+import { loginWithCredentials, fetchMe } from '../lib/api'
 import { clubSlugFromPath } from '../lib/club-path'
+import { deriveClubAccessError, type ClubAccessError } from '../lib/club-access'
 
 interface UseAuthReturn extends AuthState {
   // remember: true guarda la sesión en localStorage ("recordar este
@@ -20,11 +21,13 @@ interface UseAuthReturn extends AuthState {
   refreshSession: () => Promise<void>
   // No-null solo cuando el club de la URL (ver lib/club-path.ts) existe pero
   // el backend acaba de rechazar la cuenta activa para ese club — 403 "no
-  // soy socio" o 404 "club no encontrado". App.tsx lo usa para decidir entre
-  // el dashboard y una de las pantallas de la Tabla de routing (Design §3).
-  // Nunca se llena por un error SIN slug en el path (Ruling 1 del plan de
-  // esta PR: ahí el comportamiento sigue siendo el silencioso de siempre).
-  clubAccessError: { status: 403 | 404; message: string } | null
+  // soy socio", 403 suspendido o 404 "club no encontrado" (kind distingue
+  // los dos 403 entre sí, ver lib/club-access.ts). App.tsx lo usa para
+  // decidir entre el dashboard y una de las pantallas de la Tabla de routing
+  // (Design §3). Nunca se llena por un error SIN slug en el path (Ruling 1
+  // del plan de esta PR: ahí el comportamiento sigue siendo el silencioso de
+  // siempre).
+  clubAccessError: ClubAccessError | null
 }
 
 function buildInitialState(): { user: User | null; token: string | null } {
@@ -39,7 +42,7 @@ function buildInitialState(): { user: User | null; token: string | null } {
 export function useAuth(): UseAuthReturn {
   const [state, setState] = useState(buildInitialState)
   const [isLoading, setIsLoading] = useState(false)
-  const [clubAccessError, setClubAccessError] = useState<{ status: 403 | 404; message: string } | null>(null)
+  const [clubAccessError, setClubAccessError] = useState<ClubAccessError | null>(null)
 
   useEffect(() => {
     if (state.token) setAuthToken(state.token)
@@ -80,12 +83,11 @@ export function useAuth(): UseAuthReturn {
         applyUser(user, savedToken)
       })
       .catch((err: unknown) => {
-        // Ruling 1: solo se convierte en clubAccessError cuando HAY un slug
-        // en el path — sin slug, un 403/404 sería inesperado (no debería
-        // pasar, ver el comentario de arriba) y se prefiere no arriesgar un
-        // falso positivo; se trata como cualquier otro fallo silencioso.
-        if (slug && err instanceof ApiError && (err.status === 403 || err.status === 404)) {
-          setClubAccessError({ status: err.status, message: err.message })
+        // La decisión completa (Ruling 1 incluido) vive en deriveClubAccessError,
+        // pura y testeada aparte (lib/club-access.test.ts) sin depender de React.
+        const clubError = deriveClubAccessError(slug, err)
+        if (clubError) {
+          setClubAccessError(clubError)
           return
         }
         // Token inválido/expirado o red caída: no se toca el estado
@@ -96,6 +98,7 @@ export function useAuth(): UseAuthReturn {
     const token = state.token
     if (!token) return
     const { user } = await fetchMe()
+    setClubAccessError(null)
     applyUser(user, token)
   }, [state.token, applyUser])
 
