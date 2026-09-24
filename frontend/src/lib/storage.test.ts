@@ -14,6 +14,7 @@ import {
   clearIntegrantesCache,
   decideDraftOwnership,
   establishSession,
+  migrateUnkeyedDraftToCurrentClub,
 } from './storage'
 import { clubRecordado } from './club-preferido'
 import type { User } from '../types/salida'
@@ -232,6 +233,94 @@ describe('saveIntegrante / loadIntegrantes / clearIntegrantesCache', () => {
     saveIntegrante(integrante, storage)
     clearIntegrantesCache(storage)
     expect(loadIntegrantes(storage)).toEqual([])
+  })
+})
+
+// ─── Claves por club (Tarea 7: multi-club) ────────────────────────────────────
+// clubSlugFromPath NO se importa acá a propósito: estos tests manejan el
+// keying por club enteramente a través del parámetro `slug` que exponen
+// saveDraft/loadDraft/clearDraft — resolver el slug desde la URL es
+// responsabilidad de los call sites reales (WizardLayout.tsx), no de storage.ts.
+
+describe('per-club draft/integrantes keys', () => {
+  it('saveDraft/loadDraft usan una clave por club cuando se pasa un slug', () => {
+    const storage = createFakeStorage()
+    saveDraft({ nombreActividad: 'A' }, storage, 'el-montanista')
+    saveDraft({ nombreActividad: 'B' }, storage, 'riala')
+    expect(loadDraft(storage, 'el-montanista')).toEqual({ nombreActividad: 'A' })
+    expect(loadDraft(storage, 'riala')).toEqual({ nombreActividad: 'B' })
+  })
+
+  it('sin slug, usa la clave sin club de siempre (compatibilidad)', () => {
+    const storage = createFakeStorage()
+    saveDraft({ nombreActividad: 'Sin club' }, storage)
+    expect(loadDraft(storage)).toEqual({ nombreActividad: 'Sin club' })
+  })
+
+  it('clearDraft con slug no borra el draft de otro club', () => {
+    const storage = createFakeStorage()
+    saveDraft({ nombreActividad: 'A' }, storage, 'el-montanista')
+    saveDraft({ nombreActividad: 'B' }, storage, 'riala')
+    clearDraft(storage, 'el-montanista')
+    expect(loadDraft(storage, 'el-montanista')).toBeNull()
+    expect(loadDraft(storage, 'riala')).toEqual({ nombreActividad: 'B' })
+  })
+})
+
+describe('migrateUnkeyedDraftToCurrentClub', () => {
+  it('mueve un draft SIN club (guardado antes de esta fase) a la clave del club actual', () => {
+    const storage = createFakeStorage()
+    saveDraft({ nombreActividad: 'Draft viejo' }, storage)
+    saveDraftStep(2, storage)
+
+    migrateUnkeyedDraftToCurrentClub(storage, 'el-montanista')
+
+    expect(loadDraft(storage, 'el-montanista')).toEqual({ nombreActividad: 'Draft viejo' })
+    expect(loadDraftStep(storage, 'el-montanista')).toBe(2)
+    expect(loadDraft(storage)).toBeNull()
+  })
+
+  it('no hace nada si no hay draft sin club', () => {
+    const storage = createFakeStorage()
+    migrateUnkeyedDraftToCurrentClub(storage, 'el-montanista')
+    expect(loadDraft(storage, 'el-montanista')).toBeNull()
+  })
+
+  it('no hace nada si ya existe un draft en la clave del club actual (nunca lo pisa)', () => {
+    const storage = createFakeStorage()
+    saveDraft({ nombreActividad: 'Viejo sin club' }, storage)
+    saveDraft({ nombreActividad: 'Ya en el club actual' }, storage, 'el-montanista')
+
+    migrateUnkeyedDraftToCurrentClub(storage, 'el-montanista')
+
+    expect(loadDraft(storage, 'el-montanista')).toEqual({ nombreActividad: 'Ya en el club actual' })
+    // El draft viejo sin club se conserva intacto: no se migró (destino
+    // ocupado) y tampoco se borró (nadie pierde una ficha en curso).
+    expect(loadDraft(storage)).toEqual({ nombreActividad: 'Viejo sin club' })
+  })
+
+  it('correr la migración dos veces es un no-op la segunda vez (idempotente)', () => {
+    const storage = createFakeStorage()
+    saveDraft({ nombreActividad: 'Draft viejo' }, storage)
+
+    migrateUnkeyedDraftToCurrentClub(storage, 'el-montanista')
+    saveDraft({ nombreActividad: 'Nuevo draft sin club, después de migrar' }, storage)
+    migrateUnkeyedDraftToCurrentClub(storage, 'el-montanista')
+
+    // La segunda corrida encuentra la clave del club actual YA ocupada (por
+    // la primera migración) y no la pisa con el segundo draft sin club.
+    expect(loadDraft(storage, 'el-montanista')).toEqual({ nombreActividad: 'Draft viejo' })
+  })
+
+  it('no hace nada en la raíz del dominio (sin club): un no-op cuando no se pasa slug', () => {
+    const storage = createFakeStorage()
+    saveDraft({ nombreActividad: 'Draft sin club' }, storage)
+    saveDraftStep(1, storage)
+
+    migrateUnkeyedDraftToCurrentClub(storage)
+
+    expect(loadDraft(storage)).toEqual({ nombreActividad: 'Draft sin club' })
+    expect(loadDraftStep(storage)).toBe(1)
   })
 })
 
