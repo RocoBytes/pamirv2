@@ -38,7 +38,7 @@ function buildDeps(organization: OrganizationSummary): CodigosQrDeps {
       await sendClubEmail(organization, {
         to: params.to,
         subject: subjectInvitacion(branding),
-        html: buildInvitationEmail(params, branding, { viaQr: true }),
+        html: buildInvitationEmail(params, branding, { viaQr: true, existingAccount: params.existingAccount }),
         kind: 'notificacion',
       });
     },
@@ -75,7 +75,7 @@ function buildPublicDeps(): CodigosQrDeps {
       await sendClubEmail(organization, {
         to: params.to,
         subject: subjectInvitacion(branding),
-        html: buildInvitationEmail(params, branding, { viaQr: true }),
+        html: buildInvitationEmail(params, branding, { viaQr: true, existingAccount: params.existingAccount }),
         kind: 'notificacion',
       });
     },

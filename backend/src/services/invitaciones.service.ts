@@ -124,6 +124,11 @@ export interface SendInvitationEmailParams {
   rolLabel: string;
   inviteUrl: string;
   expiraEnDias: number;
+  // La persona invitada ya tiene una cuenta RIALA (en este club o en otro):
+  // el correo debe decir "inicia sesión" en vez de "crea tu cuenta" (ver
+  // lib/email-templates.ts). El admin que invita NUNCA ve este campo ni nada
+  // derivado de él — solo cambia el texto del correo que recibe el invitado.
+  existingAccount: boolean;
 }
 
 export interface InvitacionesDeps {
@@ -272,7 +277,13 @@ async function invitadoPorPublico(
 
 const MENSAJE_SIN_PERMISO = 'No tienes permiso para invitar';
 const MENSAJE_ROL_NO_PERMITIDO = 'No puedes invitar con ese rol';
+// MENSAJE_CUENTA_EXISTENTE ya no lo usan crearInvitacion/reenviarInvitacion/
+// crearInvitacionPlataforma (ver el plan de la PR de Joining, Task 2): el
+// único 409 de esas tres ahora es "ya es socia de ESTE club"
+// (MENSAJE_YA_SOCIO_CLUB). aceptarInvitacion todavía lo usa — Task 3 de la
+// misma PR lo reemplaza ahí por el flujo de cuenta existente.
 const MENSAJE_CUENTA_EXISTENTE = 'Ya existe una cuenta con ese correo';
+const MENSAJE_YA_SOCIO_CLUB = 'Ya es socio de este club';
 const MENSAJE_NO_PENDIENTE = 'La invitación ya no está pendiente';
 const MENSAJE_NO_ENCONTRADA = 'Invitación no encontrada';
 const MENSAJE_TOKEN_INVALIDO = 'La invitación no es válida';
@@ -328,9 +339,13 @@ export async function crearInvitacion(
   // que es un subconjunto de RolUsuario.
   const rol = rolInput as RolUsuario;
 
-  const existing = await deps.repo.findUserByEmail(email);
-  if (existing) {
-    return { ok: false, status: 409, error: MENSAJE_CUENTA_EXISTENTE };
+  // Una sola consulta que responde a la vez "existe" y "ya es socia de ESTE
+  // club" (ver Ruling 2 del plan de esta PR) — el admin nunca aprende cuál
+  // de los dos casos restantes ocurrió, ni por el body de la respuesta ni
+  // por el tiempo que tarda: el camino de abajo es idéntico en ambos.
+  const estado = await deps.repo.findAccountMembershipStatus(email, requester.organizationId);
+  if (estado.esSocioDeEsteClub) {
+    return { ok: false, status: 409, error: MENSAJE_YA_SOCIO_CLUB };
   }
 
   const now = deps.now();
@@ -357,6 +372,7 @@ export async function crearInvitacion(
     rolLabel: ROL_LABELS[rol],
     inviteUrl,
     expiraEnDias: INVITE_TTL_DIAS,
+    existingAccount: estado.cuentaExiste,
   });
 
   return {
@@ -463,9 +479,9 @@ export async function reenviarInvitacion(
     return { ok: false, status: 403, error: MENSAJE_ROL_NO_PERMITIDO };
   }
 
-  const existing = await deps.repo.findUserByEmail(inv.email);
-  if (existing) {
-    return { ok: false, status: 409, error: MENSAJE_CUENTA_EXISTENTE };
+  const estadoCuenta = await deps.repo.findAccountMembershipStatus(inv.email, requester.organizationId);
+  if (estadoCuenta.esSocioDeEsteClub) {
+    return { ok: false, status: 409, error: MENSAJE_YA_SOCIO_CLUB };
   }
 
   await deps.repo.markRevoked(id, now);
@@ -492,6 +508,7 @@ export async function reenviarInvitacion(
     rolLabel: ROL_LABELS[inv.rol],
     inviteUrl,
     expiraEnDias: INVITE_TTL_DIAS,
+    existingAccount: estadoCuenta.cuentaExiste,
   });
 
   return {
@@ -678,9 +695,9 @@ export async function crearInvitacionPlataforma(
   }
   const rol = input.rol as RolUsuario;
 
-  const existing = await deps.repo.findUserByEmail(email);
-  if (existing) {
-    return { ok: false, status: 409, error: MENSAJE_CUENTA_EXISTENTE };
+  const estado = await deps.repo.findAccountMembershipStatus(email, input.organizationId);
+  if (estado.esSocioDeEsteClub) {
+    return { ok: false, status: 409, error: MENSAJE_YA_SOCIO_CLUB };
   }
 
   const now = deps.now();
@@ -707,6 +724,7 @@ export async function crearInvitacionPlataforma(
     rolLabel: ROL_LABELS[rol],
     inviteUrl,
     expiraEnDias: INVITE_TTL_DIAS,
+    existingAccount: estado.cuentaExiste,
   });
 
   return {

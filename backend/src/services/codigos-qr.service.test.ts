@@ -89,6 +89,18 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
       const u = users.find((x) => x.email === email);
       return u ? { id: u.id, email: u.email, name: u.name, rol: u.rol } : null;
     },
+    async findAccountMembershipStatus(email, organizationId) {
+      const u = users.find((x) => x.email === email);
+      if (!u) return { cuentaExiste: false, esSocioDeEsteClub: false };
+      // Misma simplificación deliberada que en invitaciones.service.test.ts:
+      // el fake nunca modeló Membresia como tabla propia, así que "socia de
+      // este club" es, para el fake, "su organizationId ES este club".
+      return { cuentaExiste: true, esSocioDeEsteClub: u.organizationId === organizationId };
+    },
+    async findAccountForOwnershipProof(email) {
+      const u = users.find((x) => x.email === email);
+      return u ? { id: u.id, email: u.email, passwordHash: `hashed:${u.email}-password` } : null;
+    },
     async hasPendingInvitacion(email, now) {
       return invitaciones.some(
         (inv) => inv.email === email && !inv.aceptadaAt && !inv.revocadaAt && inv.expiresAt > now,
@@ -141,6 +153,9 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
       codigo.registradoUsuarioId = user.id;
 
       return { kind: 'ok', user: { id: user.id, email: user.email, name: user.name, rol: user.rol } };
+    },
+    async registrarMembresiaQrDirectoExistente() {
+      throw new Error('registrarMembresiaQrDirectoExistente: not modeled until Task 4 — no Task 2 test should call this');
     },
   };
 
@@ -520,6 +535,47 @@ describe('consultarCodigoQr', () => {
 // ─── solicitarInvitacionQr (público) ───────────────────────────────────────────
 
 describe('solicitarInvitacionQr', () => {
+  // Crea un código CORREO activo con maxUsos alto (por defecto 50, salvo que
+  // el propio test lo agote) y devuelve solo el token — la mayoría de los
+  // tests de este describe solo necesitan eso, no el resto de creado.body.
+  async function crearQrActivo(deps: CodigosQrDeps, requester: Requester = ADMIN): Promise<string> {
+    const creado = await crearCodigoQr(deps, requester, {});
+    assert.equal(creado.ok, true);
+    if (!creado.ok) throw new Error('no se pudo crear el código QR');
+    return creado.body.qrUrl.split('#qr=')[1] ?? '';
+  }
+
+  it('un email con cuenta en OTRO club ya no se ignora: mintea la invitación igual que a un email nuevo', async () => {
+    const { deps, invitaciones, users } = createDeps({}, [
+      { id: 'u5', organizationId: 'otro-club', email: 'qr-otro-club@club.cl', name: 'QR Otro', rol: 'SOCIO', emailVerified: true },
+    ]);
+    void users;
+    const qrToken = await crearQrActivo(deps, ADMIN);
+    const result = await solicitarInvitacionQr(deps, qrToken, { email: 'qr-otro-club@club.cl' });
+    assert.equal(result.ok, true);
+    assert.equal(invitaciones.some((i) => i.email === 'qr-otro-club@club.cl'), true);
+  });
+
+  it('un email YA socio de este club sigue sin mintear nada (silencioso, mismo 202 genérico)', async () => {
+    const { deps, invitaciones } = createDeps({}, [
+      { id: 'u6', organizationId: ADMIN.organizationId, email: 'qr-ya-socio@club.cl', name: 'QR Ya Socio', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const qrToken = await crearQrActivo(deps, ADMIN);
+    const result = await solicitarInvitacionQr(deps, qrToken, { email: 'qr-ya-socio@club.cl' });
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.body.message, MENSAJE_SOLICITUD_GENERICA);
+    assert.equal(invitaciones.some((i) => i.email === 'qr-ya-socio@club.cl'), false);
+  });
+
+  it('el correo mezcla viaQr y existingAccount cuando ambos aplican', async () => {
+    const { deps, sentEmails } = createDeps({}, [
+      { id: 'u7', organizationId: 'otro-club', email: 'qr-viaqr-existente@club.cl', name: 'QR Existente', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const qrToken = await crearQrActivo(deps, ADMIN);
+    await solicitarInvitacionQr(deps, qrToken, { email: 'qr-viaqr-existente@club.cl' });
+    assert.equal((sentEmails[0] as { existingAccount: boolean }).existingAccount, true);
+  });
+
   it('con un email nuevo mintea una Invitacion SOCIO y envía el correo', async () => {
     const { deps, invitaciones, sentEmails } = createDeps();
     const creado = await crearCodigoQr(deps, ADMIN, {});

@@ -150,6 +150,7 @@ export interface SendCodigoQrInvitationEmailParams {
   rolLabel: string;
   inviteUrl: string;
   expiraEnDias: number;
+  existingAccount: boolean;
 }
 
 export interface OrganizacionPublicaConEstado {
@@ -610,11 +611,15 @@ export async function solicitarInvitacionQr(
 
   // (3) Todo lo que sigue corre en el contexto de tenant del club del QR.
   await deps.withOrganization(qr.organizationId, async () => {
-    // findUserByEmail es plataforma-wide (User.email es único en toda la
-    // plataforma) pese a correr acá dentro: el repo lo re-envuelve en
-    // runAsPlatform él mismo.
-    const existing = await deps.repo.findUserByEmail(email);
-    if (existing) return;
+    // Antes de la fase "Joining", una cuenta existente cortaba acá sin
+    // mintear nada. Desde esta PR, solo se sigue cortando si YA es socia de
+    // ESTE club — si tiene cuenta en otro club, o no tiene cuenta, el flujo
+    // es el mismo: mintear la invitación (el correo cambia de texto según
+    // cuentaExiste; la respuesta pública NUNCA cambia — sigue siendo el
+    // mismo 202 genérico en los tres casos, ver Ruling 6 del plan de esta
+    // PR: nadie que escanea un QR público debe poder distinguirlos).
+    const estado = await deps.repo.findAccountMembershipStatus(email, qr.organizationId);
+    if (estado.esSocioDeEsteClub) return;
 
     // Nunca se revoca una invitación pendiente existente para este email en
     // este club (a diferencia de crearInvitacion): quien sostiene el QR
@@ -649,6 +654,7 @@ export async function solicitarInvitacionQr(
         rolLabel: ROL_LABELS[ROL_QR],
         inviteUrl,
         expiraEnDias: INVITE_TTL_DIAS,
+        existingAccount: estado.cuentaExiste,
       })
       .catch(deps.logError);
   });

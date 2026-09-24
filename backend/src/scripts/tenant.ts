@@ -59,7 +59,7 @@ const crearInvitacionAdmin: TenantsDeps['crearInvitacionAdmin'] = (organizationI
         await sendClubEmail(organization, {
           to: params.to,
           subject: subjectInvitacion(branding),
-          html: buildInvitationEmail(params, branding),
+          html: buildInvitationEmail(params, branding, { existingAccount: params.existingAccount }),
           kind: 'notificacion',
         });
       },

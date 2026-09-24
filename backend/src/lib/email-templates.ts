@@ -985,6 +985,15 @@ export interface InvitationEmailOptions {
   // aclaratorio. Ausente (o false) deja el correo byte a byte igual que
   // antes de este campo.
   viaQr?: boolean;
+  // true cuando la persona invitada ya tiene una cuenta RIALA (fase
+  // "Joining" del diseño multi-club): cambia el párrafo introductorio y el
+  // botón de "Crear mi cuenta" a "Iniciar sesión y unirme". El enlace en sí
+  // no cambia — sigue siendo el mismo inviteUrl; hasta que el frontend de
+  // PR 4 distinga la pantalla, quien haga clic ve hoy la pantalla de "crear
+  // cuenta" de siempre, y su contraseña ahí se usa como prueba de
+  // titularidad (ver el backend de aceptarInvitacion). Ausente (o false)
+  // deja el correo byte a byte igual que antes de este campo.
+  existingAccount?: boolean;
 }
 
 export function buildInvitationEmail(
@@ -994,9 +1003,18 @@ export function buildInvitationEmail(
 ): string {
   const inviteUrlSafe = escapeHtml(data.inviteUrl);
 
-  const intro = `<p style="margin:0;color:#1f2937;font-size:15px;">
+  const introPrincipal = opts.existingAccount
+    ? `<p style="margin:0;color:#1f2937;font-size:15px;">
+    <strong>${escapeHtml(data.invitadoPorNombre)}</strong> te invitó a unirte a ${escapeHtml(branding.name)} con tu cuenta RIALA.
+  </p>
+  <p style="margin:10px 0 0;color:#1f2937;font-size:15px;">
+    Ya tienes una cuenta en el sistema: inicia sesión con tu correo y tu contraseña de siempre para unirte a este club.
+  </p>`
+    : `<p style="margin:0;color:#1f2937;font-size:15px;">
     <strong>${escapeHtml(data.invitadoPorNombre)}</strong> te invitó a crear una cuenta en el sistema de ${escapeHtml(branding.name)}.
-  </p>${
+  </p>`;
+
+  const intro = `${introPrincipal}${
     opts.viaQr
       ? `
   <p style="margin:10px 0 0;color:#1f2937;font-size:15px;">
@@ -1007,10 +1025,11 @@ export function buildInvitationEmail(
 
   const tabla = `${row('Rol asignado', data.rolLabel)}`;
 
+  const ctaLabel = opts.existingAccount ? 'Iniciar sesión y unirme' : 'Crear mi cuenta';
   const cta = `
         <tr>
           <td style="padding:0 32px 28px;text-align:center;">
-            <a href="${inviteUrlSafe}" style="display:inline-block;background:${GREEN};color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 28px;border-radius:8px;">Crear mi cuenta</a>
+            <a href="${inviteUrlSafe}" style="display:inline-block;background:${GREEN};color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 28px;border-radius:8px;">${ctaLabel}</a>
             <p style="margin:14px 0 0;color:#6b7280;font-size:11px;word-break:break-all;">
               Si el botón no funciona, copia este enlace: ${inviteUrlSafe}
             </p>

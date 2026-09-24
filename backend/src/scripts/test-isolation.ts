@@ -1326,7 +1326,12 @@ async function runQrChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Pro
     async () => {
       const creado = await postJsonAuth(baseUrl, tokenA, '/api/invitaciones/qr', {
         duracion: '24h',
-        maxUsos: 3,
+        // 4, no 3: desde la PR "Joining", solicitar con el email de una
+        // cuenta existente en OTRO club también mintea (ver el check
+        // "solicitar de nuevo..." más abajo) — un uso más que antes de esa
+        // PR, para que el check de revocación al final de esta función siga
+        // encontrando el código ACTIVO (usosRestantes > 0) tal como asumía.
+        maxUsos: 4,
         etiqueta: `iso-test-qr-${RANDOM_SUFFIX}`,
       });
       assert.equal(creado.status, 201);
@@ -1334,7 +1339,7 @@ async function runQrChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Pro
       qrIdA = body.codigo.id;
       qrTokenA = body.qrUrl.split('#qr=')[1] ?? '';
       assert.ok(qrTokenA.length > 0);
-      assert.equal(body.codigo.usosRestantes, 3);
+      assert.equal(body.codigo.usosRestantes, 4);
 
       const consultado = await postJson(baseUrl, '/api/qr/consultar', { token: qrTokenA });
       assert.equal(consultado.status, 200);
@@ -1363,12 +1368,12 @@ async function runQrChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Pro
       assert.equal(listado.status, 200);
       const codigos = (listado.body as { codigos: { id: string; usosRestantes: number }[] }).codigos;
       const propio = codigos.find((c) => c.id === qrIdA);
-      assert.equal(propio?.usosRestantes, 2);
+      assert.equal(propio?.usosRestantes, 3);
     },
   );
 
   await check(
-    'solicitar de nuevo con el MISMO email, o con el email de un ADMIN existente de OTRO club, da la misma respuesta 202 sin nueva fila',
+    'solicitar de nuevo con el MISMO email da la misma respuesta 202 sin nueva fila (ya pendiente); con el email de un ADMIN existente de OTRO club SÍ mintea (Ruling 6 de la PR "Joining")',
     async () => {
       const repetida = await postJson(baseUrl, '/api/qr/solicitar', { token: qrTokenA, email: emailNuevoQr });
       const conCuentaExistente = await postJson(baseUrl, '/api/qr/solicitar', { token: qrTokenA, email: seedB.adminEmail });
@@ -1379,10 +1384,20 @@ async function runQrChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Pro
         prisma.invitacion.findMany({ where: { email: emailNuevoQr } }),
       );
       assert.equal(invitacionesEmailRepetido.length, 1);
+      // Desde la PR "Joining", una cuenta existente en OTRO club deja de ser
+      // silenciosa acá: el QR reusable de A mintea una invitación para ella
+      // igual que para un email nuevo (el 202 público no lo revela, pero la
+      // fila sí queda — ver Ruling 6 del plan de esa PR). usosRestantes de
+      // qrIdA baja uno más de lo que bajaba antes de esa PR (ver el
+      // comentario en maxUsos, arriba).
       const invitacionEmailAdminB = await runAsPlatform(() =>
         prisma.invitacion.findFirst({ where: { email: seedB.adminEmail } }),
       );
-      assert.equal(invitacionEmailAdminB, null);
+      assert.ok(invitacionEmailAdminB);
+      assert.equal(invitacionEmailAdminB?.organizationId, seedA.organizationId);
+      assert.equal(invitacionEmailAdminB?.rol, 'SOCIO');
+      assert.equal(invitacionEmailAdminB?.invitadoPorId, seedA.adminUserId);
+      assert.equal(invitacionEmailAdminB?.codigoQrId, qrIdA);
     },
   );
 
@@ -2568,6 +2583,29 @@ async function runClubesFieldChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgS
   });
 }
 
+// ─── Invitar/reenviar/QR-por-correo con una cuenta existente (PR "Joining") ────
+
+async function runInviteJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
+  const tokenAdminA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+
+  await check(
+    'POST /api/invitaciones con el email de una cuenta que ya existe SOLO EN B: A la invita igual (201), no 409',
+    async () => {
+      const res = await postJsonAuth(baseUrl, tokenAdminA, '/api/invitaciones', { email: seedB.adminEmail });
+      assert.equal(res.status, 201);
+    },
+  );
+
+  await check(
+    'POST /api/invitaciones con el email de alguien que YA es socio de A responde 409 "Ya es socio de este club"',
+    async () => {
+      const res = await postJsonAuth(baseUrl, tokenAdminA, '/api/invitaciones', { email: seedA.socioEmail });
+      assert.equal(res.status, 409);
+      assert.deepEqual(res.body, { error: 'Ya es socio de este club' });
+    },
+  );
+}
+
 // ─── CLI create-user ─────────────────────────────────────────────────────────
 
 interface CreateUserCliResult {
@@ -2797,6 +2835,7 @@ async function main(): Promise<void> {
     await runCreateUserCliChecks(seedA, seedB);
     await runAuthMembershipChecks(started.baseUrl, seedA, seedB);
     await runClubesFieldChecks(started.baseUrl, seedA, seedB);
+    await runInviteJoiningChecks(started.baseUrl, seedA, seedB);
 
     await check(
       'invariante global: todo usuario de la base tiene al menos una Membresia (ningún alta se saltó el dual write) (Review Focus #1)',

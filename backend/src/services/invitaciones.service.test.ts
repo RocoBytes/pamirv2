@@ -44,6 +44,22 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
       const u = users.find((x) => x.id === id);
       return u ? { id: u.id, name: u.name, rol: u.rol } : null;
     },
+    async findAccountMembershipStatus(email, organizationId) {
+      const u = users.find((x) => x.email === email);
+      if (!u) return { cuentaExiste: false, esSocioDeEsteClub: false };
+      // El fake modela "socio de este club" como u.organizationId ===
+      // organizationId — una simplificación deliberada: este repositorio en
+      // memoria nunca modeló Membresia como una tabla propia (solo User),
+      // así que "socia de este club" es, para el fake, "su organizationId
+      // ES este club". Suficiente para las pruebas de crearInvitacion/
+      // reenviarInvitacion/crearInvitacionPlataforma, que solo necesitan
+      // distinguir "mismo club" de "cualquier otra cosa".
+      return { cuentaExiste: true, esSocioDeEsteClub: u.organizationId === organizationId };
+    },
+    async findAccountForOwnershipProof(email) {
+      const u = users.find((x) => x.email === email);
+      return u ? { id: u.id, email: u.email, passwordHash: `hashed:${u.email}-password` } : null;
+    },
     async revokePendingForEmail(email, now) {
       for (const inv of invitaciones) {
         if (inv.email === email && !inv.aceptadaAt && !inv.revocadaAt && inv.expiresAt > now) {
@@ -100,6 +116,9 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
       users.push(user);
       inv.usuarioId = user.id;
       return { id: user.id, email: user.email, name: user.name, rol: user.rol };
+    },
+    async acceptInvitacionExistente() {
+      throw new Error('acceptInvitacionExistente: not modeled until Task 3 — no Task 2 test should call this');
     },
   };
 
@@ -176,16 +195,56 @@ describe('crearInvitacion', () => {
     }
   });
 
-  it('rechaza con 409 si ya existe una cuenta con ese email', async () => {
+  it('un email con cuenta en OTRO club ya no se rechaza: se invita igual que a un email nuevo', async () => {
+    const { deps, sentEmails } = createDeps({}, [
+      { id: 'u1', organizationId: 'otro-club', email: 'ya@club.cl', name: 'Ya', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const result = await crearInvitacion(deps, ADMIN, { email: 'ya@club.cl' });
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.status, 201);
+      assert.equal(result.body.emailEnviado, true);
+    }
+    assert.equal(sentEmails.length, 1);
+  });
+
+  it('rechaza con 409 "Ya es socio de este club" si la cuenta YA es socia del club que invita', async () => {
     const { deps } = createDeps({}, [
-      { id: 'u1', organizationId: 'org-1', email: 'ya@club.cl', name: 'Ya', rol: 'SOCIO', emailVerified: true },
+      { id: 'u1', organizationId: ADMIN.organizationId, email: 'ya@club.cl', name: 'Ya', rol: 'SOCIO', emailVerified: true },
     ]);
     const result = await crearInvitacion(deps, ADMIN, { email: 'ya@club.cl' });
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.status, 409);
-      assert.equal(result.error, 'Ya existe una cuenta con ese correo');
+      assert.equal(result.error, 'Ya es socio de este club');
     }
+  });
+
+  it('la respuesta (ok/status/forma del body) es IDÉNTICA para un email sin cuenta y un email con cuenta en otro club — nunca revela cuál fue (enumeración, Review Focus #2)', async () => {
+    const { deps: depsNuevo } = createDeps();
+    const { deps: depsOtroClub } = createDeps({}, [
+      { id: 'u2', organizationId: 'otro-club', email: 'otro-club@club.cl', name: 'Otro', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const nuevo = await crearInvitacion(depsNuevo, ADMIN, { email: 'nunca-existio@club.cl' });
+    const existente = await crearInvitacion(depsOtroClub, ADMIN, { email: 'otro-club@club.cl' });
+    assert.equal(nuevo.ok, existente.ok);
+    if (nuevo.ok && existente.ok) {
+      assert.equal(nuevo.status, existente.status);
+      assert.deepEqual(Object.keys(nuevo.body).sort(), Object.keys(existente.body).sort());
+      assert.equal(nuevo.body.emailEnviado, existente.body.emailEnviado);
+    }
+  });
+
+  it('el correo a una cuenta existente dice "inicia sesión" (existingAccount: true); a una nueva, "crea tu cuenta" (existingAccount: false)', async () => {
+    const { deps: depsNuevo, sentEmails: emailsNuevo } = createDeps();
+    await crearInvitacion(depsNuevo, ADMIN, { email: 'nunca-existio-2@club.cl' });
+    assert.equal((emailsNuevo[0] as { existingAccount: boolean }).existingAccount, false);
+
+    const { deps: depsExistente, sentEmails: emailsExistente } = createDeps({}, [
+      { id: 'u3', organizationId: 'otro-club', email: 'con-cuenta@club.cl', name: 'Con Cuenta', rol: 'SOCIO', emailVerified: true },
+    ]);
+    await crearInvitacion(depsExistente, ADMIN, { email: 'con-cuenta@club.cl' });
+    assert.equal((emailsExistente[0] as { existingAccount: boolean }).existingAccount, true);
   });
 
   it('revoca cualquier invitación pendiente previa para el mismo email', async () => {
@@ -354,6 +413,24 @@ describe('revocarInvitacion', () => {
 // ─── reenviarInvitacion ─────────────────────────────────────────────────────────
 
 describe('reenviarInvitacion', () => {
+  it('un email con cuenta en OTRO club ya no se rechaza al reenviar', async () => {
+    const { deps, users, invitaciones } = createDeps({}, [
+      { id: 'u4', organizationId: 'otro-club', email: 'reenvio-otro@club.cl', name: 'Reenvío', rol: 'SOCIO', emailVerified: true },
+    ]);
+    void users;
+    const primera = await crearInvitacion(
+      { ...deps, repo: { ...deps.repo, findAccountMembershipStatus: async () => ({ cuentaExiste: false, esSocioDeEsteClub: false }) } },
+      ADMIN,
+      { email: 'reenvio-otro@club.cl' },
+    );
+    assert.equal(primera.ok, true);
+    if (!primera.ok) return;
+
+    const reenviada = await reenviarInvitacion(deps, ADMIN, primera.body.invitacion.id);
+    assert.equal(reenviada.ok, true);
+    assert.equal(invitaciones.filter((i) => i.email === 'reenvio-otro@club.cl').length, 2);
+  });
+
   it('reenvía una invitación pendiente con un token nuevo', async () => {
     const { deps } = createDeps();
     const creada = await crearInvitacion(deps, ADMIN, { email: 'x@club.cl' });
@@ -739,13 +816,29 @@ describe('crearInvitacionPlataforma', () => {
     assert.equal((sentEmails[0] as { invitadoPorNombre: string }).invitadoPorNombre, 'el equipo de la plataforma');
   });
 
-  it('rechaza con 409 si ya existe una cuenta con ese email', async () => {
+  it('rechaza con 409 "Ya es socio de este club" si la cuenta ya es socia del club destino (Ruling 7)', async () => {
     const { deps } = createDeps({}, [
-      { id: 'u1', organizationId: 'org-1', email: 'ya@club.cl', name: 'Ya', rol: 'SOCIO', emailVerified: true },
+      { id: 'u1', organizationId: 'org-nuevo', email: 'ya@club.cl', name: 'Ya', rol: 'SOCIO', emailVerified: true },
     ]);
     const result = await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'ya@club.cl', rol: 'ADMIN' });
     assert.equal(result.ok, false);
-    if (!result.ok) assert.equal(result.status, 409);
+    if (!result.ok) {
+      assert.equal(result.status, 409);
+      assert.equal(result.error, 'Ya es socio de este club');
+    }
+  });
+
+  it('un email con cuenta en OTRO club ya no se rechaza (Ruling 7: no hay enumeración que proteger frente a un CLI de confianza)', async () => {
+    const { deps } = createDeps({}, [
+      { id: 'u1', organizationId: 'org-1', email: 'otro-club@club.cl', name: 'Ya', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const result = await crearInvitacionPlataforma(deps, {
+      organizationId: 'org-nuevo',
+      email: 'otro-club@club.cl',
+      rol: 'ADMIN',
+    });
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.status, 201);
   });
 
   it('rechaza un rol desconocido', async () => {
