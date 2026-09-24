@@ -2652,6 +2652,58 @@ async function runAcceptJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: Or
     assert.equal(perfil?.name, 'Existente En B');
   });
 
+  await check(
+    'aceptar con rol/organizationId/email en conflicto en el body: la Membresia real en la DB usa el rol y el club de la INVITACIÓN, nunca los del body',
+    async () => {
+      const emailConflicto = `joining-conflicto-${RANDOM_SUFFIX}@iso-test.local`;
+      const passwordConflicto = 'password-conflicto-existente';
+      const passwordHash = await bcrypt.hash(passwordConflicto, SALT_ROUNDS);
+      const cuenta = await runAsPlatform(async () =>
+        prisma.$transaction(async (tx) => {
+          const user = await tx.user.create({
+            data: { organizationId: seedB.organizationId, email: emailConflicto, name: 'Nombre Original Conflicto', passwordHash, rol: 'SOCIO', emailVerified: true },
+          });
+          await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+          return user;
+        }),
+      );
+      // La invitación otorga LIDER en A — el body de abajo intenta colarse
+      // con otro rol, otro club y hasta otro email.
+      const token = await invitarYObtenerToken(emailConflicto, 'LIDER');
+      const res = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', {
+        token,
+        name: 'Nombre Que Se Ignora',
+        password: passwordConflicto,
+        rol: 'ADMIN',
+        organizationId: seedB.organizationId,
+        email: seedA.adminEmail,
+      });
+      assert.equal(res.status, 201);
+
+      // La Membresia real en A quedó con el rol de la INVITACIÓN (LIDER),
+      // nunca con el 'ADMIN' del body.
+      const membresiaA = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: cuenta.id } },
+        }),
+      );
+      assert.ok(membresiaA);
+      assert.equal(membresiaA?.rol, 'LIDER');
+
+      // No se creó ninguna Membresia extra bajo el organizationId inyectado
+      // en el body (que además coincide con el club real de B: si el bug
+      // existiera, esto seguiría siendo una fila más allá de la ya sembrada
+      // arriba para 'cuenta').
+      const membresiasDeLaCuenta = await runAsPlatform(() => prisma.membresia.findMany({ where: { usuarioId: cuenta.id } }));
+      assert.equal(membresiasDeLaCuenta.length, 2); // la sembrada en B + la nueva en A.
+
+      // El perfil compartido nunca se tocó: sigue el nombre/email original.
+      const perfil = await runAsPlatform(() => prisma.user.findUnique({ where: { id: cuenta.id } }));
+      assert.equal(perfil?.name, 'Nombre Original Conflicto');
+      assert.equal(perfil?.email, emailConflicto);
+    },
+  );
+
   await check('aceptar con la contraseña incorrecta responde 401 y no crea ninguna Membresia', async () => {
     const emailOtra = `joining-mal-password-${RANDOM_SUFFIX}@iso-test.local`;
     const passwordHash = await bcrypt.hash('la-correcta', SALT_ROUNDS);

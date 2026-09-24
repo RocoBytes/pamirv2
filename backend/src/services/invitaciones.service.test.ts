@@ -32,13 +32,27 @@ interface FakeUser {
   emailVerified: boolean;
 }
 
+// Solo la rama de "cuenta existente" de aceptarInvitacion escribe acá (ver
+// acceptInvitacionExistente más abajo) — el fake nunca modeló Membresia como
+// tabla propia del flujo de cuenta nueva (ver el comentario de
+// findAccountMembershipStatus), así que esto existe únicamente para poder
+// afirmar, en las pruebas de cuenta existente, con qué rol/organizationId se
+// llamó de verdad al repositorio (nunca los que traiga el body).
+interface FakeMembresia {
+  organizationId: string;
+  usuarioId: string;
+  rol: RolUsuario;
+}
+
 function createFakeRepo(seedUsers: FakeUser[] = []): {
   repo: InvitacionesRepo;
   users: FakeUser[];
   invitaciones: InvitacionRow[];
+  membresias: FakeMembresia[];
 } {
   const users = [...seedUsers];
   const invitaciones: InvitacionRow[] = [];
+  const membresias: FakeMembresia[] = [];
   let seq = 0;
   const nextId = (prefix: string): string => `${prefix}-${++seq}`;
 
@@ -127,13 +141,12 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
       }
       inv.aceptadaAt = now;
       inv.usuarioId = usuarioId;
-      void organizationId;
-      void rol;
+      membresias.push({ organizationId, usuarioId, rol });
       return true;
     },
   };
 
-  return { repo, users, invitaciones };
+  return { repo, users, invitaciones, membresias };
 }
 
 // Todo Requester usado como invitador debe existir como fila de usuario en el
@@ -146,7 +159,7 @@ function createDeps(overrides: Partial<InvitacionesDeps> = {}, extraUsers: FakeU
     { id: SOCIO.id, organizationId: SOCIO.organizationId, email: 'socio@club.cl', name: SOCIO.name, rol: 'SOCIO', emailVerified: true },
     ...extraUsers,
   ];
-  const { repo, users, invitaciones } = createFakeRepo(seedUsers);
+  const { repo, users, invitaciones, membresias } = createFakeRepo(seedUsers);
   const sentEmails: unknown[] = [];
   const deps: InvitacionesDeps = {
     repo,
@@ -159,7 +172,7 @@ function createDeps(overrides: Partial<InvitacionesDeps> = {}, extraUsers: FakeU
     frontendUrl: 'https://andinoclubpamir.app',
     ...overrides,
   };
-  return { deps, users, invitaciones, sentEmails };
+  return { deps, users, invitaciones, membresias, sentEmails };
 }
 
 const ADMIN = { id: 'admin-1', organizationId: 'org-1', name: 'Ada Admin', rol: 'ADMIN' as RolUsuario };
@@ -836,6 +849,53 @@ describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
     assert.equal(users.length, usersAntes);
   });
 
+  it('con un rol/organizationId/email en conflicto en el body, la Membresia usa los de la INVITACIÓN (nunca los del body) y no toca el perfil', async () => {
+    const { deps, users, membresias } = createDeps({}, [
+      { id: 'existente-5', organizationId: 'otro-club', email: 'existe5@club.cl', name: 'Nombre Original', rol: 'SOCIO', emailVerified: true },
+    ]);
+    // La invitación otorga LIDER en el club de ADMIN — el body de abajo
+    // intentará "colarse" con otro rol, otro club y hasta otro email.
+    const crear = await crearInvitacion(deps, ADMIN, { email: 'existe5@club.cl', rol: 'LIDER' });
+    assert.equal(crear.ok, true);
+    if (!crear.ok) return;
+    const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
+
+    const usersAntes = users.length;
+    const result = await aceptarInvitacion(
+      deps,
+      token,
+      {
+        name: 'Nombre Que Se Ignora',
+        password: 'existe5@club.cl-password',
+        // Ninguno de estos tres forma parte del contrato de entrada de la
+        // rama de cuenta existente: deben ignorarse igual que en el flujo
+        // de cuenta nueva (ver 'ignora un emitidaPorPlataforma/...' arriba).
+        rol: 'ADMIN',
+        organizationId: 'org-intrusa',
+        email: 'otro@evil.cl',
+      } as unknown as { name: unknown; password: unknown },
+      { verifiedEmail: null },
+    );
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.body.email, 'existe5@club.cl');
+
+    // Ninguna cuenta nueva se creó y el perfil compartido de la cuenta
+    // existente no se tocó.
+    assert.equal(users.length, usersAntes);
+    const cuenta = users.find((u) => u.id === 'existente-5');
+    assert.equal(cuenta?.name, 'Nombre Original');
+    assert.equal(cuenta?.organizationId, 'otro-club');
+
+    // Se creó EXACTAMENTE una Membresia — para la cuenta cuyo email es el de
+    // la INVITACIÓN (no 'otro@evil.cl' del body), con el rol y el club de
+    // la INVITACIÓN (LIDER, ADMIN.organizationId), nunca los del body
+    // ('ADMIN', 'org-intrusa').
+    assert.equal(membresias.length, 1);
+    assert.equal(membresias[0]?.usuarioId, 'existente-5');
+    assert.equal(membresias[0]?.rol, 'LIDER');
+    assert.equal(membresias[0]?.organizationId, ADMIN.organizationId);
+  });
+
   it('con la contraseña incorrecta, responde 401 y no crea nada', async () => {
     const { deps, invitaciones } = createDeps({}, [
       { id: 'existente-2', organizationId: 'otro-club', email: 'existe2@club.cl', name: 'X', rol: 'SOCIO', emailVerified: true },
@@ -848,11 +908,12 @@ describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
     const result = await aceptarInvitacion(deps, token, { name: 'X', password: 'contraseña-incorrecta' }, { verifiedEmail: null });
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.status, 401);
-    assert.equal(invitaciones.find((i) => i.tokenHash)?.aceptadaAt, null);
+    const invitacion = invitaciones.find((i) => i.id === crear.body.invitacion.id);
+    assert.equal(invitacion?.aceptadaAt, null);
   });
 
   it('con un Bearer del MISMO email (sin password), crea la Membresia igual', async () => {
-    const { deps } = createDeps({}, [
+    const { deps, users } = createDeps({}, [
       { id: 'existente-3', organizationId: 'otro-club', email: 'existe3@club.cl', name: 'X', rol: 'SOCIO', emailVerified: true },
     ]);
     const crear = await crearInvitacion(deps, ADMIN, { email: 'existe3@club.cl' });
@@ -860,8 +921,12 @@ describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
     if (!crear.ok) return;
     const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
 
+    const usersAntes = users.length;
     const result = await aceptarInvitacion(deps, token, { name: undefined, password: undefined }, { verifiedEmail: 'existe3@club.cl' });
     assert.equal(result.ok, true);
+    // Igual que la rama por contraseña: ningún User nuevo se crea (ver
+    // createFakeRepo.acceptInvitacionExistente, que nunca empuja a `users`).
+    assert.equal(users.length, usersAntes);
   });
 
   it('con un Bearer de OTRO email, responde 403 "Esta invitación es para otro correo"', async () => {
