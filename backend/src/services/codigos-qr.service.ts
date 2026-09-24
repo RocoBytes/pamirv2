@@ -709,7 +709,11 @@ export async function registrarConQrDirecto(
     if (existing) {
       // Cuenta existente (fase "Joining"): pide sign-in en vez de crear una
       // cuenta — mismas reglas de prueba que aceptarInvitacion (Ruling 3 del
-      // plan de esta PR). name del body se ignora siempre.
+      // plan de esta PR). name del body se ignora siempre. Si hay un Bearer
+      // verificado, la contraseña ni se valida ni se lee. Sin Bearer, la
+      // contraseña sí es obligatoria — mismo rate limit por token que login
+      // (ver Ruling 4 del plan de esta PR: app.ts's qrTokenKey limiter en
+      // /api/qr/registrar, 10/15min).
       let submittedPassword: string | undefined;
       if (auth.verifiedEmail === null) {
         const passwordParsed = passwordField.safeParse(body.password);

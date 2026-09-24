@@ -1196,6 +1196,7 @@ describe('registrarConQrDirecto — cuenta existente (PR "Joining")', () => {
     if (!result.ok) assert.equal(result.status, 401);
     const codigo = codigos.find((c) => c.modo === 'DIRECTO');
     assert.equal(codigo?.usosRestantes, 1);
+    assert.equal(codigo?.registradoUsuarioId, null);
   });
 
   it('con un Bearer de OTRO email, responde 403 "Este código es para otro correo"', async () => {
