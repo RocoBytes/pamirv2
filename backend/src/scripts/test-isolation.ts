@@ -2985,12 +2985,18 @@ interface CreateUserCliResult {
   stderr: string;
 }
 
+const CREATE_USER_CLI_TIMEOUT_MS = 15_000;
+
 // Corre create-user.ts como proceso real (misma DATABASE_URL, guardada por
 // su propio db:guard). stdin no es una TTY en un proceso hijo con stdio en
 // pipe, así que readPassword() toma la rama de una sola línea (ver
 // create-user.ts, readLineFromStdin): ni confirmación ni eco oculto, una
-// línea con la contraseña basta.
-function runCreateUserCli(args: string[], password: string): Promise<CreateUserCliResult> {
+// línea con la contraseña basta. password=null no escribe NADA en stdin
+// (solo lo cierra) — se usa para probar que un camino determinado no lee
+// contraseña en absoluto; si una regresión hiciera que igual la leyera y
+// se quedara esperando, el timeout de acá mata el proceso hijo en vez de
+// colgar el resto de la suite.
+function runCreateUserCli(args: string[], password: string | null): Promise<CreateUserCliResult> {
   return new Promise((resolve, reject) => {
     const child = spawn('npx', ['tsx', 'src/scripts/create-user.ts', ...args], {
       cwd: process.cwd(),
@@ -2998,15 +3004,39 @@ function runCreateUserCli(args: string[], password: string): Promise<CreateUserC
     });
     let stdout = '';
     let stderr = '';
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill('SIGKILL');
+      reject(
+        new Error(
+          `runCreateUserCli: timeout tras ${CREATE_USER_CLI_TIMEOUT_MS}ms esperando a que el proceso cierre ` +
+            `(args=${JSON.stringify(args)})`,
+        ),
+      );
+    }, CREATE_USER_CLI_TIMEOUT_MS);
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString();
     });
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString();
     });
-    child.on('error', reject);
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
-    child.stdin.write(`${password}\n`);
+    child.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve({ code, stdout, stderr });
+    });
+    if (password !== null) {
+      child.stdin.write(`${password}\n`);
+    }
     child.stdin.end();
   });
 }
@@ -3144,7 +3174,7 @@ async function runCreateUserCliChecks(seedA: OrgSeed, seedB: OrgSeed): Promise<v
   );
 
   await check(
-    'CLI create-user --force en un club NO primario actualiza SOLO el rol de la Membresia, nunca el nombre/contraseña compartidos (Ruling 8 del plan de la PR de Joining)',
+    'CLI create-user --force en un club NO primario actualiza SOLO el rol de la Membresia, sin pedir ni usar contraseña (Ruling 8 del plan de la PR de Joining)',
     async () => {
       const email = `cli-force-no-primario-${RANDOM_SUFFIX}@iso-test.local`;
       const primero = await runCreateUserCli(
@@ -3166,16 +3196,24 @@ async function runCreateUserCliChecks(seedA: OrgSeed, seedB: OrgSeed): Promise<v
       );
       assert.equal(segundo.code, 0, `stderr: ${segundo.stderr}`);
 
+      // Sin contraseña en stdin (password=null, ver runCreateUserCli): el
+      // camino no-primario no debe leerla ni pedirla. Si una regresión
+      // volviera a leer readPassword() acá, este comando fallaría (la
+      // contraseña vacía no pasa la validación mínima) o se quedaría
+      // esperando input — runCreateUserCli tiene su propio timeout para
+      // que ese segundo caso no cuelgue el resto de la suite.
       const tercero = await runCreateUserCli(
         ['--email', email, '--name', 'Nombre Que NO Debe Guardarse', '--org', SLUG_B, '--rol', 'LIDER', '--force'],
-        'password-que-no-debe-guardarse',
+        null,
       );
       assert.equal(tercero.code, 0, `stderr: ${tercero.stderr}`);
 
       const usuarioDespues = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
-      // El perfil compartido no cambió NADA: ni nombre ni passwordHash.
+      // El perfil compartido no cambió NADA: ni nombre, ni passwordHash, ni
+      // emailVerified.
       assert.equal(usuarioDespues?.name, usuarioAntes?.name);
       assert.equal(usuarioDespues?.passwordHash, usuarioAntes?.passwordHash);
+      assert.equal(usuarioDespues?.emailVerified, usuarioAntes?.emailVerified);
       // La columna heredada User.organizationId/rol tampoco (B no es el
       // primario).
       assert.equal(usuarioDespues?.organizationId, seedA.organizationId);

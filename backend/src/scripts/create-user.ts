@@ -163,6 +163,32 @@ async function run(): Promise<void> {
     return;
   }
 
+  // Desde acá: o una cuenta nueva (!existing), o una actualización con
+  // --force de una membresía existente (existing && existingMembresia &&
+  // force). Club NO primario + --force: --force es acá una herramienta de
+  // reparación de ROL para ESTE club, nunca del perfil compartido de la
+  // cuenta (Ruling 8 del plan de la PR de Joining: el mismo motivo por el
+  // que la alta aditiva de arriba tampoco lo toca) — así que esta rama
+  // decide ANTES de pedir contraseña y nunca llama a readPassword()/
+  // bcrypt.hash(): no hay nada que pedir, teclear ni descartar. Cualquier
+  // contraseña que el operador haya puesto a disposición en stdin
+  // simplemente queda sin leer (no es un error).
+  if (existing && existing.organizationId !== organization.id) {
+    await prisma.membresia.upsert({
+      where: { organizationId_usuarioId: { organizationId: organization.id, usuarioId: existing.id } },
+      create: { organizationId: organization.id, usuarioId: existing.id, rol },
+      update: { rol },
+    });
+    console.log(
+      `[create-user] Se actualizó el rol de "${email}" en "${org}" a rol="${rol}" (club no primario: el ` +
+        'perfil compartido de la cuenta no se tocó; no se pidió ni se usó ninguna contraseña).',
+    );
+    return;
+  }
+
+  // Desde acá: cuenta nueva, o --force sobre el club PRIMARIO de la cuenta
+  // (existing.organizationId === organization.id). Ambos caminos necesitan
+  // nombre + contraseña, así que recién acá se pide/hashea.
   const rawPassword = await readPassword();
   if (rawPassword === null) {
     process.exitCode = 1;
@@ -191,29 +217,8 @@ async function run(): Promise<void> {
     return;
   }
 
-  // existing && existingMembresia && force: club PRIMARIO de la cuenta →
-  // actualiza el perfil compartido completo (name/contraseña/rol), como
-  // siempre. Club NO primario → --force es una herramienta de reparación de
-  // ROL para ESTE club, nunca del perfil compartido de la cuenta (Ruling 8
-  // del plan de la PR de Joining: el mismo motivo por el que la alta
-  // aditiva de arriba nunca lo toca). No se pide/hashea contraseña para esa
-  // rama: ya se leyó rawPassword más arriba en TODA invocación con --force,
-  // así que simplemente se descarta acá si el club no es el primario —
-  // mantiene un solo camino de parseo de argumentos, sin --force
-  // condicionando qué flags son válidos.
-  if (existing.organizationId !== organization.id) {
-    await prisma.membresia.upsert({
-      where: { organizationId_usuarioId: { organizationId: organization.id, usuarioId: existing.id } },
-      create: { organizationId: organization.id, usuarioId: existing.id, rol },
-      update: { rol },
-    });
-    console.log(
-      `[create-user] Se actualizó el rol de "${email}" en "${org}" a rol="${rol}" (club no primario: el ` +
-        'perfil compartido de la cuenta no se tocó).',
-    );
-    return;
-  }
-
+  // existing && existingMembresia && force && club PRIMARIO: actualiza el
+  // perfil compartido completo (name/contraseña/rol), como siempre.
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.update({
       where: { email },
