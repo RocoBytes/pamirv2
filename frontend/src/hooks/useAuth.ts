@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect } from 'react'
 import type { User, AuthState } from '../types/salida'
 import { establishSession, loadAuth, clearAuth, isAuthRemembered } from '../lib/storage'
 import { setAuthToken } from '../lib/auth-token'
-import { loginWithCredentials, fetchMe } from '../lib/api'
+import { loginWithCredentials, fetchMe, ApiError } from '../lib/api'
+import { clubSlugFromPath } from '../lib/club-path'
 
 interface UseAuthReturn extends AuthState {
   // remember: true guarda la sesión en localStorage ("recordar este
@@ -17,6 +18,13 @@ interface UseAuthReturn extends AuthState {
   // hace nada sin sesión; propaga el error de red para que quien la llame
   // decida cómo mostrarlo (o ignorarlo, como hace el efecto de montaje).
   refreshSession: () => Promise<void>
+  // No-null solo cuando el club de la URL (ver lib/club-path.ts) existe pero
+  // el backend acaba de rechazar la cuenta activa para ese club — 403 "no
+  // soy socio" o 404 "club no encontrado". App.tsx lo usa para decidir entre
+  // el dashboard y una de las pantallas de la Tabla de routing (Design §3).
+  // Nunca se llena por un error SIN slug en el path (Ruling 1 del plan de
+  // esta PR: ahí el comportamiento sigue siendo el silencioso de siempre).
+  clubAccessError: { status: 403 | 404; message: string } | null
 }
 
 function buildInitialState(): { user: User | null; token: string | null } {
@@ -31,6 +39,7 @@ function buildInitialState(): { user: User | null; token: string | null } {
 export function useAuth(): UseAuthReturn {
   const [state, setState] = useState(buildInitialState)
   const [isLoading, setIsLoading] = useState(false)
+  const [clubAccessError, setClubAccessError] = useState<{ status: 403 | 404; message: string } | null>(null)
 
   useEffect(() => {
     if (state.token) setAuthToken(state.token)
@@ -57,9 +66,28 @@ export function useAuth(): UseAuthReturn {
     const saved = loadAuth()
     if (!saved?.token) return
     const savedToken = saved.token
+    // Ruling 2 del plan de esta PR: en la raíz sin slug, con varias
+    // membresías YA conocidas por una sesión guardada, esta llamada
+    // recibiría siempre 400 "Selecciona un club" (authMiddleware) — se
+    // evita a propósito; App.tsx muestra "Mis clubes" con los datos
+    // guardados sin esperar ninguna red.
+    const slug = clubSlugFromPath()
+    if (!slug && (saved.user?.clubes?.length ?? 0) > 1) return
+
     fetchMe()
-      .then(({ user }) => applyUser(user, savedToken))
-      .catch(() => {
+      .then(({ user }) => {
+        setClubAccessError(null)
+        applyUser(user, savedToken)
+      })
+      .catch((err: unknown) => {
+        // Ruling 1: solo se convierte en clubAccessError cuando HAY un slug
+        // en el path — sin slug, un 403/404 sería inesperado (no debería
+        // pasar, ver el comentario de arriba) y se prefiere no arriesgar un
+        // falso positivo; se trata como cualquier otro fallo silencioso.
+        if (slug && err instanceof ApiError && (err.status === 403 || err.status === 404)) {
+          setClubAccessError({ status: err.status, message: err.message })
+          return
+        }
         // Token inválido/expirado o red caída: no se toca el estado
       })
   }, [applyUser])
@@ -77,6 +105,7 @@ export function useAuth(): UseAuthReturn {
       const { user, token } = await loginWithCredentials(email, password)
       setAuthToken(token)
       establishSession({ user, token }, { remember })
+      setClubAccessError(null)
       setState({ user, token })
     } finally {
       setIsLoading(false)
@@ -86,6 +115,7 @@ export function useAuth(): UseAuthReturn {
   const logout = useCallback((): void => {
     clearAuth()
     setAuthToken(null)
+    setClubAccessError(null)
     setState({ user: null, token: null })
   }, [])
 
@@ -96,5 +126,6 @@ export function useAuth(): UseAuthReturn {
     loginWithCredentials: login,
     logout,
     refreshSession,
+    clubAccessError,
   }
 }
