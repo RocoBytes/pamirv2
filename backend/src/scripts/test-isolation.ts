@@ -481,22 +481,14 @@ interface ModelProbe {
   // estos checks (siempre se dispara sobre el id de B desde el contexto de A,
   // que siempre debe fallar antes de tocar la fila).
   updateProbe: Record<string, unknown>;
-  // Filas totales que el club A debe tener de este modelo (default 1). User e
-  // Integrante ahora seedean una fila extra (el socio "de biblioteca" — ver
-  // seedOrganization), así que declaran 2 explícitamente.
+  // Filas totales que el club A debe tener de este modelo (default 1).
+  // Integrante ahora seedea una fila extra (el socio "de biblioteca" — ver
+  // seedOrganization), así que declara 2 explícitamente.
   rowCount?: number;
 }
 
 function buildProbes(seedA: OrgSeed, seedB: OrgSeed): ModelProbe[] {
   return [
-    {
-      name: 'User',
-      delegate: asCheckable(prisma.user),
-      idA: seedA.adminUserId,
-      idB: seedB.adminUserId,
-      updateProbe: { name: 'probe' },
-      rowCount: 2,
-    },
     {
       name: 'Membresia',
       delegate: asCheckable(prisma.membresia),
@@ -868,15 +860,20 @@ async function runHttpChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): P
     },
   );
 
-  await check('GET /api/admin/users — solo los usuarios del propio club', async () => {
+  await check('GET /api/admin/users — solo los usuarios del propio club (por Membresia desde este PR)', async () => {
     const res = await getJson(baseUrl, tokenA, '/api/admin/users');
     assert.equal(res.status, 200);
-    const users = res.body as { email: string }[];
+    const users = res.body as { email: string; rol: string }[];
     // 2: el admin y el socio "de biblioteca" seedeados en el club A.
     assert.equal(users.length, 2);
     const emails = users.map((u) => u.email);
     assert.ok(emails.includes(seedA.adminEmail));
     assert.ok(emails.includes(seedA.socioEmail));
+    // User es global desde este PR (ver scope-args.ts): si listUsers volviera
+    // a listar directo desde User en vez de Membresia, este assert lo
+    // detectaría filtrando personas de OTRO club adentro de la lista de A.
+    assert.ok(!emails.includes(seedB.adminEmail));
+    assert.ok(!emails.includes(seedB.socioEmail));
   });
 
   await check('GET /api/admin/stats — los totales reflejan solo el club del que consulta (predicado SQL crudo)', async () => {
@@ -2257,7 +2254,7 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
 
 // ─── Cambio de rol y Membresia ──────────────────────────────────────────────
 
-async function runRoleChangeMembresiaChecks(baseUrl: string, seedA: OrgSeed): Promise<void> {
+async function runRoleChangeMembresiaChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
   const tokenA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
 
   await check(
@@ -2275,6 +2272,21 @@ async function runRoleChangeMembresiaChecks(baseUrl: string, seedA: OrgSeed): Pr
       );
       assert.ok(membresia);
       assert.equal(membresia?.rol, 'LIDER');
+    },
+  );
+
+  await check(
+    'PATCH /api/admin/users/:id/rol — el admin de A no puede cambiar el rol de alguien que solo es socio de B (404, User ya es global) (Review Focus #2)',
+    async () => {
+      const res = await patchJsonAuth(baseUrl, tokenA, `/api/admin/users/${seedB.socioUserId}/rol`, { rol: 'ADMIN' });
+      assert.equal(res.status, 404);
+
+      const membresiaIntacta = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedB.organizationId, usuarioId: seedB.socioUserId } },
+        }),
+      );
+      assert.equal(membresiaIntacta?.rol, 'SOCIO');
     },
   );
 }
@@ -2448,7 +2460,7 @@ async function main(): Promise<void> {
     await runFileDownloadChecks(started.baseUrl, seedA, seedB);
     await runClubLogoChecks(started.baseUrl, seedA, seedB);
     await runTenantCliChecks(started.baseUrl, seedA, seedB);
-    await runRoleChangeMembresiaChecks(started.baseUrl, seedA);
+    await runRoleChangeMembresiaChecks(started.baseUrl, seedA, seedB);
     await runCreateUserCliChecks(seedA);
 
     await check(

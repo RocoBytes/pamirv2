@@ -12,9 +12,11 @@ import { TenantContextError, type TenantStore } from './tenant-context.js';
 
 export { TenantContextError };
 
-// Los 17 modelos de negocio: toda fila pertenece a exactamente un club.
+// Los 16 modelos de negocio: toda fila pertenece a exactamente un club. User
+// se movió a GLOBAL_MODELS (ver abajo) — sigue teniendo organization_id como
+// columna heredada (fase de expansión del diseño multi-club, nunca leída
+// para el aislamiento), pero una cuenta ya no pertenece a un único club.
 export const TENANT_MODELS = [
-  'User',
   'Membresia',
   'DashboardLayout',
   'Invitacion',
@@ -33,11 +35,15 @@ export const TENANT_MODELS = [
   'Notificacion',
 ] as const;
 
-// Modelos sin organizationId: no pertenecen a ningún club y jamás se filtran.
-// Vacía desde que el único modelo global (guardaba el refresh token de
-// Google, ya eliminado tras migrar el almacenamiento de archivos) dejó de
-// existir — el mecanismo se conserva tipado para el próximo modelo global.
-export const GLOBAL_MODELS = [] as const;
+// Modelos sin organization_id como filtro de aislamiento: no pertenecen a un
+// único club y jamás se filtran por él. User es el primero desde el diseño
+// multi-club (docs/superpowers/specs/2026-09-23-multi-club-membership-design.md):
+// una cuenta puede tener una Membresia (esa sí tenant-scoped, ver arriba) en
+// cualquier número de clubes. Todo listado o conteo de User debe pasar por
+// Membresia — ver lib/user-global-guard.test.ts, que falla el build si User
+// se lista o cuenta directo (findMany, count, groupBy o aggregate) fuera de
+// la allowlist corta que declara ese archivo.
+export const GLOBAL_MODELS = ['User'] as const;
 
 // Organization no está en TENANT_MODELS (no tiene columna organizationId; ES
 // el club) ni en GLOBAL_MODELS (si hay un contexto de club activo, ese club
