@@ -98,6 +98,7 @@ model Organization {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   users                      User[]
+  membresias                 Membresia[]
   dashboardLayouts           DashboardLayout[]
   invitaciones               Invitacion[]
   codigosQr                  CodigoQrInvitacion[]
@@ -150,9 +151,32 @@ model User {
   // El QR directo que dio de alta a este usuario (null para toda cuenta que
   // nació por otro camino) — ver CodigoQrInvitacion.registradoUsuarioId.
   codigoQrRegistro     CodigoQrInvitacion?  @relation("CodigoQrRegistro")
+  membresias           Membresia[]
 
   @@index([organizationId])
   @@map("users")
+}
+
+// Pertenencia de una cuenta a un club, con su rol EN ESE club — ver
+// docs/superpowers/specs/2026-09-23-multi-club-membership-design.md. Fase de
+// expansión: hoy es una copia con dual write de User.organizationId/rol
+// (User sigue siendo la fuente de verdad de lectura), no confundir con
+// Integrante.membresiaClub/MEMBRESIA_CLUBS (lib/membresias.ts), que es un
+// concepto totalmente distinto (afiliación declarada en la ficha de socio).
+model Membresia {
+  id             String     @id @default(uuid())
+  organizationId String     @map("organization_id")
+  usuarioId      String     @map("usuario_id")
+  rol            RolUsuario
+  creadoAt       DateTime   @default(now()) @map("creado_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  usuario      User         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, usuarioId])
+  @@index([usuarioId])
+  @@index([organizationId])
+  @@map("membresias")
 }
 
 // Per-user customizable dashboard layout (react-grid-layout config).

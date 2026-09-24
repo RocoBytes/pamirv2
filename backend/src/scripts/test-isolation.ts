@@ -8,6 +8,7 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
+import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.js';
@@ -122,6 +123,7 @@ async function purgeOrganization(organizationId: string): Promise<void> {
     await prisma.codigoQrInvitacion.deleteMany({ where: { organizationId } });
     await prisma.invitacion.deleteMany({ where: { organizationId } });
     await prisma.dashboardLayout.deleteMany({ where: { organizationId } });
+    await prisma.membresia.deleteMany({ where: { organizationId } });
     await prisma.user.deleteMany({ where: { organizationId } });
     await prisma.organization.delete({ where: { id: organizationId } });
   });
@@ -150,6 +152,7 @@ interface OrgSeed {
   organizationName: string;
   adminUserId: string;
   adminEmail: string;
+  membresiaAdminId: string;
   // Socio (no admin) con su propia ficha de Integrante en el mismo club — ver
   // el check de la biblioteca de documentos en runHttpChecks.
   socioUserId: string;
@@ -199,6 +202,10 @@ async function seedOrganization(label: 'A' | 'B', slug: string): Promise<OrgSeed
       },
     });
 
+    const membresiaAdmin = await prisma.membresia.create({
+      data: { organizationId: organization.id, usuarioId: adminUser.id, rol: 'ADMIN' },
+    });
+
     const integrante = await prisma.integrante.create({
       data: {
         organizationId: organization.id,
@@ -245,6 +252,10 @@ async function seedOrganization(label: 'A' | 'B', slug: string): Promise<OrgSeed
         rol: 'SOCIO',
         emailVerified: true,
       },
+    });
+
+    await prisma.membresia.create({
+      data: { organizationId: organization.id, usuarioId: socioUser.id, rol: 'SOCIO' },
     });
 
     await prisma.integrante.create({
@@ -419,6 +430,7 @@ async function seedOrganization(label: 'A' | 'B', slug: string): Promise<OrgSeed
       organizationName,
       adminUserId: adminUser.id,
       adminEmail,
+      membresiaAdminId: membresiaAdmin.id,
       socioUserId: socioUser.id,
       socioEmail,
       integranteId: integrante.id,
@@ -483,6 +495,14 @@ function buildProbes(seedA: OrgSeed, seedB: OrgSeed): ModelProbe[] {
       idA: seedA.adminUserId,
       idB: seedB.adminUserId,
       updateProbe: { name: 'probe' },
+      rowCount: 2,
+    },
+    {
+      name: 'Membresia',
+      delegate: asCheckable(prisma.membresia),
+      idA: seedA.membresiaAdminId,
+      idB: seedB.membresiaAdminId,
+      updateProbe: { rol: 'SOCIO' },
       rowCount: 2,
     },
     {
@@ -776,6 +796,24 @@ async function postJsonAuth(
   return { status: res.status, body };
 }
 
+// Como postJsonAuth, pero con method PATCH — lo necesita el check de cambio
+// de rol (ver runRoleChangeMembresiaChecks), la primera vez que este archivo
+// prueba PATCH /api/admin/users/:id/rol.
+async function patchJsonAuth(
+  baseUrl: string,
+  token: string,
+  urlPath: string,
+  payload: unknown,
+): Promise<{ status: number; body: unknown }> {
+  const res = await fetch(`${baseUrl}${urlPath}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => undefined);
+  return { status: res.status, body };
+}
+
 // Fecha calendario (YYYY-MM-DD) desplazada `dias` desde ahora — usada para
 // armar la ficha del evento operativo del club nuevo (ver runTenantCliChecks)
 // sin acoplarse a la fecha en que corra la suite.
@@ -991,6 +1029,14 @@ async function runHttpChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): P
       assert.equal(creado?.organizationId, seedA.organizationId);
       assert.equal(creado?.rol, 'ADMIN');
       assert.equal(creado?.emailVerified, true);
+
+      const membresia = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: creado!.id } },
+        }),
+      );
+      assert.ok(membresia);
+      assert.equal(membresia?.rol, 'ADMIN');
     },
   );
 
@@ -1006,6 +1052,82 @@ async function runHttpChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): P
     const body = res.body as { invitaciones: { email: string }[] };
     assert.equal(body.invitaciones.some((i) => i.email === email), false);
   });
+
+  await check(
+    'dos invitaciones pendientes para el mismo correo: la transacción que pierde la carrera de User.email no deja una Membresia huérfana',
+    async () => {
+      const email = `race-invite-${RANDOM_SUFFIX}@iso-test.local`;
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      const invitacion1 = await runAsPlatform(() =>
+        prisma.invitacion.create({
+          data: {
+            organizationId: seedA.organizationId,
+            email,
+            rol: 'SOCIO',
+            tokenHash: randomUUID().replace(/-/g, ''),
+            expiresAt,
+            invitadoPorId: seedA.adminUserId,
+          },
+        }),
+      );
+      const invitacion2 = await runAsPlatform(() =>
+        prisma.invitacion.create({
+          data: {
+            organizationId: seedA.organizationId,
+            email,
+            rol: 'LIDER',
+            tokenHash: randomUUID().replace(/-/g, ''),
+            expiresAt,
+            invitadoPorId: seedA.adminUserId,
+          },
+        }),
+      );
+
+      // acceptInvitacion corre siempre dentro de runAsPlatform en producción
+      // (así lo invoca el controller en aceptarInvitacion) — acá se preserva
+      // ese mismo contexto para las dos llamadas directas y concurrentes.
+      const [primero, segundo] = await runAsPlatform(() =>
+        Promise.all([
+          invitacionesRepoPrisma.acceptInvitacion({
+            invitacionId: invitacion1.id,
+            organizationId: seedA.organizationId,
+            email,
+            name: 'Primero',
+            passwordHash: 'hashed:primero',
+            rol: 'SOCIO',
+            now,
+          }),
+          invitacionesRepoPrisma.acceptInvitacion({
+            invitacionId: invitacion2.id,
+            organizationId: seedA.organizationId,
+            email,
+            name: 'Segundo',
+            passwordHash: 'hashed:segundo',
+            rol: 'LIDER',
+            now,
+          }),
+        ]),
+      );
+
+      // Exactamente una de las dos transacciones gana la carrera del unique
+      // de User.email; la otra vuelve null (ver el catch de P2002 en
+      // invitaciones.repo.prisma.ts) sin dejar rastro.
+      const ganadores = [primero, segundo].filter((r) => r !== null);
+      assert.equal(ganadores.length, 1);
+
+      const creado = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+      assert.ok(creado);
+
+      const membresias = await runAsPlatform(() => prisma.membresia.findMany({ where: { usuarioId: creado!.id } }));
+      // Si el dual write viviera fuera de la transacción de Prisma, este
+      // assert es el que lo detectaría: una Membresia "huérfana" de la
+      // transacción que perdió la carrera de User.email.
+      assert.equal(membresias.length, 1);
+      assert.equal(membresias[0]?.rol, creado?.rol);
+    },
+  );
 
   // ─── Puente multi-club: la membresía de una ficha nueva la decide el servidor ──
   // El formulario de registro ya no pregunta a qué club dice pertenecer la
@@ -1409,6 +1531,14 @@ async function runQrDirectoChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
       assert.equal(creado?.organizationId, seedA.organizationId);
       assert.equal(creado?.rol, 'SOCIO');
       assert.equal(creado?.emailVerified, true);
+
+      const membresia = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: creado!.id } },
+        }),
+      );
+      assert.ok(membresia);
+      assert.equal(membresia?.rol, 'SOCIO');
 
       const login = await postJson(baseUrl, '/api/auth/login', { email: emailNuevo, password: 'password123' });
       assert.equal(login.status, 200);
@@ -2125,6 +2255,141 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
   });
 }
 
+// ─── Cambio de rol y Membresia ──────────────────────────────────────────────
+
+async function runRoleChangeMembresiaChecks(baseUrl: string, seedA: OrgSeed): Promise<void> {
+  const tokenA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+
+  await check(
+    'PATCH /api/admin/users/:id/rol actualiza también la Membresia del usuario (mismo club, mismo rol nuevo)',
+    async () => {
+      const res = await patchJsonAuth(baseUrl, tokenA, `/api/admin/users/${seedA.socioUserId}/rol`, { rol: 'LIDER' });
+      assert.equal(res.status, 200);
+      const body = res.body as { rol: string };
+      assert.equal(body.rol, 'LIDER');
+
+      const membresia = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: seedA.socioUserId } },
+        }),
+      );
+      assert.ok(membresia);
+      assert.equal(membresia?.rol, 'LIDER');
+    },
+  );
+}
+
+// ─── CLI create-user ─────────────────────────────────────────────────────────
+
+interface CreateUserCliResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+// Corre create-user.ts como proceso real (misma DATABASE_URL, guardada por
+// su propio db:guard). stdin no es una TTY en un proceso hijo con stdio en
+// pipe, así que readPassword() toma la rama de una sola línea (ver
+// create-user.ts, readLineFromStdin): ni confirmación ni eco oculto, una
+// línea con la contraseña basta.
+function runCreateUserCli(args: string[], password: string): Promise<CreateUserCliResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('npx', ['tsx', 'src/scripts/create-user.ts', ...args], {
+      cwd: process.cwd(),
+      env: process.env,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.on('error', reject);
+    child.on('close', (code) => resolve({ code, stdout, stderr }));
+    child.stdin.write(`${password}\n`);
+    child.stdin.end();
+  });
+}
+
+async function runCreateUserCliChecks(seedA: OrgSeed): Promise<void> {
+  await check('CLI create-user: un usuario nuevo obtiene exactamente una Membresia con su rol y club', async () => {
+    const email = `cli-nuevo-${RANDOM_SUFFIX}@iso-test.local`;
+    const result = await runCreateUserCli(
+      ['--email', email, '--name', 'CLI Nuevo', '--org', SLUG_A, '--rol', 'LIDER'],
+      'password123',
+    );
+    assert.equal(result.code, 0, `stderr: ${result.stderr}`);
+
+    const user = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+    assert.ok(user);
+    const membresias = await runAsPlatform(() => prisma.membresia.findMany({ where: { usuarioId: user!.id } }));
+    assert.equal(membresias.length, 1);
+    assert.equal(membresias[0]?.organizationId, seedA.organizationId);
+    assert.equal(membresias[0]?.rol, 'LIDER');
+  });
+
+  await check('CLI create-user --force: cambia el rol y también actualiza la Membresia existente', async () => {
+    const email = `cli-force-${RANDOM_SUFFIX}@iso-test.local`;
+    const primero = await runCreateUserCli(
+      ['--email', email, '--name', 'CLI Force', '--org', SLUG_A, '--rol', 'SOCIO'],
+      'password123',
+    );
+    assert.equal(primero.code, 0, `stderr: ${primero.stderr}`);
+
+    const segundo = await runCreateUserCli(
+      ['--email', email, '--name', 'CLI Force', '--org', SLUG_A, '--rol', 'ADMIN', '--force'],
+      'password123',
+    );
+    assert.equal(segundo.code, 0, `stderr: ${segundo.stderr}`);
+
+    const user = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+    assert.ok(user);
+    const membresia = await runAsPlatform(() =>
+      prisma.membresia.findUnique({
+        where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: user!.id } },
+      }),
+    );
+    assert.ok(membresia);
+    assert.equal(membresia?.rol, 'ADMIN');
+  });
+
+  await check(
+    'CLI create-user --force autosana una Membresia faltante (fila borrada a mano) en vez de fallar (Review Focus #5)',
+    async () => {
+      const email = `cli-force-autosana-${RANDOM_SUFFIX}@iso-test.local`;
+      const primero = await runCreateUserCli(
+        ['--email', email, '--name', 'CLI Autosana', '--org', SLUG_A, '--rol', 'SOCIO'],
+        'password123',
+      );
+      assert.equal(primero.code, 0, `stderr: ${primero.stderr}`);
+
+      const user = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+      assert.ok(user);
+      await runAsPlatform(() =>
+        prisma.membresia.delete({
+          where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: user!.id } },
+        }),
+      );
+
+      const segundo = await runCreateUserCli(
+        ['--email', email, '--name', 'CLI Autosana', '--org', SLUG_A, '--rol', 'LIDER', '--force'],
+        'password123',
+      );
+      assert.equal(segundo.code, 0, `stderr: ${segundo.stderr}`);
+
+      const membresia = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: user!.id } },
+        }),
+      );
+      assert.ok(membresia);
+      assert.equal(membresia?.rol, 'LIDER');
+    },
+  );
+}
+
 // ─── Orquestación ──────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -2183,6 +2448,16 @@ async function main(): Promise<void> {
     await runFileDownloadChecks(started.baseUrl, seedA, seedB);
     await runClubLogoChecks(started.baseUrl, seedA, seedB);
     await runTenantCliChecks(started.baseUrl, seedA, seedB);
+    await runRoleChangeMembresiaChecks(started.baseUrl, seedA);
+    await runCreateUserCliChecks(seedA);
+
+    await check(
+      'invariante global: todo usuario de la base tiene al menos una Membresia (ningún alta se saltó el dual write) (Review Focus #1)',
+      async () => {
+        const huerfanos = await runAsPlatform(() => prisma.user.count({ where: { membresias: { none: {} } } }));
+        assert.equal(huerfanos, 0);
+      },
+    );
   } catch (err) {
     results.push({
       label: 'ejecución general del script (fuera de un check individual)',

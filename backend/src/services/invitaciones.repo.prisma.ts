@@ -88,6 +88,11 @@ export const invitacionesRepoPrisma: InvitacionesRepo = {
           data: { organizationId, email, name, passwordHash, rol, emailVerified: true },
           select: { id: true, email: true, name: true, rol: true },
         });
+        // Dual write (fase de expansión del multi-club, ver schema.prisma):
+        // toda alta de User crea su Membresia en la misma transacción.
+        await tx.membresia.create({
+          data: { organizationId, usuarioId: user.id, rol },
+        });
         await tx.invitacion.update({ where: { id: invitacionId }, data: { usuarioId: user.id } });
 
         return user;
