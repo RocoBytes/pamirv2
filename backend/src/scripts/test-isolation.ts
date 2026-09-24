@@ -2606,6 +2606,177 @@ async function runInviteJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: Or
   );
 }
 
+// ─── aceptarInvitacion con una cuenta existente (PR "Joining") ────────────────
+
+async function runAcceptJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
+  const tokenAdminA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+  const B_PASSWORD = 'password-b-existente';
+
+  // Una cuenta nueva, propia de B, con contraseña conocida — para poder
+  // probarla como "cuenta existente" al unirse a A.
+  const emailExistenteEnB = `joining-existente-${RANDOM_SUFFIX}@iso-test.local`;
+  const usuarioExistenteEnB = await runAsPlatform(async () => {
+    const passwordHash = await bcrypt.hash(B_PASSWORD, SALT_ROUNDS);
+    return prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { organizationId: seedB.organizationId, email: emailExistenteEnB, name: 'Existente En B', passwordHash, rol: 'SOCIO', emailVerified: true },
+      });
+      await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+      return user;
+    });
+  });
+
+  async function invitarYObtenerToken(email: string, rol: 'SOCIO' | 'LIDER' | 'ADMIN' = 'LIDER'): Promise<string> {
+    const invitar = await postJsonAuth(baseUrl, tokenAdminA, '/api/invitaciones', { email, rol });
+    assert.equal(invitar.status, 201);
+    const inviteUrl = (invitar.body as { inviteUrl: string }).inviteUrl;
+    return new URL(inviteUrl).hash.replace('#invite=', '');
+  }
+
+  await check('aceptar con la contraseña correcta de la cuenta existente crea SOLO la Membresia en A, con el rol de la invitación', async () => {
+    const token = await invitarYObtenerToken(emailExistenteEnB, 'LIDER');
+    const res = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'Nombre Que Se Ignora', password: B_PASSWORD });
+    assert.equal(res.status, 201);
+
+    const membresiaA = await runAsPlatform(() =>
+      prisma.membresia.findUnique({
+        where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: usuarioExistenteEnB.id } },
+      }),
+    );
+    assert.ok(membresiaA);
+    assert.equal(membresiaA?.rol, 'LIDER');
+
+    // El perfil compartido nunca se tocó: sigue el nombre original de B, no
+    // "Nombre Que Se Ignora".
+    const perfil = await runAsPlatform(() => prisma.user.findUnique({ where: { id: usuarioExistenteEnB.id } }));
+    assert.equal(perfil?.name, 'Existente En B');
+  });
+
+  await check('aceptar con la contraseña incorrecta responde 401 y no crea ninguna Membresia', async () => {
+    const emailOtra = `joining-mal-password-${RANDOM_SUFFIX}@iso-test.local`;
+    const passwordHash = await bcrypt.hash('la-correcta', SALT_ROUNDS);
+    const cuenta = await runAsPlatform(async () =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { organizationId: seedB.organizationId, email: emailOtra, name: 'Mal Password', passwordHash, rol: 'SOCIO', emailVerified: true },
+        });
+        await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+        return user;
+      }),
+    );
+    const token = await invitarYObtenerToken(emailOtra);
+    const res = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'X', password: 'la-incorrecta' });
+    assert.equal(res.status, 401);
+
+    const membresiaA = await runAsPlatform(() =>
+      prisma.membresia.findUnique({
+        where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: cuenta.id } },
+      }),
+    );
+    assert.equal(membresiaA, null);
+  });
+
+  await check('varios intentos de contraseña incorrecta contra el MISMO token siguen fallando 401, nunca 200 (Review Focus #1 — la política de brute force sigue siendo la del rate limiter existente)', async () => {
+    const emailBrute = `joining-brute-${RANDOM_SUFFIX}@iso-test.local`;
+    const passwordHash = await bcrypt.hash('la-real', SALT_ROUNDS);
+    await runAsPlatform(async () =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { organizationId: seedB.organizationId, email: emailBrute, name: 'Brute', passwordHash, rol: 'SOCIO', emailVerified: true },
+        });
+        await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+      }),
+    );
+    const token = await invitarYObtenerToken(emailBrute);
+    // Cada intento debe pasar la validación de forma (mínimo 8 caracteres)
+    // para llegar de verdad a la comparación de contraseña — un intento de
+    // 1 carácter daría 400 (Zod) antes de tocar comparePassword, sin probar
+    // nada sobre el límite de intentos.
+    for (const intento of ['incorrecta-1', 'incorrecta-2', 'incorrecta-3']) {
+      const res = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'X', password: intento });
+      assert.equal(res.status, 401);
+    }
+  });
+
+  await check('aceptar con un Bearer del MISMO email crea la Membresia sin enviar contraseña', async () => {
+    const emailBearer = `joining-bearer-${RANDOM_SUFFIX}@iso-test.local`;
+    const passwordHash = await bcrypt.hash('no-se-usa', SALT_ROUNDS);
+    const cuenta = await runAsPlatform(async () =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { organizationId: seedB.organizationId, email: emailBearer, name: 'Bearer', passwordHash, rol: 'SOCIO', emailVerified: true },
+        });
+        await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+        return user;
+      }),
+    );
+    const token = await invitarYObtenerToken(emailBearer);
+    const bearerCuenta = signToken({ userId: cuenta.id, email: emailBearer });
+    const res = await postJsonAuth(baseUrl, bearerCuenta, '/api/auth/invitaciones/aceptar', { token });
+    assert.equal(res.status, 201);
+
+    const membresiaA = await runAsPlatform(() =>
+      prisma.membresia.findUnique({
+        where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: cuenta.id } },
+      }),
+    );
+    assert.ok(membresiaA);
+  });
+
+  await check('aceptar con un Bearer de OTRO email responde 403 "Esta invitación es para otro correo" (Review Focus #4)', async () => {
+    const emailMismatch = `joining-mismatch-${RANDOM_SUFFIX}@iso-test.local`;
+    const passwordHash = await bcrypt.hash('x', SALT_ROUNDS);
+    await runAsPlatform(async () =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { organizationId: seedB.organizationId, email: emailMismatch, name: 'Mismatch', passwordHash, rol: 'SOCIO', emailVerified: true },
+        });
+        await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+      }),
+    );
+    const token = await invitarYObtenerToken(emailMismatch);
+    // seedA.socioUserId es una cuenta real, pero NO la invitada.
+    const bearerAjeno = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
+    const res = await postJsonAuth(baseUrl, bearerAjeno, '/api/auth/invitaciones/aceptar', { token });
+    assert.equal(res.status, 403);
+    assert.deepEqual(res.body, { error: 'Esta invitación es para otro correo' });
+  });
+
+  await check('dos aceptaciones concurrentes de la MISMA invitación (cuenta existente) crean exactamente una Membresia (Review Focus #3)', async () => {
+    const emailRace = `joining-race-${RANDOM_SUFFIX}@iso-test.local`;
+    const passwordHash = await bcrypt.hash('race-password', SALT_ROUNDS);
+    const cuenta = await runAsPlatform(async () =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { organizationId: seedB.organizationId, email: emailRace, name: 'Race', passwordHash, rol: 'SOCIO', emailVerified: true },
+        });
+        await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+        return user;
+      }),
+    );
+    const token = await invitarYObtenerToken(emailRace);
+    const [primero, segundo] = await Promise.all([
+      postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'X', password: 'race-password' }),
+      postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'X', password: 'race-password' }),
+    ]);
+    const statuses = [primero.status, segundo.status].sort();
+    // Exactamente uno gana (201); el otro pierde la carrera del update
+    // condicional (409, MENSAJE_NO_PENDIENTE).
+    assert.deepEqual(statuses, [201, 409]);
+
+    const membresias = await runAsPlatform(() => prisma.membresia.findMany({ where: { usuarioId: cuenta.id } }));
+    assert.equal(membresias.length, 2); // la de B (seed) + la nueva de A.
+  });
+
+  await check('sin cuenta existente, aceptar sigue creando la cuenta nueva (regresión)', async () => {
+    const emailNuevo = `joining-nuevo-${RANDOM_SUFFIX}@iso-test.local`;
+    const token = await invitarYObtenerToken(emailNuevo, 'SOCIO');
+    const res = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'Persona Nueva', password: 'password123' });
+    assert.equal(res.status, 201);
+    assert.deepEqual(res.body, { message: 'Cuenta creada. Ya puedes iniciar sesión.', email: emailNuevo });
+  });
+}
+
 // ─── CLI create-user ─────────────────────────────────────────────────────────
 
 interface CreateUserCliResult {
@@ -2836,6 +3007,7 @@ async function main(): Promise<void> {
     await runAuthMembershipChecks(started.baseUrl, seedA, seedB);
     await runClubesFieldChecks(started.baseUrl, seedA, seedB);
     await runInviteJoiningChecks(started.baseUrl, seedA, seedB);
+    await runAcceptJoiningChecks(started.baseUrl, seedA, seedB);
 
     await check(
       'invariante global: todo usuario de la base tiene al menos una Membresia (ningún alta se saltó el dual write) (Review Focus #1)',

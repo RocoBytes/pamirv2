@@ -14,6 +14,13 @@ import {
   type InvitacionRow,
 } from './invitaciones.service.js';
 
+// El token siempre viaja como fragmento (#invite=...) en inviteUrl — nunca
+// llega al servidor por sí solo, así que cada test que necesita aceptar una
+// invitación tiene que extraerlo de la URL devuelta por crearInvitacion.
+function extractTokenFromInviteUrl(inviteUrl: string): string {
+  return new URL(inviteUrl).hash.replace('#invite=', '');
+}
+
 // ─── Fake repo (en memoria, sin Prisma) ────────────────────────────────────────
 
 interface FakeUser {
@@ -36,10 +43,6 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
   const nextId = (prefix: string): string => `${prefix}-${++seq}`;
 
   const repo: InvitacionesRepo = {
-    async findUserByEmail(email) {
-      const u = users.find((x) => x.email === email);
-      return u ? { id: u.id, email: u.email, name: u.name, rol: u.rol } : null;
-    },
     async findUserById(id) {
       const u = users.find((x) => x.id === id);
       return u ? { id: u.id, name: u.name, rol: u.rol } : null;
@@ -117,8 +120,16 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
       inv.usuarioId = user.id;
       return { id: user.id, email: user.email, name: user.name, rol: user.rol };
     },
-    async acceptInvitacionExistente() {
-      throw new Error('acceptInvitacionExistente: not modeled until Task 3 — no Task 2 test should call this');
+    async acceptInvitacionExistente({ invitacionId, organizationId, usuarioId, rol, now }) {
+      const inv = invitaciones.find((i) => i.id === invitacionId);
+      if (!inv || inv.aceptadaAt !== null || inv.revocadaAt !== null || inv.expiresAt <= now) {
+        return false;
+      }
+      inv.aceptadaAt = now;
+      inv.usuarioId = usuarioId;
+      void organizationId;
+      void rol;
+      return true;
     },
   };
 
@@ -143,6 +154,7 @@ function createDeps(overrides: Partial<InvitacionesDeps> = {}, extraUsers: FakeU
       sentEmails.push(params);
     },
     hashPassword: async (password) => `hashed:${password}`,
+    comparePassword: async (password, hash) => hash === `hashed:${password}`,
     now: () => new Date('2026-01-01T00:00:00.000Z'),
     frontendUrl: 'https://andinoclubpamir.app',
     ...overrides,
@@ -489,7 +501,7 @@ describe('reenviarInvitacion', () => {
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-    const aceptada = await aceptarInvitacion(deps, token, { name: 'Nuevo', password: 'password123' });
+    const aceptada = await aceptarInvitacion(deps, token, { name: 'Nuevo', password: 'password123' }, { verifiedEmail: null });
     assert.equal(aceptada.ok, true);
 
     const result = await reenviarInvitacion(deps, ADMIN, creada.body.invitacion.id);
@@ -559,7 +571,7 @@ describe('consultarInvitacion', () => {
     assert.equal(creada.ok, true);
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
-    await aceptarInvitacion(deps, token, { name: 'Nuevo', password: 'password123' });
+    await aceptarInvitacion(deps, token, { name: 'Nuevo', password: 'password123' }, { verifiedEmail: null });
 
     const result = await consultarInvitacion(deps, token);
     assert.equal(result.ok, false);
@@ -646,7 +658,7 @@ describe('aceptarInvitacion', () => {
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-    const result = await aceptarInvitacion(deps, token, { name: 'Nueva Persona', password: 'password123' });
+    const result = await aceptarInvitacion(deps, token, { name: 'Nueva Persona', password: 'password123' }, { verifiedEmail: null });
     assert.equal(result.ok, true);
     if (result.ok) {
       assert.equal(result.status, 201);
@@ -673,7 +685,7 @@ describe('aceptarInvitacion', () => {
       // Estos dos campos no forman parte del contrato de entrada y deben ignorarse.
       email: 'otro@evil.cl',
       rol: 'ADMIN',
-    } as unknown as { name: unknown; password: unknown });
+    } as unknown as { name: unknown; password: unknown }, { verifiedEmail: null });
     assert.equal(result.ok, true);
     if (result.ok) assert.equal(result.body.email, 'real@club.cl');
 
@@ -694,7 +706,7 @@ describe('aceptarInvitacion', () => {
       password: 'password123',
       // No forma parte del contrato de entrada: debe ignorarse igual que email/rol.
       organizationId: 'org-intrusa',
-    } as unknown as { name: unknown; password: unknown });
+    } as unknown as { name: unknown; password: unknown }, { verifiedEmail: null });
     assert.equal(result.ok, true);
 
     const creado = users.find((u) => u.email === 'club@club.cl');
@@ -708,10 +720,10 @@ describe('aceptarInvitacion', () => {
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-    const primero = await aceptarInvitacion(deps, token, { name: 'Uno', password: 'password123' });
+    const primero = await aceptarInvitacion(deps, token, { name: 'Uno', password: 'password123' }, { verifiedEmail: null });
     assert.equal(primero.ok, true);
 
-    const segundo = await aceptarInvitacion(deps, token, { name: 'Dos', password: 'password123' });
+    const segundo = await aceptarInvitacion(deps, token, { name: 'Dos', password: 'password123' }, { verifiedEmail: null });
     assert.equal(segundo.ok, false);
     if (!segundo.ok) {
       assert.equal(segundo.status, 410);
@@ -726,7 +738,7 @@ describe('aceptarInvitacion', () => {
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-    const result = await aceptarInvitacion(deps, token, { name: 'Alguien', password: '123' });
+    const result = await aceptarInvitacion(deps, token, { name: 'Alguien', password: '123' }, { verifiedEmail: null });
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.status, 400);
@@ -741,7 +753,7 @@ describe('aceptarInvitacion', () => {
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-    const result = await aceptarInvitacion(deps, token, { name: '', password: 'password123' });
+    const result = await aceptarInvitacion(deps, token, { name: '', password: 'password123' }, { verifiedEmail: null });
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.status, 400);
@@ -749,18 +761,30 @@ describe('aceptarInvitacion', () => {
     }
   });
 
-  it('rechaza si ya existe una cuenta con ese email (carrera perdida)', async () => {
+  it('si una cuenta con ese email se crea en el medio de la carrera, ya no se rechaza con 409: entra por la rama de cuenta existente (y ahí, contraseña equivocada => 401, ninguna cuenta nueva)', async () => {
     const { deps, users } = createDeps();
     const creada = await crearInvitacion(deps, ADMIN, { email: 'x@club.cl' });
     assert.equal(creada.ok, true);
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
+    const usersAntes = users.length;
     users.push({ id: 'raced', organizationId: 'org-1', email: 'x@club.cl', name: 'Otro', rol: 'SOCIO', emailVerified: true });
 
-    const result = await aceptarInvitacion(deps, token, { name: 'Alguien', password: 'password123' });
+    // El fake's findAccountForOwnershipProof modela el passwordHash real de
+    // 'raced' como `hashed:x@club.cl-password` (ver createFakeRepo) — la
+    // contraseña enviada acá ('password123') no calza, así que la prueba de
+    // titularidad falla exactamente como si alguien más estuviera probando
+    // suerte con la cuenta ajena.
+    const result = await aceptarInvitacion(deps, token, { name: 'Alguien', password: 'password123' }, { verifiedEmail: null });
     assert.equal(result.ok, false);
-    if (!result.ok) assert.equal(result.status, 409);
+    if (!result.ok) {
+      assert.equal(result.status, 401);
+      assert.equal(result.error, 'Ya tienes una cuenta con este correo. Verifica tu contraseña e inténtalo de nuevo.');
+    }
+    // Ninguna cuenta nueva se creó: solo sigue estando 'raced', empujada a
+    // propósito arriba.
+    assert.equal(users.length, usersAntes + 1);
   });
 
   it('ignora un emitidaPorPlataforma/organizationId inyectados en el body: la cuenta hereda los de la invitación', async () => {
@@ -776,12 +800,97 @@ describe('aceptarInvitacion', () => {
       // No forman parte del contrato de entrada de aceptarInvitacion: deben ignorarse.
       emitidaPorPlataforma: true,
       organizationId: 'org-intrusa',
-    } as unknown as { name: unknown; password: unknown });
+    } as unknown as { name: unknown; password: unknown }, { verifiedEmail: null });
     assert.equal(result.ok, true);
 
     const creado = users.find((u) => u.email === 'segura@club.cl');
     assert.equal(creado?.organizationId, ADMIN.organizationId);
     assert.equal(invitaciones.find((i) => i.email === 'segura@club.cl')?.emitidaPorPlataforma, false);
+  });
+});
+
+// ─── aceptarInvitacion — cuenta existente (PR "Joining") ──────────────────────
+
+describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
+  it('con la contraseña correcta, crea SOLO la Membresia (nunca un User nuevo, nunca toca el nombre)', async () => {
+    const { deps, users } = createDeps({}, [
+      { id: 'existente-1', organizationId: 'otro-club', email: 'existe@club.cl', name: 'Nombre Original', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const crear = await crearInvitacion(deps, ADMIN, { email: 'existe@club.cl', rol: 'LIDER' });
+    assert.equal(crear.ok, true);
+    if (!crear.ok) return;
+    const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
+
+    const usersAntes = users.length;
+    const result = await aceptarInvitacion(
+      deps,
+      token,
+      { name: 'Nombre Que Se Ignora', password: 'existe@club.cl-password' },
+      { verifiedEmail: null },
+    );
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.body.email, 'existe@club.cl');
+    // El fake modela "cuenta existente" en el array `users`; ningún User
+    // nuevo se agrega (createFakeRepo.acceptInvitacionExistente, ver más
+    // abajo, no empuja a `users`).
+    assert.equal(users.length, usersAntes);
+  });
+
+  it('con la contraseña incorrecta, responde 401 y no crea nada', async () => {
+    const { deps, invitaciones } = createDeps({}, [
+      { id: 'existente-2', organizationId: 'otro-club', email: 'existe2@club.cl', name: 'X', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const crear = await crearInvitacion(deps, ADMIN, { email: 'existe2@club.cl' });
+    assert.equal(crear.ok, true);
+    if (!crear.ok) return;
+    const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
+
+    const result = await aceptarInvitacion(deps, token, { name: 'X', password: 'contraseña-incorrecta' }, { verifiedEmail: null });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.status, 401);
+    assert.equal(invitaciones.find((i) => i.tokenHash)?.aceptadaAt, null);
+  });
+
+  it('con un Bearer del MISMO email (sin password), crea la Membresia igual', async () => {
+    const { deps } = createDeps({}, [
+      { id: 'existente-3', organizationId: 'otro-club', email: 'existe3@club.cl', name: 'X', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const crear = await crearInvitacion(deps, ADMIN, { email: 'existe3@club.cl' });
+    assert.equal(crear.ok, true);
+    if (!crear.ok) return;
+    const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
+
+    const result = await aceptarInvitacion(deps, token, { name: undefined, password: undefined }, { verifiedEmail: 'existe3@club.cl' });
+    assert.equal(result.ok, true);
+  });
+
+  it('con un Bearer de OTRO email, responde 403 "Esta invitación es para otro correo"', async () => {
+    const { deps } = createDeps({}, [
+      { id: 'existente-4', organizationId: 'otro-club', email: 'existe4@club.cl', name: 'X', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const crear = await crearInvitacion(deps, ADMIN, { email: 'existe4@club.cl' });
+    assert.equal(crear.ok, true);
+    if (!crear.ok) return;
+    const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
+
+    const result = await aceptarInvitacion(deps, token, {}, { verifiedEmail: 'alguien-mas@club.cl' });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.status, 403);
+      assert.equal(result.error, 'Esta invitación es para otro correo');
+    }
+  });
+
+  it('sin cuenta existente, el comportamiento de siempre no cambia (regresión)', async () => {
+    const { deps } = createDeps();
+    const crear = await crearInvitacion(deps, ADMIN, { email: 'nunca-existio-3@club.cl' });
+    assert.equal(crear.ok, true);
+    if (!crear.ok) return;
+    const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
+
+    const result = await aceptarInvitacion(deps, token, { name: 'Nuevo', password: 'password123' }, { verifiedEmail: null });
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.body.message, 'Cuenta creada. Ya puedes iniciar sesión.');
   });
 });
 
@@ -888,7 +997,7 @@ describe('crearInvitacionPlataforma', () => {
       if (!creada.ok) return;
       const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-      const result = await aceptarInvitacion(deps, token, { name: 'Nuevo Admin', password: 'password123' });
+      const result = await aceptarInvitacion(deps, token, { name: 'Nuevo Admin', password: 'password123' }, { verifiedEmail: null });
       assert.equal(result.ok, true);
 
       const creado = users.find((u) => u.email === 'nuevo-admin@club-nuevo.cl');

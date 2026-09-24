@@ -11,8 +11,10 @@ import {
   type InvitacionesDeps,
   type Requester,
   type ServiceResult,
+  type AuthProof,
 } from '../services/invitaciones.service.js';
 import { invitacionesRepoPrisma } from '../services/invitaciones.repo.prisma.js';
+import { verifiedEmailFromAuthHeader } from '../lib/verified-email.js';
 import { sendClubEmail } from '../lib/email/club-email.js';
 import { buildInvitationEmail, brandingFor } from '../lib/email-templates.js';
 import { subjectInvitacion } from '../lib/email/subjects.js';
@@ -175,13 +177,20 @@ export async function aceptarInvitacion(req: Request, res: Response): Promise<vo
     return;
   }
   try {
-    // Público: el usuario nuevo hereda el organizationId de la invitación, no
-    // de ningún contexto previo — corre en contexto de plataforma.
+    // Público: el usuario nuevo (o la Membresia nueva, si la cuenta ya
+    // existe) hereda el organizationId de la invitación, no de ningún
+    // contexto previo — corre en contexto de plataforma. Un Bearer válido
+    // (ver lib/verified-email.ts) es la prueba de titularidad para PR 4's
+    // pantalla; el servicio nunca decodifica el token él mismo, solo recibe
+    // el email YA verificado.
+    const auth: AuthProof = { verifiedEmail: verifiedEmailFromAuthHeader(req) };
     const result = await runAsPlatform(() =>
-      aceptarInvitacionService(buildPublicDeps(), parsedToken.data, {
-        name: req.body?.name,
-        password: req.body?.password,
-      }),
+      aceptarInvitacionService(
+        buildPublicDeps(),
+        parsedToken.data,
+        { name: req.body?.name, password: req.body?.password },
+        auth,
+      ),
     );
     respond(res, result);
   } catch (error) {
