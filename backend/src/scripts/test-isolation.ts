@@ -16,7 +16,12 @@ import { verifyDbTargetOrExit } from '../lib/db-target-guard.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 import { signToken } from '../lib/jwt.js';
 import { Prisma } from '../generated/prisma/client.js';
-import { crearInvitacionPlataforma, type InvitacionesDeps } from '../services/invitaciones.service.js';
+import {
+  crearInvitacionPlataforma,
+  crearInvitacion as crearInvitacionService,
+  type InvitacionesDeps,
+  type InvitacionesRepo,
+} from '../services/invitaciones.service.js';
 import { invitacionesRepoPrisma } from '../services/invitaciones.repo.prisma.js';
 import {
   solicitarInvitacionQr as solicitarInvitacionQrService,
@@ -2260,6 +2265,79 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
     },
   );
 
+  await check(
+    'tenant:create --admin-email con una cuenta YA existente (en otro club) la vuelve ADMIN del club nuevo mediante sign-in-and-confirm (Ruling 7 del plan de la PR de Joining)',
+    async () => {
+      const preexistenteEmail = `tenant-preexistente-${RANDOM_SUFFIX}@iso-test.local`;
+      const preexistentePassword = 'ya-tengo-cuenta';
+      const preexistente = await runAsPlatform(async () => {
+        const passwordHash = await bcrypt.hash(preexistentePassword, SALT_ROUNDS);
+        return prisma.$transaction(async (tx) => {
+          const user = await tx.user.create({
+            data: {
+              organizationId: seedA.organizationId,
+              email: preexistenteEmail,
+              name: 'Ya Tengo Cuenta',
+              passwordHash,
+              rol: 'SOCIO',
+              emailVerified: true,
+            },
+          });
+          await tx.membresia.create({ data: { organizationId: seedA.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+          return user;
+        });
+      });
+
+      const segundoClubSlug = `iso-test-cli-2-${RANDOM_SUFFIX}`;
+      const input: CrearClubInput = {
+        slug: segundoClubSlug,
+        name: `Iso Test Club CLI 2 ${RANDOM_SUFFIX}`,
+        // MEMBRESIA_B ya la usa el club B sembrado por esta misma suite: se
+        // reutiliza depsConMembresiaLibre (definido más arriba, mismo patrón
+        // que la creación del primer club CLI) porque este check no prueba
+        // la unicidad de membresiaPropia — eso ya lo prueba el primer check
+        // de esta sección — sino el camino de "cuenta ya existente" de
+        // tenant:create --admin-email de punta a punta.
+        membresiaPropia: MEMBRESIA_B,
+        alertEmail: `alert-cli-2-${RANDOM_SUFFIX}@iso-test.local`,
+        contactName: 'Contacto CLI 2',
+        contactEmail: `contacto-cli-2-${RANDOM_SUFFIX}@iso-test.local`,
+        adminEmail: preexistenteEmail,
+      };
+      const creado = await runAsPlatform(() => crearClub(depsConMembresiaLibre, input));
+      assert.equal(creado.ok, true);
+      if (!creado.ok) return;
+      assert.equal(creado.body.invitacion.emitida, true);
+      // Ruling 7: crearInvitacionPlataforma NO 409ea una cuenta existente —
+      // el club queda creado y la invitación, emitida.
+
+      const inviteToken = creado.body.invitacion.emitida
+        ? new URL(creado.body.invitacion.inviteUrl).hash.replace('#invite=', '')
+        : '';
+      const aceptar = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', {
+        token: inviteToken,
+        name: 'Se Ignora',
+        password: preexistentePassword,
+      });
+      assert.equal(aceptar.status, 201);
+
+      const nuevaOrg = await runAsPlatform(() => prisma.organization.findUnique({ where: { slug: segundoClubSlug } }));
+      assert.ok(nuevaOrg);
+      const membresiaNueva = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: nuevaOrg!.id, usuarioId: preexistente.id } },
+        }),
+      );
+      assert.equal(membresiaNueva?.rol, 'ADMIN');
+
+      // El perfil compartido nunca se tocó.
+      const perfil = await runAsPlatform(() => prisma.user.findUnique({ where: { id: preexistente.id } }));
+      assert.equal(perfil?.name, 'Ya Tengo Cuenta');
+
+      await runAsPlatform(() => purgeOrganization(nuevaOrg!.id));
+    },
+  );
+
   await check('invita a un SOCIO del club nuevo (invitación normal, no de plataforma)', async () => {
     const invitar = await postJsonAuth(baseUrl, cliAdminToken, '/api/invitaciones', {
       email: cliSocioEmail,
@@ -2610,6 +2688,42 @@ async function runInviteJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: Or
       const res = await postJsonAuth(baseUrl, tokenAdminA, '/api/invitaciones', { email: seedA.socioEmail });
       assert.equal(res.status, 409);
       assert.deepEqual(res.body, { error: 'Ya es socio de este club' });
+    },
+  );
+
+  await check(
+    'crearInvitacion hace EXACTAMENTE una consulta de cuenta/membresía sin importar si el email existe en otro club o no existe en absoluto (Review Focus #2 — sin canal de tiempo)',
+    async () => {
+      let llamadas = 0;
+      const repoInstrumentado: InvitacionesRepo = {
+        ...invitacionesRepoPrisma,
+        findAccountMembershipStatus: async (email, organizationId) => {
+          llamadas += 1;
+          return invitacionesRepoPrisma.findAccountMembershipStatus(email, organizationId);
+        },
+      };
+      const deps: InvitacionesDeps = {
+        repo: repoInstrumentado,
+        sendEmail: async () => {},
+        hashPassword: async (password) => `hashed:${password}`,
+        comparePassword: async (password, hash) => hash === `hashed:${password}`,
+        now: () => new Date(),
+        frontendUrl: 'https://iso-test.local',
+      };
+      const requester = { id: seedA.adminUserId, organizationId: seedA.organizationId, name: 'Admin A', rol: 'ADMIN' as const };
+
+      llamadas = 0;
+      await runWithOrganization(seedA.organizationId, () =>
+        crearInvitacionService(deps, requester, { email: `enum-sin-cuenta-${RANDOM_SUFFIX}@iso-test.local` }),
+      );
+      const llamadasSinCuenta = llamadas;
+
+      llamadas = 0;
+      await runWithOrganization(seedA.organizationId, () => crearInvitacionService(deps, requester, { email: seedB.adminEmail }));
+      const llamadasConCuentaEnOtroClub = llamadas;
+
+      assert.equal(llamadasSinCuenta, 1);
+      assert.equal(llamadasConCuentaEnOtroClub, 1);
     },
   );
 }

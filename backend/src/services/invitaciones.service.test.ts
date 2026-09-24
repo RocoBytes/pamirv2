@@ -12,6 +12,7 @@ import {
   type InvitacionesDeps,
   type InvitacionesRepo,
   type InvitacionRow,
+  type CrearInvitacionBody,
 } from './invitaciones.service.js';
 
 // El token siempre viaja como fragmento (#invite=...) en inviteUrl — nunca
@@ -19,6 +20,21 @@ import {
 // invitación tiene que extraerlo de la URL devuelta por crearInvitacion.
 function extractTokenFromInviteUrl(inviteUrl: string): string {
   return new URL(inviteUrl).hash.replace('#invite=', '');
+}
+
+// Compara dos CrearInvitacionBody ignorando SOLO lo que legítimamente varía
+// entre dos invitaciones distintas (id, timestamps, token) — usada por las
+// pruebas de invariancia de enumeración de reenviarInvitacion/
+// crearInvitacionPlataforma (deferred finding de Task 2, Review Focus #2):
+// si una rama dependiente de "cuenta existente en otro club" empezara a
+// devolver un campo de más, uno de menos, o un valor distinto de
+// emailEnviado/rol/estado, el deepEqual de la prueba dejaría de pasar.
+function normalizarCrearInvitacionBody(body: CrearInvitacionBody): unknown {
+  return {
+    invitacion: { ...body.invitacion, id: '<id>', createdAt: '<createdAt>', expiresAt: '<expiresAt>' },
+    inviteUrl: body.inviteUrl.replace(/#invite=.+$/, '#invite=<token>'),
+    emailEnviado: body.emailEnviado,
+  };
 }
 
 // ─── Fake repo (en memoria, sin Prisma) ────────────────────────────────────────
@@ -454,6 +470,36 @@ describe('reenviarInvitacion', () => {
     const reenviada = await reenviarInvitacion(deps, ADMIN, primera.body.invitacion.id);
     assert.equal(reenviada.ok, true);
     assert.equal(invitaciones.filter((i) => i.email === 'reenvio-otro@club.cl').length, 2);
+  });
+
+  it('la respuesta (status + body, salvo id/timestamps/token) es IDÉNTICA para un email sin cuenta y un email con cuenta en otro club (deferred finding de Task 2, Review Focus #2)', async () => {
+    // Mismo email literal en ambos escenarios (cada uno con su propio
+    // repositorio en memoria independiente) para poder comparar el body
+    // completo por deepEqual sin tener que normalizar el campo email.
+    const emailSimetria = 'reenvio-simetria@club.cl';
+
+    const { deps: depsSinCuenta } = createDeps();
+    const creadaSinCuenta = await crearInvitacion(depsSinCuenta, ADMIN, { email: emailSimetria });
+    assert.equal(creadaSinCuenta.ok, true);
+    if (!creadaSinCuenta.ok) return;
+
+    const { deps: depsOtroClub } = createDeps({}, [
+      { id: 'u-reenvio-simetria', organizationId: 'otro-club', email: emailSimetria, name: 'Otro', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const creadaOtroClub = await crearInvitacion(depsOtroClub, ADMIN, { email: emailSimetria });
+    assert.equal(creadaOtroClub.ok, true);
+    if (!creadaOtroClub.ok) return;
+
+    const reenviadaSinCuenta = await reenviarInvitacion(depsSinCuenta, ADMIN, creadaSinCuenta.body.invitacion.id);
+    const reenviadaOtroClub = await reenviarInvitacion(depsOtroClub, ADMIN, creadaOtroClub.body.invitacion.id);
+
+    assert.equal(reenviadaSinCuenta.ok, reenviadaOtroClub.ok);
+    if (!reenviadaSinCuenta.ok || !reenviadaOtroClub.ok) return;
+    assert.equal(reenviadaSinCuenta.status, reenviadaOtroClub.status);
+    assert.deepEqual(
+      normalizarCrearInvitacionBody(reenviadaSinCuenta.body),
+      normalizarCrearInvitacionBody(reenviadaOtroClub.body),
+    );
   });
 
   it('reenvía una invitación pendiente con un token nuevo', async () => {
@@ -1013,6 +1059,37 @@ describe('crearInvitacionPlataforma', () => {
     });
     assert.equal(result.ok, true);
     if (result.ok) assert.equal(result.status, 201);
+  });
+
+  it('la respuesta (status + body, salvo id/timestamps/token) es IDÉNTICA para un email sin cuenta y un email con cuenta en otro club (deferred finding de Task 2)', async () => {
+    // Mismo email literal en ambos escenarios (cada uno con su propio
+    // repositorio en memoria independiente) para poder comparar el body
+    // completo por deepEqual sin tener que normalizar el campo email.
+    const emailSimetria = 'plataforma-simetria@club.cl';
+
+    const { deps: depsSinCuenta } = createDeps();
+    const sinCuenta = await crearInvitacionPlataforma(depsSinCuenta, {
+      organizationId: 'org-nuevo-simetria',
+      email: emailSimetria,
+      rol: 'ADMIN',
+    });
+
+    const { deps: depsOtroClub } = createDeps({}, [
+      { id: 'u-plataforma-simetria', organizationId: 'otro-club', email: emailSimetria, name: 'Otro', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const otroClub = await crearInvitacionPlataforma(depsOtroClub, {
+      organizationId: 'org-nuevo-simetria',
+      email: emailSimetria,
+      rol: 'ADMIN',
+    });
+
+    assert.equal(sinCuenta.ok, otroClub.ok);
+    if (!sinCuenta.ok || !otroClub.ok) return;
+    assert.equal(sinCuenta.status, otroClub.status);
+    assert.deepEqual(
+      normalizarCrearInvitacionBody(sinCuenta.body),
+      normalizarCrearInvitacionBody(otroClub.body),
+    );
   });
 
   it('rechaza un rol desconocido', async () => {
