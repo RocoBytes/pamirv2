@@ -3142,6 +3142,76 @@ async function runCreateUserCliChecks(seedA: OrgSeed, seedB: OrgSeed): Promise<v
       assert.equal(membresias[1]?.rol, 'LIDER');
     },
   );
+
+  await check(
+    'CLI create-user --force en un club NO primario actualiza SOLO el rol de la Membresia, nunca el nombre/contraseña compartidos (Ruling 8 del plan de la PR de Joining)',
+    async () => {
+      const email = `cli-force-no-primario-${RANDOM_SUFFIX}@iso-test.local`;
+      const primero = await runCreateUserCli(
+        ['--email', email, '--name', 'Nombre Primario', '--org', SLUG_A, '--rol', 'SOCIO'],
+        'password123',
+      );
+      assert.equal(primero.code, 0, `stderr: ${primero.stderr}`);
+
+      const usuarioAntes = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+      assert.ok(usuarioAntes);
+      assert.equal(usuarioAntes?.organizationId, seedA.organizationId);
+
+      // Se agrega como socio de B (aditivo, sin --force) y LUEGO se corrige
+      // el rol en B con --force: B nunca fue ni es el club primario de esta
+      // cuenta (ese sigue siendo A).
+      const segundo = await runCreateUserCli(
+        ['--email', email, '--name', 'Nombre Primario', '--org', SLUG_B, '--rol', 'SOCIO'],
+        'password123',
+      );
+      assert.equal(segundo.code, 0, `stderr: ${segundo.stderr}`);
+
+      const tercero = await runCreateUserCli(
+        ['--email', email, '--name', 'Nombre Que NO Debe Guardarse', '--org', SLUG_B, '--rol', 'LIDER', '--force'],
+        'password-que-no-debe-guardarse',
+      );
+      assert.equal(tercero.code, 0, `stderr: ${tercero.stderr}`);
+
+      const usuarioDespues = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+      // El perfil compartido no cambió NADA: ni nombre ni passwordHash.
+      assert.equal(usuarioDespues?.name, usuarioAntes?.name);
+      assert.equal(usuarioDespues?.passwordHash, usuarioAntes?.passwordHash);
+      // La columna heredada User.organizationId/rol tampoco (B no es el
+      // primario).
+      assert.equal(usuarioDespues?.organizationId, seedA.organizationId);
+      assert.equal(usuarioDespues?.rol, usuarioAntes?.rol);
+
+      // Pero la Membresia de B sí quedó con el rol nuevo.
+      const membresiaB = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedB.organizationId, usuarioId: usuarioDespues!.id } },
+        }),
+      );
+      assert.equal(membresiaB?.rol, 'LIDER');
+    },
+  );
+
+  await check(
+    'CLI create-user --force en el club PRIMARIO sigue actualizando el perfil completo (regresión)',
+    async () => {
+      const email = `cli-force-primario-${RANDOM_SUFFIX}@iso-test.local`;
+      const primero = await runCreateUserCli(
+        ['--email', email, '--name', 'Nombre Viejo', '--org', SLUG_A, '--rol', 'SOCIO'],
+        'password-vieja',
+      );
+      assert.equal(primero.code, 0, `stderr: ${primero.stderr}`);
+
+      const segundo = await runCreateUserCli(
+        ['--email', email, '--name', 'Nombre Nuevo', '--org', SLUG_A, '--rol', 'LIDER', '--force'],
+        'password-nueva',
+      );
+      assert.equal(segundo.code, 0, `stderr: ${segundo.stderr}`);
+
+      const usuario = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+      assert.equal(usuario?.name, 'Nombre Nuevo');
+      assert.equal(usuario?.rol, 'LIDER');
+    },
+  );
 }
 
 // ─── Orquestación ──────────────────────────────────────────────────────────────

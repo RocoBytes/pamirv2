@@ -191,8 +191,29 @@ async function run(): Promise<void> {
     return;
   }
 
-  // existing && existingMembresia && force: actualiza el perfil compartido
-  // de la cuenta y el rol de ESTA membresía.
+  // existing && existingMembresia && force: club PRIMARIO de la cuenta →
+  // actualiza el perfil compartido completo (name/contraseña/rol), como
+  // siempre. Club NO primario → --force es una herramienta de reparación de
+  // ROL para ESTE club, nunca del perfil compartido de la cuenta (Ruling 8
+  // del plan de la PR de Joining: el mismo motivo por el que la alta
+  // aditiva de arriba nunca lo toca). No se pide/hashea contraseña para esa
+  // rama: ya se leyó rawPassword más arriba en TODA invocación con --force,
+  // así que simplemente se descarta acá si el club no es el primario —
+  // mantiene un solo camino de parseo de argumentos, sin --force
+  // condicionando qué flags son válidos.
+  if (existing.organizationId !== organization.id) {
+    await prisma.membresia.upsert({
+      where: { organizationId_usuarioId: { organizationId: organization.id, usuarioId: existing.id } },
+      create: { organizationId: organization.id, usuarioId: existing.id, rol },
+      update: { rol },
+    });
+    console.log(
+      `[create-user] Se actualizó el rol de "${email}" en "${org}" a rol="${rol}" (club no primario: el ` +
+        'perfil compartido de la cuenta no se tocó).',
+    );
+    return;
+  }
+
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.update({
       where: { email },
@@ -204,19 +225,9 @@ async function run(): Promise<void> {
         verificationTokenExpiry: null,
         resetToken: null,
         resetTokenExpiry: null,
-        // Columna heredada de User (fase de expansión, ver schema.prisma):
-        // solo se actualiza cuando este club sigue siendo el club
-        // "primario" de la cuenta (User.organizationId) — igual que
-        // updateUserRol en admin.controller.ts.
-        ...(existing.organizationId === organization.id ? { rol } : {}),
+        rol,
       },
     });
-    // upsert (no update): --force es una herramienta de reparación operativa
-    // (ver su descripción en create-user-args.ts, "actualizarlo") — a
-    // diferencia de PATCH /admin/users/:id/rol (admin.controller.ts), que
-    // falla ruidoso si la Membresia falta, acá se prefiere autosanar: una
-    // fila que falte (backfill incompleto, borrado a mano) no debe bloquear
-    // al operador que está tratando de arreglar justamente ese usuario.
     await tx.membresia.upsert({
       where: { organizationId_usuarioId: { organizationId: organization.id, usuarioId: user.id } },
       create: { organizationId: organization.id, usuarioId: user.id, rol },
