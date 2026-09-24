@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { MotionConfig } from 'motion/react'
 import { useAuth } from './hooks/useAuth'
 import { OrganizationProvider } from './contexts/OrganizationContext'
 import { NavPreferencesProvider } from './contexts/NavPreferencesContext'
 import { documentTitle, esSocioDelClub } from './lib/club-brand'
+import { clubSlugFromPath, redirectLegacyClubQueryParam } from './lib/club-path'
+import { migrateUnkeyedDraftToCurrentClub } from './lib/storage'
 import { AuthPage } from './components/AuthPage'
 import { Dashboard } from './components/Dashboard'
 import { WizardLayout } from './components/wizard/WizardLayout'
@@ -20,9 +22,11 @@ import { AdminDashboard } from './components/AdminDashboard'
 import { SalidaEditForm } from './components/SalidaEditForm'
 import { InvitarPage } from './components/invitaciones/InvitarPage'
 import { QrInvitacionPage } from './components/QrInvitacionPage'
+import { MisClubesPage } from './components/MisClubesPage'
+import { ClubAccessErrorPage } from './components/ClubAccessErrorPage'
 import { Button } from './components/ui/Button'
-import { fetchMyIntegrante } from './lib/api'
-import type { IntegranteRecord } from './types/salida'
+import { fetchMyIntegrante, fetchMarcaClub } from './lib/api'
+import type { IntegranteRecord, OrganizationBrand } from './types/salida'
 import { parseInviteToken, parseQrToken } from './lib/invite-token'
 import { puedeInvitar } from './lib/roles'
 
@@ -41,10 +45,15 @@ const Spinner = () => (
   </div>
 )
 
+// Corre una sola vez, antes del primer render: reescribe un link legacy
+// ?club=<slug> a /<slug> (ver Global Constraints del plan de esta PR) antes
+// de que cualquier componente lea window.location.
+redirectLegacyClubQueryParam()
+
 // Recibe la sesión ya resuelta por App() en vez de llamar useAuth() de nuevo
 // (crearía un segundo estado independiente): así App() puede envolver todo
 // este árbol en OrganizationProvider con el club de la MISMA sesión.
-function AppContent({ user, token, isLoading, loginWithCredentials, logout, refreshSession }: ReturnType<typeof useAuth>) {
+function AppContent({ user, token, isLoading, loginWithCredentials, logout, refreshSession, clubAccessError }: ReturnType<typeof useAuth>) {
   const [route, setRoute] = useState<Route>('dashboard')
   const [actionSalidaId, setActionSalidaId] = useState<string | null>(null)
   const [actionEventoId, setActionEventoId] = useState<string | null>(null)
@@ -89,6 +98,46 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   const esSocioClubActual = esSocioDelClub(integrante, user?.organization ?? null)
   // Sistema cerrado por invitación: solo ADMIN y LIDER pueden invitar.
   const puedeInvitarUsuario = puedeInvitar(user?.rol)
+
+  const pathSlug = useMemo(() => clubSlugFromPath(), [])
+  const clubes = user?.clubes ?? null
+
+  // Migración de una sola vez del draft sin club — antes de que cualquier
+  // pantalla del wizard pueda leerlo. Migra a la clave que WizardLayout
+  // (único lector/escritor del draft) realmente usa: clubSlugFromPath(), NO
+  // user.organization.slug — son distintos hasta que corre el redirect
+  // transparente de más abajo (bare domain con una sola membresía todavía
+  // sin slug en el path), y migrar contra el slug de la SESIÓN ahí borraría
+  // pamir_draft antes de que exista ningún lector con ese mismo path. Solo
+  // tiene sentido una vez resuelto un club activo real (nunca en la raíz sin
+  // slug, donde "el club actual" todavía no existe).
+  useEffect(() => {
+    if (pathSlug) migrateUnkeyedDraftToCurrentClub(undefined, pathSlug)
+  }, [pathSlug])
+
+  // Redirección transparente: una sola membresía y sin slug en el path →
+  // /<slug>, preservando el resto de la URL (query/hash ya se consumieron
+  // arriba en los efectos de inviteToken/qrToken, así que no hace falta
+  // reenviarlos acá). No se dispara mientras clubes todavía no se conoce
+  // (Ruling 3: undefined es "no se sabe todavía", nunca "cero clubes").
+  useEffect(() => {
+    if (!isAuthenticated || pathSlug || !clubes) return
+    if (clubes.length === 1) window.location.replace(`/${clubes[0]!.slug}`)
+  }, [isAuthenticated, pathSlug, clubes])
+
+  // Marca pública del club del path cuando la sesión NO puede entrar a él
+  // (clubAccessError): la única pantalla que necesita branding de un club
+  // ajeno a la sesión activa, resuelta vía el mismo fetchMarcaClub público
+  // que ya usa AuthPage.
+  const [pathSlugOrg, setPathSlugOrg] = useState<OrganizationBrand | null>(null)
+  useEffect(() => {
+    if (!pathSlug || !clubAccessError) return
+    let cancelled = false
+    fetchMarcaClub(pathSlug)
+      .then((org) => { if (!cancelled) setPathSlugOrg(org) })
+      .catch(() => { /* club-not-found ya cubre esto con org: null */ })
+    return () => { cancelled = true }
+  }, [pathSlug, clubAccessError])
 
   // Contexto del chrome compartido (header, barra inferior, pie). Se arma una
   // sola vez acá y cada pantalla que usa AppShell lo recibe entero, para que
@@ -198,6 +247,27 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
         </div>
       </div>
     )
+  }
+
+  // La sesión existe pero el backend acaba de rechazarla para el club del
+  // path (no es socio, club suspendido, o el club no existe) — Tabla de
+  // routing (Design §3). Se resuelve antes que cualquier ruta del dashboard.
+  if (isAuthenticated && clubAccessError) {
+    return (
+      <ClubAccessErrorPage
+        status={clubAccessError.status}
+        message={clubAccessError.message}
+        org={pathSlugOrg}
+        onLogout={logout}
+        onMisClubes={() => window.location.assign('/')}
+      />
+    )
+  }
+
+  // Raíz sin slug y varias membresías: nunca hay "el club actual" todavía
+  // (Ruling 2), así que se muestra el selector en vez de cualquier ruta.
+  if (isAuthenticated && !pathSlug && clubes && clubes.length > 1) {
+    return <MisClubesPage clubes={clubes} onLogout={logout} />
   }
 
   if ((route === 'nueva-salida' || route === 'nuevo-integrante') && user) {
