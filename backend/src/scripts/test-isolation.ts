@@ -806,6 +806,22 @@ async function patchJsonAuth(
   return { status: res.status, body };
 }
 
+// Como getJson, pero con el header X-Club — lo necesitan los checks nuevos de
+// resolución de club activo (ver runAuthMembershipChecks): antes de este PR,
+// ningún check de esta suite necesitaba enviarlo.
+async function getJsonWithClub(
+  baseUrl: string,
+  token: string,
+  urlPath: string,
+  xClub?: string,
+): Promise<{ status: number; body: unknown }> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  if (xClub !== undefined) headers['X-Club'] = xClub;
+  const res = await fetch(`${baseUrl}${urlPath}`, { headers });
+  const body = await res.json().catch(() => undefined);
+  return { status: res.status, body };
+}
+
 // Fecha calendario (YYYY-MM-DD) desplazada `dias` desde ahora — usada para
 // armar la ficha del evento operativo del club nuevo (ver runTenantCliChecks)
 // sin acoplarse a la fecha en que corra la suite.
@@ -2291,6 +2307,114 @@ async function runRoleChangeMembresiaChecks(baseUrl: string, seedA: OrgSeed, see
   );
 }
 
+// ─── Resolución de club activo (X-Club) y membresías múltiples ────────────────
+
+async function runAuthMembershipChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
+  // El socio de A también se hace ADMIN de B — la única cuenta de todo el
+  // fixture con más de una membresía, y con un rol DISTINTO en cada club, así
+  // los checks de abajo prueban que el rol activo es el de la MEMBRESÍA, no
+  // el de User.rol "primario". Nunca se limpia a mano: la purga final de B
+  // borra esta fila junto con el resto de sus membresías.
+  const tokenMulti = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
+  await runAsPlatform(() =>
+    prisma.membresia.create({
+      data: { organizationId: seedB.organizationId, usuarioId: seedA.socioUserId, rol: 'ADMIN' },
+    }),
+  );
+
+  await check('GET /api/me con X-Club resuelve la membresía de ESE club (rol incluido)', async () => {
+    const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', SLUG_A);
+    assert.equal(res.status, 200);
+    const body = res.body as { user: { rol: string; organization: { slug: string } } };
+    assert.equal(body.user.organization.slug, SLUG_A);
+    // LIDER y no SOCIO: runRoleChangeMembresiaChecks ya promovió a este mismo
+    // socio a LIDER en A (su club primario) antes de este punto de la suite,
+    // lo que también actualizó su User.rol heredado por la misma razón. La
+    // prueba de que el rol viene de la MEMBRESÍA activa (y no ciegamente de
+    // User.rol) la da el siguiente check, con la membresía recién creada en
+    // B (ADMIN, distinta del rol primario).
+    assert.equal(body.user.rol, 'LIDER');
+  });
+
+  await check('GET /api/me con X-Club de la OTRA membresía resuelve SU rol ahí (ADMIN, no SOCIO)', async () => {
+    const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', SLUG_B);
+    assert.equal(res.status, 200);
+    const body = res.body as { user: { rol: string; organization: { slug: string } } };
+    assert.equal(body.user.organization.slug, SLUG_B);
+    assert.equal(body.user.rol, 'ADMIN');
+  });
+
+  await check('GET /api/me sin X-Club y con varias membresías responde 400 "Selecciona un club"', async () => {
+    const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', undefined);
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: 'Selecciona un club' });
+  });
+
+  await check('GET /api/me con X-Club de un club inexistente responde 404 "Club no encontrado"', async () => {
+    const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', `iso-test-no-existe-${RANDOM_SUFFIX}`);
+    assert.equal(res.status, 404);
+    assert.deepEqual(res.body, { error: 'Club no encontrado' });
+  });
+
+  await check(
+    'GET /api/me con X-Club de un club real del que NO es socio responde 403 "No perteneces a este club"',
+    async () => {
+      const tokenSoloA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+      const res = await getJsonWithClub(baseUrl, tokenSoloA, '/api/me', SLUG_B);
+      assert.equal(res.status, 403);
+      assert.deepEqual(res.body, { error: 'No perteneces a este club' });
+    },
+  );
+
+  await check(
+    'GET /api/me con X-Club de un club suspendido responde 403 con el mensaje de club suspendido',
+    async () => {
+      await runAsPlatform(() =>
+        prisma.organization.update({ where: { id: seedA.organizationId }, data: { status: 'SUSPENDED' } }),
+      );
+      try {
+        const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', SLUG_A);
+        assert.equal(res.status, 403);
+        const body = res.body as { error: string };
+        assert.match(body.error, /suspendido/i);
+      } finally {
+        await runAsPlatform(() =>
+          prisma.organization.update({ where: { id: seedA.organizationId }, data: { status: 'ACTIVE' } }),
+        );
+      }
+    },
+  );
+
+  await check(
+    'PATCH /api/admin/users/:id/rol en B no toca la columna heredada User.rol/organizationId cuando B no es el club primario (Review Focus #3)',
+    async () => {
+      const tokenB = signToken({ userId: seedB.adminUserId, email: seedB.adminEmail });
+      const antes = await runAsPlatform(() => prisma.user.findUnique({ where: { id: seedA.socioUserId } }));
+
+      try {
+        const res = await patchJsonAuth(baseUrl, tokenB, `/api/admin/users/${seedA.socioUserId}/rol`, { rol: 'LIDER' });
+        assert.equal(res.status, 200);
+        assert.equal((res.body as { rol: string }).rol, 'LIDER');
+
+        const despues = await runAsPlatform(() => prisma.user.findUnique({ where: { id: seedA.socioUserId } }));
+        // User.organizationId/rol (columna heredada) sigue intacta: A sigue
+        // siendo el club "primario" de la cuenta, y este cambio ocurrió en B.
+        assert.equal(despues?.organizationId, seedA.organizationId);
+        assert.equal(despues?.rol, antes?.rol);
+      } finally {
+        // Deja la membresía de B como la espera runClubesFieldChecks (Task
+        // 3): ADMIN, tal como la creó este mismo fixture.
+        await runAsPlatform(() =>
+          prisma.membresia.update({
+            where: { organizationId_usuarioId: { organizationId: seedB.organizationId, usuarioId: seedA.socioUserId } },
+            data: { rol: 'ADMIN' },
+          }),
+        );
+      }
+    },
+  );
+}
+
 // ─── CLI create-user ─────────────────────────────────────────────────────────
 
 interface CreateUserCliResult {
@@ -2462,6 +2586,7 @@ async function main(): Promise<void> {
     await runTenantCliChecks(started.baseUrl, seedA, seedB);
     await runRoleChangeMembresiaChecks(started.baseUrl, seedA, seedB);
     await runCreateUserCliChecks(seedA);
+    await runAuthMembershipChecks(started.baseUrl, seedA, seedB);
 
     await check(
       'invariante global: todo usuario de la base tiene al menos una Membresia (ningún alta se saltó el dual write) (Review Focus #1)',
