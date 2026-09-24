@@ -10,6 +10,7 @@ import type {
   PostulantesResponse,
 } from '../types/evento'
 import { getAuthToken } from './auth-token'
+import { clubSlugFromPath } from './club-path'
 import type {
   Rol,
   Invitacion,
@@ -38,9 +39,19 @@ const API_BASE = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
   : '/api'
 
+// Único punto de integración de X-Club: cada una de las ~40 llamadas
+// autenticadas de este archivo pasa por acá, así que agregar el header acá
+// alcanza para todas. Ausente en la raíz sin slug (riala.cl) — el backend ya
+// sabe resolver ese caso con una sola membresía (ver authMiddleware) y
+// App.tsx nunca deja que una cuenta con varias membresías llegue a llamar acá
+// sin antes haber navegado a /<slug> (ver Ruling 2 del plan de esta PR).
 function authHeaders(): Record<string, string> {
   const token = getAuthToken()
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const slug = clubSlugFromPath()
+  if (slug) headers['X-Club'] = slug
+  return headers
 }
 
 // Conserva el status HTTP junto al mensaje: los controles de descarga de
