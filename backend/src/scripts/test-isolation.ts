@@ -2451,6 +2451,22 @@ async function runClubesFieldChecks(baseUrl: string, seedA: OrgSeed): Promise<vo
       assert.equal(porSlug[SLUG_B]?.rol, 'ADMIN');
     },
   );
+
+  await check(
+    'POST /api/auth/forgot-password con X-Club de un club ajeno no revienta y responde el mensaje genérico igual',
+    async () => {
+      const res = await fetch(`${baseUrl}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Club': SLUG_B },
+        body: JSON.stringify({ email: seedA.adminEmail }),
+      });
+      const body = await res.json().catch(() => undefined);
+      assert.equal(res.status, 200);
+      assert.deepEqual(body, {
+        message: 'Si el email está registrado, recibirás un enlace para restablecer tu contraseña.',
+      });
+    },
+  );
 }
 
 // ─── CLI create-user ─────────────────────────────────────────────────────────

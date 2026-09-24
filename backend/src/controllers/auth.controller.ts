@@ -13,6 +13,8 @@ import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 import { categoriasGestionadas } from '../lib/gestores-eventos.js';
 import { isOrganizationSuspended, CLUB_SUSPENDIDO_MENSAJE } from '../lib/organization-status.js';
 import { toPublicOrganization, toPublicOrganizationBrand } from '../lib/serializers/organization.js';
+import { xClubHeader } from '../lib/x-club.js';
+import { resolveResetBrandingOrganizationId } from '../lib/reset-branding.js';
 
 const loginSchema = z.object({ email: emailField, password: z.string().min(1, 'Contraseña requerida') });
 const forgotSchema = z.object({ email: emailField });
@@ -180,29 +182,48 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
 
   try {
     // El email es único en toda la plataforma, así que este flujo corre en
-    // contexto de plataforma. El correo se envía "como" el club del usuario
-    // encontrado (se carga en la misma búsqueda) usando el proveedor
-    // transaccional — ya no depende de ningún contexto de tenant ambiente.
+    // contexto de plataforma. El correo se envía "como" el club de la marca
+    // (ver resolveResetBrandingOrganizationId): el de la request (X-Club) si
+    // la persona es socia de él, si no su membresía más antigua — hoy eso es
+    // siempre su única membresía (ver Ruling 3 del plan de esta PR).
     await runAsPlatform(async () => {
-      const found = await prisma.user.findUnique({
-        where: { email: normalizedEmail },
-        include: {
-          organization: {
-            select: {
-              id: true,
-              slug: true,
-              name: true,
-              shortName: true,
-              membresiaPropia: true,
-              alertEmail: true,
-              contactName: true,
-              contactEmail: true,
-              logoObjectKey: true,
-            },
-          },
+      const found = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+      if (!found) return;
+
+      const memberships = await prisma.membresia.findMany({
+        where: { usuarioId: found.id },
+        orderBy: { creadoAt: 'asc' },
+        select: { organizationId: true },
+      });
+
+      const xClub = xClubHeader(req);
+      let requestOrganizationId: string | null = null;
+      if (xClub) {
+        const org = await prisma.organization.findUnique({ where: { slug: xClub }, select: { id: true } });
+        requestOrganizationId = org?.id ?? null;
+      }
+
+      const brandingOrgId = resolveResetBrandingOrganizationId(memberships, requestOrganizationId);
+      // Sin membresías: no puede pasar hoy (toda cuenta nace con una — ver
+      // el diseño), pero no revienta si pasara — simplemente no hay con qué
+      // marca enviar el correo.
+      if (!brandingOrgId) return;
+
+      const organization = await prisma.organization.findUnique({
+        where: { id: brandingOrgId },
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          shortName: true,
+          membresiaPropia: true,
+          alertEmail: true,
+          contactName: true,
+          contactEmail: true,
+          logoObjectKey: true,
         },
       });
-      if (!found) return;
+      if (!organization) return;
 
       const resetToken = randomUUID();
       const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
@@ -213,8 +234,8 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
       });
 
       const resetUrl = `${FRONTEND_URL}?reset=${resetToken}`;
-      const branding = brandingFor(found.organization);
-      sendClubEmail(found.organization, {
+      const branding = brandingFor(organization);
+      sendClubEmail(organization, {
         to: normalizedEmail,
         subject: subjectPasswordReset(branding),
         html: buildPasswordResetEmail(found.name, resetUrl, branding),
