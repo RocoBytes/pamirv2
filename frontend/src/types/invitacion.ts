@@ -53,6 +53,10 @@ export interface ConsultarInvitacionResponse {
   // null si el backend no pudo resolver el club (no debería pasar en
   // producción, pero la pantalla se mantiene neutral en ese caso).
   organization: OrganizationBrand | null
+  // true si el email invitado ya tiene una cuenta RIALA. Usado por la
+  // pantalla de aceptar invitación (PR 4b) para mostrar "inicia sesión" en
+  // vez de "crea tu cuenta".
+  cuentaExistente: boolean
 }
 
 export interface AceptarInvitacionResponse {

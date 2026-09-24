@@ -28,6 +28,15 @@ export interface OrganizationBrand {
   logoVersion: string | null
 }
 
+// Una membresía de "Mis clubes" (login/GET /me devuelven clubes: esto[]).
+// suspendido solo tiene sentido acá — nunca en OrganizationBrand a secas, que
+// también describe la marca pública de OTRO club (ver
+// backend/src/lib/serializers/organization.ts).
+export interface ClubMembership extends OrganizationBrand {
+  rol: 'SOCIO' | 'LIDER' | 'ADMIN'
+  suspendido: boolean
+}
+
 export interface User {
   id: string
   name: string
@@ -41,6 +50,12 @@ export interface User {
   // Opcional: un pamir_auth guardado por una sesión anterior a esta fase no
   // lo trae hasta que useAuth refresca /me.
   organization?: Organization
+  // Todas las membresías de la cuenta, más antigua primero — login y GET
+  // /api/me las devuelven desde PR 2, pero el frontend no las tipaba ni leía
+  // hasta esta fase. Opcional por el mismo motivo que organization: una
+  // sesión guardada antes de esta fase no lo trae hasta que useAuth refresca
+  // /me.
+  clubes?: ClubMembership[]
 }
 
 export interface AuthState {
