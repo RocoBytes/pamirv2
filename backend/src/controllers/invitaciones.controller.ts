@@ -48,6 +48,7 @@ function buildDeps(organization: OrganizationSummary): InvitacionesDeps {
     comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
+    organizationSlug: organization.slug,
   };
 }
 
@@ -66,6 +67,9 @@ function buildPublicDeps(): InvitacionesDeps {
     comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
+    // Nunca se usa: ningún flujo público (consultarInvitacion, aceptarInvitacion)
+    // arma un link — se cablea solo porque InvitacionesDeps lo exige.
+    organizationSlug: '',
     // Se llama dentro del runAsPlatform que ya envuelve a consultarInvitacion
     // (ver consultarInvitacion abajo), así que puede resolver el club de
     // CUALQUIERA de los dos clubes, no solo el de una sesión activa.

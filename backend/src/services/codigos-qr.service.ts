@@ -174,6 +174,8 @@ export interface CodigosQrDeps {
   comparePassword: (password: string, hash: string) => Promise<boolean>;
   now: () => Date;
   frontendUrl: string;
+  // Mismo criterio que InvitacionesDeps.organizationSlug.
+  organizationSlug: string;
   jwtSecret: string;
   logError: (error: unknown) => void;
 }
@@ -334,9 +336,9 @@ export async function crearCodigoQr(
     modo: modoInput,
   });
 
-  // Fragmento (#) a propósito, igual que una invitación individual: nunca
-  // llega al servidor ni a los logs del proxy.
-  const qrUrl = `${deps.frontendUrl}/#qr=${token}`;
+  // Segmento del club ANTES del fragmento (#), igual que una invitación
+  // individual (ver invitaciones.service.ts).
+  const qrUrl = `${deps.frontendUrl}/${deps.organizationSlug}/#qr=${token}`;
 
   return {
     ok: true,
@@ -452,7 +454,7 @@ export async function verCodigoQr(
     status: 200,
     body: {
       codigo: toPublicView(qr, creadoPor, now),
-      qrUrl: `${deps.frontendUrl}/#qr=${token}`,
+      qrUrl: `${deps.frontendUrl}/${deps.organizationSlug}/#qr=${token}`,
     },
   };
 }
@@ -648,7 +650,10 @@ export async function solicitarInvitacionQr(
     // entre verificarVigenciaQr y este punto): no se envía correo.
     if (!minted) return;
 
-    const inviteUrl = `${deps.frontendUrl}/#invite=${inviteToken}`;
+    // El slug es el del club DUEÑO DEL QR (vigencia.org), nunca deps.organizationSlug:
+    // solicitarInvitacionQr es pública y el QR puede pertenecer a un club distinto
+    // del de cualquier sesión — acá no hay ninguna.
+    const inviteUrl = `${deps.frontendUrl}/${vigencia.org.brand.slug}/#invite=${inviteToken}`;
     // Sin await a propósito: la respuesta pública es idéntica exista o no la
     // cuenta, así que nunca debe esperar (ni fallar por) el envío del correo.
     deps

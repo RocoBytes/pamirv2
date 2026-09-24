@@ -144,6 +144,12 @@ export interface InvitacionesDeps {
   comparePassword: (password: string, hash: string) => Promise<boolean>;
   now: () => Date;
   frontendUrl: string;
+  // Slug del club de esta request — SIEMPRE el propio club de quien invita
+  // (buildDeps ya construye estas deps por request, a partir de
+  // req.user!.organization, que ya trae slug). Nunca se resuelve con una
+  // consulta nueva en el punto de armar el link (ver Ruling 6 del plan de
+  // esta PR).
+  organizationSlug: string;
   // Resuelve la marca pública (slug/name/shortName) de un club por su id.
   // Solo lo usa consultarInvitacion (endpoint público, sin sesión) para
   // mostrar el club que invita antes de que la persona inicie sesión.
@@ -360,8 +366,10 @@ export async function crearInvitacion(
     emitidaPorPlataforma: false,
   });
 
-  // Fragmento (#) a propósito: nunca llega al servidor ni a los logs del proxy.
-  const inviteUrl = `${deps.frontendUrl}/#invite=${token}`;
+  // Segmento del club ANTES del fragmento (#): nginx sirve index.html para
+  // cualquier path (SPA fallback), así que /<slug>/#invite=<token> llega
+  // intacto al frontend — ver docs/superpowers/specs/2026-09-23-multi-club-membership-design.md §3.
+  const inviteUrl = `${deps.frontendUrl}/${deps.organizationSlug}/#invite=${token}`;
 
   const emailEnviado = await enviarCorreoInvitacion(deps, {
     to: email,
@@ -497,7 +505,10 @@ export async function reenviarInvitacion(
     emitidaPorPlataforma: false,
   });
 
-  const inviteUrl = `${deps.frontendUrl}/#invite=${token}`;
+  // Segmento del club ANTES del fragmento (#): nginx sirve index.html para
+  // cualquier path (SPA fallback), así que /<slug>/#invite=<token> llega
+  // intacto al frontend — ver docs/superpowers/specs/2026-09-23-multi-club-membership-design.md §3.
+  const inviteUrl = `${deps.frontendUrl}/${deps.organizationSlug}/#invite=${token}`;
 
   const emailEnviado = await enviarCorreoInvitacion(deps, {
     to: inv.email,
@@ -752,8 +763,10 @@ export async function crearInvitacionPlataforma(
     emitidaPorPlataforma: true,
   });
 
-  // Fragmento (#) a propósito: nunca llega al servidor ni a los logs del proxy.
-  const inviteUrl = `${deps.frontendUrl}/#invite=${token}`;
+  // Segmento del club ANTES del fragmento (#): nginx sirve index.html para
+  // cualquier path (SPA fallback), así que /<slug>/#invite=<token> llega
+  // intacto al frontend — ver docs/superpowers/specs/2026-09-23-multi-club-membership-design.md §3.
+  const inviteUrl = `${deps.frontendUrl}/${deps.organizationSlug}/#invite=${token}`;
 
   const emailEnviado = await enviarCorreoInvitacion(deps, {
     to: email,

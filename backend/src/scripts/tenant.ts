@@ -71,6 +71,7 @@ const crearInvitacionAdmin: TenantsDeps['crearInvitacionAdmin'] = (organizationI
       comparePassword: (password, hash) => bcrypt.compare(password, hash),
       now: () => new Date(),
       frontendUrl: FRONTEND_URL,
+      organizationSlug: organization.slug,
     };
     return crearInvitacionPlataforma(deps, { organizationId, email, rol: 'ADMIN' });
   });

@@ -56,6 +56,7 @@ function buildDeps(organization: OrganizationSummary): CodigosQrDeps {
     comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
+    organizationSlug: organization.slug,
     jwtSecret: requireJwtSecret(),
     logError: (error) => console.error('[codigos-qr] Error al enviar el correo de invitación:', error),
   };
@@ -95,6 +96,11 @@ function buildPublicDeps(): CodigosQrDeps {
     comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
+    // Nunca se usa: ninguno de los flujos públicos de este archivo arma un
+    // link con deps.organizationSlug (solicitarInvitacionQr arma el suyo con
+    // vigencia.org.brand.slug; consultarCodigoQr/registrarConQrDirecto no
+    // arman ninguno) — se cablea solo porque CodigosQrDeps lo exige.
+    organizationSlug: '',
     jwtSecret: requireJwtSecret(),
     logError: (error) => console.error('[codigos-qr] Error al enviar el correo de invitación:', error),
   };
