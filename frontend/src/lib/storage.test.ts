@@ -15,6 +15,7 @@ import {
   decideDraftOwnership,
   establishSession,
   migrateUnkeyedDraftToCurrentClub,
+  purgeAllDrafts,
 } from './storage'
 import { clubRecordado } from './club-preferido'
 import type { User } from '../types/salida'
@@ -322,6 +323,78 @@ describe('migrateUnkeyedDraftToCurrentClub', () => {
     expect(loadDraft(storage)).toEqual({ nombreActividad: 'Draft sin club' })
     expect(loadDraftStep(storage)).toBe(1)
   })
+
+  it('un paso legacy huérfano (sin su draft) se descarta y nunca resurge en la raíz', () => {
+    const storage = createFakeStorage()
+    // Paso guardado sin que exista un draft que lo acompañe (storage
+    // corrupto, o resto de una limpieza anterior) — caso raro pero real.
+    saveDraftStep(2, storage)
+
+    migrateUnkeyedDraftToCurrentClub(storage, 'el-montanista')
+
+    expect(loadDraftStep(storage)).toBe(0) // ya no queda huérfano en la raíz
+    expect(loadDraftStep(storage, 'el-montanista')).toBe(0) // tampoco se migra: no hay draft al que pertenezca
+  })
+})
+
+describe('purgeAllDrafts', () => {
+  it('purga el borrador y los integrantes de TODOS los clubes, más las claves legacy sin club', () => {
+    const storage = createFakeStorage()
+    saveDraft({ nombreActividad: 'Legacy' }, storage)
+    saveDraftStep(1, storage)
+    saveIntegrante({ id: 'int-legacy', nombreCompleto: 'L', rut: '1-9', email: 'l@x.cl', createdAt: '' }, storage)
+    saveDraft({ nombreActividad: 'El Montañista' }, storage, 'el-montanista')
+    saveDraftStep(3, storage, 'el-montanista')
+    saveIntegrante(
+      { id: 'int-em', nombreCompleto: 'EM', rut: '2-7', email: 'em@x.cl', createdAt: '' },
+      storage,
+      'el-montanista',
+    )
+    saveDraft({ nombreActividad: 'Riala' }, storage, 'riala')
+    saveDraftStep(4, storage, 'riala')
+    saveIntegrante({ id: 'int-riala', nombreCompleto: 'R', rut: '3-5', email: 'r@x.cl', createdAt: '' }, storage, 'riala')
+
+    purgeAllDrafts(storage)
+
+    expect(loadDraft(storage)).toBeNull()
+    expect(loadDraftStep(storage)).toBe(0)
+    expect(loadIntegrantes(storage)).toEqual([])
+    expect(loadDraft(storage, 'el-montanista')).toBeNull()
+    expect(loadDraftStep(storage, 'el-montanista')).toBe(0)
+    expect(loadIntegrantes(storage, 'el-montanista')).toEqual([])
+    expect(loadDraft(storage, 'riala')).toBeNull()
+    expect(loadDraftStep(storage, 'riala')).toBe(0)
+    expect(loadIntegrantes(storage, 'riala')).toEqual([])
+  })
+
+  it('no toca pamir_auth ni pamir_owner', () => {
+    const storage = createFakeStorage()
+    saveAuth({ user: USER_A, token: 'tok-1' }, storage)
+    storage.setItem('pamir_owner', 'user-a')
+    saveDraft({ nombreActividad: 'x' }, storage, 'el-montanista')
+
+    purgeAllDrafts(storage)
+
+    expect(loadAuth(storage)).toEqual({ user: USER_A, token: 'tok-1' })
+    expect(storage.getItem('pamir_owner')).toBe('user-a')
+  })
+
+  it('no toca una clave no relacionada que solo comparte el prefijo como texto', () => {
+    const storage = createFakeStorage({
+      pamir_draftx: 'sobrevive: no es "pamir_draft:" con dos puntos',
+      'otra_app:pamir_draft': 'sobrevive: otro namespace, no el nuestro',
+    })
+    saveDraft({ nombreActividad: 'x' }, storage, 'el-montanista')
+
+    purgeAllDrafts(storage)
+
+    expect(storage.getItem('pamir_draftx')).toBe('sobrevive: no es "pamir_draft:" con dos puntos')
+    expect(storage.getItem('otra_app:pamir_draft')).toBe('sobrevive: otro namespace, no el nuestro')
+  })
+
+  it('un storage que lanza (modo privado) nunca rompe la purga', () => {
+    expect(() => purgeAllDrafts(createThrowingStorage())).not.toThrow()
+  })
 })
 
 // ─── decideDraftOwnership (helper puro) ───────────────────────────────────────
@@ -381,6 +454,18 @@ describe('establishSession', () => {
     expect(loadAuth(storage)).toEqual({ user: USER_A, token: 'tok-2' })
   })
 
+  it('mismo usuario vuelve a autenticarse: conserva TAMBIÉN el borrador por club (no solo el legacy)', () => {
+    const storage = createFakeStorage()
+    establish({ user: USER_A, token: 'tok-1' }, storage)
+    saveDraft({ nombreActividad: 'El Montañista' }, storage, 'el-montanista')
+    saveDraft({ nombreActividad: 'Riala' }, storage, 'riala')
+
+    establish({ user: USER_A, token: 'tok-2' }, storage)
+
+    expect(loadDraft(storage, 'el-montanista')).toEqual({ nombreActividad: 'El Montañista' })
+    expect(loadDraft(storage, 'riala')).toEqual({ nombreActividad: 'Riala' })
+  })
+
   it('un usuario distinto se autentica en el mismo navegador: purga borrador y caché de integrantes', () => {
     const storage = createFakeStorage()
     establish({ user: USER_A, token: 'tok-1' }, storage)
@@ -393,6 +478,27 @@ describe('establishSession', () => {
     expect(loadIntegrantes(storage)).toEqual([])
     expect(loadAuth(storage)).toEqual({ user: USER_B, token: 'tok-2' })
     expect(storage.getItem('pamir_owner')).toBe('user-b')
+  })
+
+  it('un usuario distinto se autentica en el mismo navegador: purga el borrador de TODOS los clubes, no solo el legacy', () => {
+    // Regresión: si el usuario A dejó una ficha en curso en pamir_draft:<slug>
+    // de un club, el usuario B que se loguea después en ese mismo navegador
+    // (y entra al mismo club) NUNCA debe heredarla.
+    const storage = createFakeStorage()
+    establish({ user: USER_A, token: 'tok-1' }, storage)
+    saveDraft({ nombreActividad: 'El Montañista de A' }, storage, 'el-montanista')
+    saveDraft({ nombreActividad: 'Riala de A' }, storage, 'riala')
+    saveIntegrante(
+      { id: 'int-em', nombreCompleto: 'EM', rut: '2-7', email: 'em@x.cl', createdAt: '' },
+      storage,
+      'el-montanista',
+    )
+
+    establish({ user: USER_B, token: 'tok-2' }, storage)
+
+    expect(loadDraft(storage, 'el-montanista')).toBeNull()
+    expect(loadDraft(storage, 'riala')).toBeNull()
+    expect(loadIntegrantes(storage, 'el-montanista')).toEqual([])
   })
 
   it('logout no purga nada, y el mismo usuario recuperando sesión después conserva el borrador', () => {

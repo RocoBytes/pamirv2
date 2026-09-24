@@ -204,15 +204,32 @@ export function migrateUnkeyedDraftToCurrentClub(storage?: Storage, clubSlug?: s
   try {
     const s = resolve(storage)
     const legacy = s.getItem(KEYS.DRAFT)
-    if (!legacy) return
+    const legacyStep = s.getItem(KEYS.DRAFT_STEP)
+
+    if (!legacy) {
+      // Un paso legacy huérfano (sin su draft — storage corrupto o una
+      // limpieza parcial anterior) no significa nada por sí solo: nunca se
+      // migra un paso sin ficha. Se descarta para que no resurja en la raíz
+      // si más adelante alguien vuelve a guardar un borrador sin club.
+      if (legacyStep !== null) s.removeItem(KEYS.DRAFT_STEP)
+      return
+    }
     if (s.getItem(draftKey(clubSlug)) !== null) return
 
+    // El draft se copia y se borra de la clave legacy ANTES de tocar el
+    // paso: si algo falla copiando/borrando el paso (el catch de abajo lo
+    // atrapa), el draft ya quedó a salvo en la clave del club Y removido de
+    // la legacy — nunca puede "resucitar" con contenido viejo en la raíz.
+    // Nunca se borra la clave legacy antes de que su copia haya tenido
+    // éxito (si el setItem de arriba lanza, el catch corta acá y no se
+    // borra nada).
     s.setItem(draftKey(clubSlug), legacy)
-    const legacyStep = s.getItem(KEYS.DRAFT_STEP)
-    if (legacyStep !== null) s.setItem(draftStepKey(clubSlug), legacyStep)
-
     s.removeItem(KEYS.DRAFT)
-    s.removeItem(KEYS.DRAFT_STEP)
+
+    if (legacyStep !== null) {
+      s.setItem(draftStepKey(clubSlug), legacyStep)
+      s.removeItem(KEYS.DRAFT_STEP)
+    }
   } catch {
     // Storage bloqueado: la migración es una conveniencia, nunca debe romper
     // el arranque de la app.
@@ -268,6 +285,46 @@ export function clearIntegrantesCache(storage?: Storage, clubSlug?: string): voi
 // pamir_auth. Cerrar sesión a propósito NO purga nada: ese es el
 // comportamiento deseado (recargar en la montaña sin señal no debe perder la
 // ficha en curso).
+
+// Purga TOTAL de borrador + caché de integrantes al cambiar de dueño: la
+// clave legacy sin club Y toda clave por club, sin importar cuál. Un dueño
+// nuevo en este navegador no debe heredar ni el borrador legacy ni el de
+// NINGÚN club anterior (ver establishSession más abajo, único llamador —
+// solo en la rama 'purge' de decideDraftOwnership; re-loguearse el MISMO
+// dueño nunca pasa por acá).
+//
+// No hay ningún índice de "qué clubes tienen datos guardados acá", así que
+// hay que escanear las claves del storage. Los prefijos incluyen los dos
+// puntos a propósito: 'pamir_draft:' nunca hace match con 'pamir_auth',
+// 'pamir_owner', 'pamir_draftx' (otra clave que solo comparte texto) ni con
+// una clave de otra app/librería en el mismo dominio — solo con
+// 'pamir_draft:<algo>' exactamente como lo generan draftKey/draftStepKey/
+// integrantesKey.
+const CLUB_KEY_PREFIXES = [`${KEYS.DRAFT}:`, `${KEYS.DRAFT_STEP}:`, `${KEYS.INTEGRANTES}:`]
+
+export function purgeAllDrafts(storage?: Storage): void {
+  try {
+    const s = resolve(storage)
+    s.removeItem(KEYS.DRAFT)
+    s.removeItem(KEYS.DRAFT_STEP)
+    s.removeItem(KEYS.INTEGRANTES)
+
+    // Primero se juntan las claves a borrar y RECIÉN DESPUÉS se borran: irlas
+    // removiendo dentro del mismo recorrido correría el índice de s.key(i)
+    // a mitad de camino (el comportamiento de Storage al borrar mientras se
+    // itera no está garantizado) y podría saltarse alguna.
+    const toRemove: string[] = []
+    for (let i = 0; i < s.length; i++) {
+      const key = s.key(i)
+      if (key && CLUB_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+        toRemove.push(key)
+      }
+    }
+    toRemove.forEach((key) => s.removeItem(key))
+  } catch {
+    // Storage bloqueado (modo privado): no debe romper el login.
+  }
+}
 
 export type DraftOwnershipDecision = 'keep' | 'purge'
 
@@ -329,8 +386,7 @@ export function establishSession(next: { user: User; token: string }, options?: 
       nextUserId: next.user.id,
     })
     if (decision === 'purge') {
-      clearDraft(local)
-      clearIntegrantesCache(local)
+      purgeAllDrafts(local)
     }
     saveOwnerId(next.user.id, local)
     saveAuth(next, chosen)
