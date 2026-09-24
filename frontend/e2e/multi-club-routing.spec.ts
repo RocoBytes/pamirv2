@@ -1,5 +1,15 @@
 import { test, expect } from '@playwright/test'
-import { setAuth, mockMe, mockHasIntegrante, mockSalidas, MOCK_USER, MOCK_ADMIN_MONTANISTA, PAMIR_ORG, EL_MONTANISTA_ORG } from './helpers'
+import {
+  setAuth,
+  mockMe,
+  mockHasIntegrante,
+  mockSalidas,
+  MOCK_USER,
+  MOCK_ADMIN_MONTANISTA,
+  MOCK_INTEGRANTE,
+  PAMIR_ORG,
+  EL_MONTANISTA_ORG,
+} from './helpers'
 
 test.describe('Redirección transparente — una sola membresía', () => {
   test('riala.cl sin slug redirige a /<slug> cuando la cuenta tiene una sola membresía', async ({ page }) => {
@@ -32,6 +42,29 @@ test.describe('Mis clubes — varias membresías', () => {
     await expect(page.getByRole('link', { name: PAMIR_ORG.name })).toBeVisible()
     await expect(page.getByText('Suspendido')).toBeVisible()
     await expect(page.getByRole('link', { name: EL_MONTANISTA_ORG.name })).toHaveCount(0)
+  })
+
+  test('con 2+ membresías y sin slug en el path, ninguna llamada que requiera X-Club sale antes de elegir club (Ruling 2)', async ({ page }) => {
+    const userConDosClubes = {
+      ...MOCK_ADMIN_MONTANISTA,
+      clubes: [
+        { ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false },
+        { ...EL_MONTANISTA_ORG, hasLogo: false, logoVersion: null, rol: 'ADMIN', suspendido: false },
+      ],
+    }
+    let integranteLlamado = false
+    await page.route('**/api/integrantes/me', (route) => {
+      integranteLlamado = true
+      void route.fulfill({ status: 200, json: MOCK_INTEGRANTE })
+    })
+    await setAuth(page, userConDosClubes)
+    await mockMe(page, userConDosClubes)
+
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'Mis clubes' })).toBeVisible()
+    // authHeaders() no manda X-Club sin slug en el path: pedir la ficha acá
+    // sería el 400 "Selecciona un club" garantizado que Ruling 2 prohíbe.
+    expect(integranteLlamado).toBe(false)
   })
 })
 
@@ -95,5 +128,85 @@ test.describe('Invitación en el dominio raíz (sin slug) sigue funcionando', ()
 
     await expect(page.getByText('Admin Seguridad')).toBeVisible()
     await expect(page.getByText('nuevo@example.com')).toBeVisible()
+  })
+
+  test('con sesión ya iniciada (un solo club) el #invite= de OTRO club muestra el interstitial, no el redirect a /<slug>', async ({ page }) => {
+    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    await setAuth(page, userConUnClub)
+    await mockMe(page, userConUnClub)
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+
+    await page.goto('/#invite=tok-otro-club')
+
+    // El redirect transparente de una sola membresía NUNCA debe ganarle a
+    // este interstitial: si lo hiciera, window.location.replace('/pamir')
+    // sería una navegación completa que se llevaría puesto el estado en
+    // memoria del token, y la persona nunca vería esta pantalla.
+    await expect(page.getByText(/Ya iniciaste sesión como/)).toBeVisible()
+    await expect(page.getByText(userConUnClub.email)).toBeVisible()
+    await expect(page.getByText('Mis Salidas')).toHaveCount(0)
+    await expect(page).toHaveURL(/\/$/)
+  })
+})
+
+test.describe('Club suspendido — única membresía: sin callejón sin salida', () => {
+  test('cuenta con una sola membresía y está suspendida: sin "Mis clubes" (sería un loop de vuelta acá), "Cerrar sesión" como salida', async ({ page }) => {
+    const userClubSuspendido = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: true }] }
+    await setAuth(page, userClubSuspendido)
+    await page.route('**/api/me', (route) => {
+      void route.fulfill({
+        status: 403,
+        json: { error: 'El club está suspendido. Contacta al equipo de la plataforma.' },
+      })
+    })
+
+    await page.goto('/')
+    // El redirect transparente de una sola membresía la manda a /pamir
+    // igual (no distingue suspendida ahí — ver App.tsx), y desde /pamir el
+    // backend rechaza con el mensaje de club suspendido.
+    await expect(page).toHaveURL(/\/pamir$/)
+    await expect(page.getByText('El club está suspendido')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Mis clubes' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
+  })
+})
+
+test.describe('Migración del draft sin club — solo si la cuenta puede abrir ESE club', () => {
+  test('visitar un club del que no soy socio NO migra el draft sin club (queda accesible, no se esconde)', async ({ page }) => {
+    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    await setAuth(page, userConUnClub)
+    await page.addInitScript(() => {
+      localStorage.setItem('pamir_draft', JSON.stringify({ nombreActividad: 'Borrador previo' }))
+    })
+    await page.route('**/api/me', (route) => {
+      void route.fulfill({ status: 403, json: { error: 'No perteneces a este club' } })
+    })
+    await page.route('**/api/clubes/el-montanista/marca', (route) => {
+      void route.fulfill({ status: 200, json: EL_MONTANISTA_ORG })
+    })
+
+    await page.goto('/el-montanista')
+    await expect(page.getByText('No perteneces a este club')).toBeVisible()
+
+    expect(await page.evaluate(() => localStorage.getItem('pamir_draft'))).not.toBeNull()
+    expect(await page.evaluate(() => localStorage.getItem('pamir_draft:el-montanista'))).toBeNull()
+  })
+
+  test('visitar el club propio (no suspendido) SÍ migra el draft sin club a la clave de ese club', async ({ page }) => {
+    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    await setAuth(page, userConUnClub)
+    await page.addInitScript(() => {
+      localStorage.setItem('pamir_draft', JSON.stringify({ nombreActividad: 'Borrador previo' }))
+    })
+    await mockMe(page, userConUnClub)
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+
+    await page.goto('/pamir')
+    await expect(page.getByText('Mis Salidas')).toBeVisible()
+
+    expect(await page.evaluate(() => localStorage.getItem('pamir_draft'))).toBeNull()
+    expect(await page.evaluate(() => localStorage.getItem('pamir_draft:pamir'))).not.toBeNull()
   })
 })

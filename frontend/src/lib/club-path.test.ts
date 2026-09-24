@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { clubSlugFromPath, redirectLegacyClubQueryParam } from './club-path'
+import { clubSlugFromPath, redirectLegacyClubQueryParam, puedeAbrirClub } from './club-path'
 
 describe('clubSlugFromPath', () => {
   it('extrae el primer segmento de un path de club', () => {
@@ -100,5 +100,35 @@ describe('redirectLegacyClubQueryParam', () => {
       replaceState,
     })
     expect(replaceState).toHaveBeenCalledWith('/el-montanista?foo=bar#invite=un-token-secreto')
+  })
+})
+
+describe('puedeAbrirClub', () => {
+  const pamir = { slug: 'pamir', suspendido: false }
+  const montanistaSuspendido = { slug: 'el-montanista', suspendido: true }
+
+  it('true si el slug está en clubes y esa membresía no está suspendida', () => {
+    expect(puedeAbrirClub('pamir', [pamir])).toBe(true)
+  })
+
+  it('false si el slug no corresponde a ninguna membresía (typo, club ajeno)', () => {
+    expect(puedeAbrirClub('no-existe', [pamir])).toBe(false)
+  })
+
+  it('false si la membresía de ese club está suspendida', () => {
+    expect(puedeAbrirClub('el-montanista', [montanistaSuspendido])).toBe(false)
+  })
+
+  it('false sin slug', () => {
+    expect(puedeAbrirClub(null, [pamir])).toBe(false)
+  })
+
+  it('false sin clubes conocidos todavía (Ruling 3: "no se sabe" nunca es "no tiene")', () => {
+    expect(puedeAbrirClub('pamir', null)).toBe(false)
+  })
+
+  it('elige la membresía correcta entre varias', () => {
+    expect(puedeAbrirClub('el-montanista', [pamir, montanistaSuspendido])).toBe(false)
+    expect(puedeAbrirClub('pamir', [pamir, montanistaSuspendido])).toBe(true)
   })
 })

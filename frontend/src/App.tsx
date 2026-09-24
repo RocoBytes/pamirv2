@@ -4,7 +4,7 @@ import { useAuth } from './hooks/useAuth'
 import { OrganizationProvider } from './contexts/OrganizationContext'
 import { NavPreferencesProvider } from './contexts/NavPreferencesContext'
 import { documentTitle, esSocioDelClub } from './lib/club-brand'
-import { clubSlugFromPath, redirectLegacyClubQueryParam } from './lib/club-path'
+import { clubSlugFromPath, redirectLegacyClubQueryParam, puedeAbrirClub } from './lib/club-path'
 import { migrateUnkeyedDraftToCurrentClub } from './lib/storage'
 import { AuthPage } from './components/AuthPage'
 import { Dashboard } from './components/Dashboard'
@@ -101,6 +101,17 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
 
   const pathSlug = useMemo(() => clubSlugFromPath(), [])
   const clubes = user?.clubes ?? null
+  // Ruling 2: con 2+ membresías YA CONOCIDAS y sin slug en el path,
+  // authHeaders() (ver lib/api.ts) no manda X-Club — pedir la ficha de
+  // integrante ahí sería un 400 "Selecciona un club" garantizado (silencioso,
+  // pero real e inútil). clubes desconocido (undefined/null — incluida una
+  // sesión guardada de antes de esta fase) NUNCA cuenta como "2+": mismo
+  // criterio que el propio efecto de montaje de useAuth.ts para su
+  // fetchMe() (`(clubes?.length ?? 0) > 1`), para no dejar de pedir la
+  // ficha en el caso de siempre. Se usa tanto para gatear el fetch como
+  // para no bloquear el Spinner esperando una respuesta que nunca sale
+  // (Mis Clubes no la necesita).
+  const debePedirIntegrante = !!pathSlug || (clubes?.length ?? 0) <= 1
 
   // Migración de una sola vez del draft sin club — antes de que cualquier
   // pantalla del wizard pueda leerlo. Migra a la clave que WizardLayout
@@ -108,22 +119,34 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   // user.organization.slug — son distintos hasta que corre el redirect
   // transparente de más abajo (bare domain con una sola membresía todavía
   // sin slug en el path), y migrar contra el slug de la SESIÓN ahí borraría
-  // pamir_draft antes de que exista ningún lector con ese mismo path. Solo
-  // tiene sentido una vez resuelto un club activo real (nunca en la raíz sin
-  // slug, donde "el club actual" todavía no existe).
+  // pamir_draft antes de que exista ningún lector con ese mismo path.
+  // Gateado por puedeAbrirClub, no solo por pathSlug: un /<slug> con un
+  // typo, de un club ajeno, o de un club suspendido NUNCA mueve el draft
+  // ahí — lo dejaría escondido en una clave que nadie puede abrir. No
+  // alcanza con gatear por clubAccessError (se resuelve async, DESPUÉS de
+  // que este efecto ya habría corrido con el pathSlug crudo): clubes ya se
+  // conoce sincrónicamente desde el storage al montar, así que se usa
+  // directo.
   useEffect(() => {
-    if (pathSlug) migrateUnkeyedDraftToCurrentClub(undefined, pathSlug)
-  }, [pathSlug])
+    if (puedeAbrirClub(pathSlug, clubes)) {
+      migrateUnkeyedDraftToCurrentClub(undefined, pathSlug!)
+    }
+  }, [pathSlug, clubes])
 
   // Redirección transparente: una sola membresía y sin slug en el path →
   // /<slug>, preservando el resto de la URL (query/hash ya se consumieron
   // arriba en los efectos de inviteToken/qrToken, así que no hace falta
   // reenviarlos acá). No se dispara mientras clubes todavía no se conoce
-  // (Ruling 3: undefined es "no se sabe todavía", nunca "cero clubes").
+  // (Ruling 3: undefined es "no se sabe todavía", nunca "cero clubes"), ni
+  // mientras haya un token de invitación/QR pendiente en el fragmento: un
+  // signed-in de un solo club que abre un link legacy de OTRO club necesita
+  // ver el interstitial correspondiente antes que nada — un replace() acá
+  // tira la navegación entera (y con ella el estado en memoria del token)
+  // antes de que React llegue a pintarlo.
   useEffect(() => {
-    if (!isAuthenticated || pathSlug || !clubes) return
+    if (!isAuthenticated || pathSlug || !clubes || inviteToken || qrToken) return
     if (clubes.length === 1) window.location.replace(`/${clubes[0]!.slug}`)
-  }, [isAuthenticated, pathSlug, clubes])
+  }, [isAuthenticated, pathSlug, clubes, inviteToken, qrToken])
 
   // Marca pública del club del path cuando la sesión NO puede entrar a él
   // (clubAccessError): la única pantalla que necesita branding de un club
@@ -169,7 +192,9 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   }
 
   useEffect(() => {
-    if (!isAuthenticated) return
+    // Ruling 2 (ver debePedirIntegrante más arriba): sin esto, nada que
+    // pedir — Mis Clubes no lee la ficha de integrante.
+    if (!isAuthenticated || !debePedirIntegrante) return
     // `cancelled` descarta respuestas que lleguen después de un logout
     let cancelled = false
     fetchMyIntegrante()
@@ -184,7 +209,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
         setIntegranteChecked(true)
       })
     return () => { cancelled = true }
-  }, [isAuthenticated])
+  }, [isAuthenticated, debePedirIntegrante])
 
   const verifiedParam = getQueryParam('verified')
   const resetToken = getQueryParam('reset')
@@ -212,7 +237,10 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
     )
   }
 
-  if (isLoading || (isAuthenticated && !integranteChecked)) {
+  // debePedirIntegrante: si no se va a pedir (Ruling 2, Mis Clubes), no hay
+  // nada por lo que esperar — el Spinner no debe bloquear por una respuesta
+  // que el efecto de arriba decidió no pedir.
+  if (isLoading || (isAuthenticated && debePedirIntegrante && !integranteChecked)) {
     return <Spinner />
   }
 
@@ -253,13 +281,22 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   // path (no es socio, club suspendido, o el club no existe) — Tabla de
   // routing (Design §3). Se resuelve antes que cualquier ruta del dashboard.
   if (isAuthenticated && clubAccessError) {
+    // "Mis clubes" (ir a la raíz) es una salida real salvo en un caso: la
+    // cuenta tiene una única membresía y es justo esta, suspendida — la
+    // raíz sin slug la redirige transparentemente de vuelta a /<slug> (el
+    // efecto de arriba), que vuelve a mostrar esta misma pantalla: un
+    // callejón sin salida. Ahí no se ofrece el botón; Cerrar sesión pasa a
+    // ser la única (y primaria) acción.
+    const misClubesEsUnaSalida = !(
+      clubes && clubes.length === 1 && clubes[0]!.slug === pathSlug && clubes[0]!.suspendido
+    )
     return (
       <ClubAccessErrorPage
         status={clubAccessError.status}
         message={clubAccessError.message}
         org={pathSlugOrg}
         onLogout={logout}
-        onMisClubes={() => window.location.assign('/')}
+        onMisClubes={misClubesEsUnaSalida ? () => window.location.assign('/') : undefined}
       />
     )
   }

@@ -78,3 +78,20 @@ export function redirectLegacyClubQueryParam(params: RedirectLegacyClubQueryPara
     // es solo una conveniencia, nunca debe romper el arranque de la app.
   }
 }
+
+// ¿La cuenta puede abrir HOY el club de este slug? (es socia de él, y esa
+// membresía no está suspendida). Puro y sin window a propósito: lo comparte
+// App.tsx (gatea la migración del draft sin club — nunca mover un borrador a
+// un club ajeno, un typo en la URL, o un club suspendido, donde quedaría
+// escondido sin que nadie pueda verlo ni recuperarlo) y este mismo test.
+// `clubes` null/undefined es "todavía no se sabe" (Ruling 3), nunca "no
+// tiene ninguno": devuelve false igual que un slug que no aparece en la
+// lista, nunca lanza ni asume.
+export function puedeAbrirClub(
+  slug: string | null,
+  clubes: { slug: string; suspendido: boolean }[] | null | undefined,
+): boolean {
+  if (!slug || !clubes) return false
+  const membresia = clubes.find((c) => c.slug === slug)
+  return !!membresia && !membresia.suspendido
+}

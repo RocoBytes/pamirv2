@@ -15,7 +15,14 @@ interface ClubAccessErrorPageProps {
   // pantalla queda con el logo neutral.
   org: OrganizationBrand | null
   onLogout: () => void
-  onMisClubes: () => void
+  // undefined cuando "Mis clubes" no sería una salida real: una cuenta cuya
+  // ÚNICA membresía es justo la que acaba de rechazarla, y encima está
+  // suspendida — la raíz sin slug la redirigiría de vuelta a esta misma
+  // pantalla (App.tsx decide esto, ver el comentario junto a donde arma este
+  // componente). En ese caso el botón no se pinta y "Cerrar sesión" pasa a
+  // ser la acción primaria, para que la pantalla nunca sea un callejón sin
+  // salida.
+  onMisClubes?: () => void
 }
 
 export function ClubAccessErrorPage({ status, message, org, onLogout, onMisClubes }: ClubAccessErrorPageProps) {
@@ -24,10 +31,11 @@ export function ClubAccessErrorPage({ status, message, org, onLogout, onMisClube
       <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-secondary/15 p-6 text-center flex flex-col items-center gap-4">
         <ClubLogo org={org} alt="" className="w-14 h-14 object-contain" />
         <AlertCircle size={32} className="text-error" />
+        <h1 className="text-headline-lg text-slate-800">No se pudo abrir el club</h1>
         <p className="text-sm text-slate-700" role="alert">{message}</p>
         <div className="flex flex-col gap-2 w-full">
-          <Button fullWidth onClick={onMisClubes}>Mis clubes</Button>
-          <Button variant="ghost" fullWidth onClick={onLogout}>
+          {onMisClubes && <Button fullWidth onClick={onMisClubes}>Mis clubes</Button>}
+          <Button variant={onMisClubes ? 'ghost' : 'primary'} fullWidth onClick={onLogout}>
             <LogOut size={16} />
             Cerrar sesión
           </Button>
