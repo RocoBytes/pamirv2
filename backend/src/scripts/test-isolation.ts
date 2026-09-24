@@ -2585,25 +2585,60 @@ async function runClubesFieldChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgS
   const tokenMulti = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
 
   await check(
-    'GET /api/me devuelve clubes con TODAS las membresías de la cuenta (slug/name/shortName/hasLogo/logoVersion/rol), no solo la activa',
+    'GET /api/me devuelve clubes con TODAS las membresías de la cuenta (slug/name/shortName/hasLogo/logoVersion/rol/suspendido), no solo la activa',
     async () => {
       const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', SLUG_A);
       assert.equal(res.status, 200);
       const body = res.body as {
         user: {
-          clubes?: { slug: string; name: string; shortName: string | null; hasLogo: boolean; logoVersion: string | null; rol: string }[];
+          clubes?: {
+            slug: string;
+            name: string;
+            shortName: string | null;
+            hasLogo: boolean;
+            logoVersion: string | null;
+            rol: string;
+            suspendido: boolean;
+          }[];
         };
       };
       const clubes = body.user.clubes;
       assert.ok(clubes);
       assert.equal(clubes!.length, 2);
-      assert.deepEqual(Object.keys(clubes![0]!).sort(), ['hasLogo', 'logoVersion', 'name', 'rol', 'shortName', 'slug']);
+      assert.deepEqual(
+        Object.keys(clubes![0]!).sort(),
+        ['hasLogo', 'logoVersion', 'name', 'rol', 'shortName', 'slug', 'suspendido'],
+      );
       const porSlug = Object.fromEntries(clubes!.map((c) => [c.slug, c]));
       // LIDER y no SOCIO: runRoleChangeMembresiaChecks ya promovió a este
       // mismo socio a LIDER en A antes de este punto de la suite (ver el
       // comentario equivalente en runAuthMembershipChecks, más arriba).
       assert.equal(porSlug[SLUG_A]?.rol, 'LIDER');
       assert.equal(porSlug[SLUG_B]?.rol, 'ADMIN');
+      // Ninguno de los dos clubes está suspendido en este punto de la suite.
+      assert.equal(porSlug[SLUG_A]?.suspendido, false);
+      assert.equal(porSlug[SLUG_B]?.suspendido, false);
+    },
+  );
+
+  await check(
+    'clubes[] marca suspendido:true para un club suspendido, sin bloquear la respuesta (aunque X-Club apunte a OTRO club, activo)',
+    async () => {
+      await runAsPlatform(() =>
+        prisma.organization.update({ where: { id: seedB.organizationId }, data: { status: 'SUSPENDED' } }),
+      );
+      try {
+        const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', SLUG_A);
+        assert.equal(res.status, 200);
+        const body = res.body as { user: { clubes?: { slug: string; suspendido: boolean }[] } };
+        const porSlug = Object.fromEntries((body.user.clubes ?? []).map((c) => [c.slug, c]));
+        assert.equal(porSlug[SLUG_A]?.suspendido, false);
+        assert.equal(porSlug[SLUG_B]?.suspendido, true);
+      } finally {
+        await runAsPlatform(() =>
+          prisma.organization.update({ where: { id: seedB.organizationId }, data: { status: 'ACTIVE' } }),
+        );
+      }
     },
   );
 
