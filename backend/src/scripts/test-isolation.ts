@@ -16,7 +16,12 @@ import { verifyDbTargetOrExit } from '../lib/db-target-guard.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 import { signToken } from '../lib/jwt.js';
 import { Prisma } from '../generated/prisma/client.js';
-import { crearInvitacionPlataforma, type InvitacionesDeps } from '../services/invitaciones.service.js';
+import {
+  crearInvitacionPlataforma,
+  crearInvitacion as crearInvitacionService,
+  type InvitacionesDeps,
+  type InvitacionesRepo,
+} from '../services/invitaciones.service.js';
 import { invitacionesRepoPrisma } from '../services/invitaciones.repo.prisma.js';
 import {
   solicitarInvitacionQr as solicitarInvitacionQrService,
@@ -709,6 +714,51 @@ async function runCrossCuttingChecks(seedA: OrgSeed, seedB: OrgSeed): Promise<vo
       assert.equal(integrante?.id, seedA.integranteId);
     },
   );
+
+  await check(
+    'Invitacion.usuarioId ya no es @unique: la MISMA cuenta puede aparecer como usuarioId en dos invitaciones de clubes distintos (Ruling 1 del plan de la PR de Joining)',
+    async () => {
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      const invA = await runAsPlatform(() =>
+        prisma.invitacion.create({
+          data: {
+            organizationId: seedA.organizationId,
+            email: `migracion-usuario-id-${RANDOM_SUFFIX}@iso-test.local`,
+            rol: 'SOCIO',
+            tokenHash: randomUUID().replace(/-/g, ''),
+            expiresAt,
+            invitadoPorId: seedA.adminUserId,
+            usuarioId: seedA.adminUserId,
+          },
+        }),
+      );
+      const invB = await runAsPlatform(() =>
+        prisma.invitacion.create({
+          data: {
+            organizationId: seedB.organizationId,
+            email: `migracion-usuario-id-${RANDOM_SUFFIX}@iso-test.local`,
+            rol: 'SOCIO',
+            tokenHash: randomUUID().replace(/-/g, ''),
+            expiresAt,
+            invitadoPorId: seedB.adminUserId,
+            // Antes de la migración de esta PR, este segundo create hubiera
+            // fallado con P2002 (invitaciones_usuario_id_key): el mismo
+            // usuarioId ya estaba en invA.
+            usuarioId: seedA.adminUserId,
+          },
+        }),
+      );
+
+      assert.equal(invA.usuarioId, seedA.adminUserId);
+      assert.equal(invB.usuarioId, seedA.adminUserId);
+
+      await runAsPlatform(() =>
+        prisma.invitacion.deleteMany({ where: { id: { in: [invA.id, invB.id] } } }),
+      );
+    },
+  );
 }
 
 // ─── Verificaciones HTTP ───────────────────────────────────────────────────────
@@ -1006,6 +1056,10 @@ async function runHttpChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): P
     repo: invitacionesRepoPrisma,
     sendEmail: async () => {},
     hashPassword: async (password) => `hashed:${password}`,
+    // Fake consistente con el hashPassword de arriba (nunca se usa bcrypt
+    // real acá — mismo motivo que hashPassword: esta invitación de
+    // plataforma nunca pasa por el flujo HTTP de aceptar).
+    comparePassword: async (password, hash) => hash === `hashed:${password}`,
     now: () => new Date(),
     frontendUrl: 'https://iso-test.local',
   };
@@ -1247,6 +1301,9 @@ function buildFakeCodigosQrDeps(capturedEmails: SendCodigoQrInvitationEmailParam
     },
     withOrganization: (organizationId, fn) => runWithOrganization(organizationId, fn),
     hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
+    // Repositorio real por debajo (codigosQrRepoPrisma), así que la
+    // comparación también debe ser real bcrypt — no el fake de arriba.
+    comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: 'https://iso-test.local',
     jwtSecret: requireJwtSecret(),
@@ -1274,7 +1331,12 @@ async function runQrChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Pro
     async () => {
       const creado = await postJsonAuth(baseUrl, tokenA, '/api/invitaciones/qr', {
         duracion: '24h',
-        maxUsos: 3,
+        // 4, no 3: desde la PR "Joining", solicitar con el email de una
+        // cuenta existente en OTRO club también mintea (ver el check
+        // "solicitar de nuevo..." más abajo) — un uso más que antes de esa
+        // PR, para que el check de revocación al final de esta función siga
+        // encontrando el código ACTIVO (usosRestantes > 0) tal como asumía.
+        maxUsos: 4,
         etiqueta: `iso-test-qr-${RANDOM_SUFFIX}`,
       });
       assert.equal(creado.status, 201);
@@ -1282,7 +1344,7 @@ async function runQrChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Pro
       qrIdA = body.codigo.id;
       qrTokenA = body.qrUrl.split('#qr=')[1] ?? '';
       assert.ok(qrTokenA.length > 0);
-      assert.equal(body.codigo.usosRestantes, 3);
+      assert.equal(body.codigo.usosRestantes, 4);
 
       const consultado = await postJson(baseUrl, '/api/qr/consultar', { token: qrTokenA });
       assert.equal(consultado.status, 200);
@@ -1311,12 +1373,12 @@ async function runQrChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Pro
       assert.equal(listado.status, 200);
       const codigos = (listado.body as { codigos: { id: string; usosRestantes: number }[] }).codigos;
       const propio = codigos.find((c) => c.id === qrIdA);
-      assert.equal(propio?.usosRestantes, 2);
+      assert.equal(propio?.usosRestantes, 3);
     },
   );
 
   await check(
-    'solicitar de nuevo con el MISMO email, o con el email de un ADMIN existente de OTRO club, da la misma respuesta 202 sin nueva fila',
+    'solicitar de nuevo con el MISMO email da la misma respuesta 202 sin nueva fila (ya pendiente); con el email de un ADMIN existente de OTRO club SÍ mintea (Ruling 6 de la PR "Joining")',
     async () => {
       const repetida = await postJson(baseUrl, '/api/qr/solicitar', { token: qrTokenA, email: emailNuevoQr });
       const conCuentaExistente = await postJson(baseUrl, '/api/qr/solicitar', { token: qrTokenA, email: seedB.adminEmail });
@@ -1327,10 +1389,20 @@ async function runQrChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Pro
         prisma.invitacion.findMany({ where: { email: emailNuevoQr } }),
       );
       assert.equal(invitacionesEmailRepetido.length, 1);
+      // Desde la PR "Joining", una cuenta existente en OTRO club deja de ser
+      // silenciosa acá: el QR reusable de A mintea una invitación para ella
+      // igual que para un email nuevo (el 202 público no lo revela, pero la
+      // fila sí queda — ver Ruling 6 del plan de esa PR). usosRestantes de
+      // qrIdA baja uno más de lo que bajaba antes de esa PR (ver el
+      // comentario en maxUsos, arriba).
       const invitacionEmailAdminB = await runAsPlatform(() =>
         prisma.invitacion.findFirst({ where: { email: seedB.adminEmail } }),
       );
-      assert.equal(invitacionEmailAdminB, null);
+      assert.ok(invitacionEmailAdminB);
+      assert.equal(invitacionEmailAdminB?.organizationId, seedA.organizationId);
+      assert.equal(invitacionEmailAdminB?.rol, 'SOCIO');
+      assert.equal(invitacionEmailAdminB?.invitadoPorId, seedA.adminUserId);
+      assert.equal(invitacionEmailAdminB?.codigoQrId, qrIdA);
     },
   );
 
@@ -1513,18 +1585,26 @@ async function runQrDirectoChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
     assert.equal(body.registrado, null);
   });
 
-  await check('registrar con un email que ya tiene cuenta da 409 y NO consume el uso', async () => {
-    const res = await postJson(baseUrl, '/api/qr/registrar', {
-      token: qrTokenA,
-      name: 'Ya Existe',
-      email: seedA.socioEmail,
-      password: 'password123',
-    });
-    assert.equal(res.status, 409);
+  await check(
+    'registrar con el email de una cuenta existente ya no da 409 (PR "Joining"): sin contraseña real que probar (seedA.socioEmail no tiene passwordHash), da 401 y NO consume el uso',
+    async () => {
+      const res = await postJson(baseUrl, '/api/qr/registrar', {
+        token: qrTokenA,
+        name: 'Ya Existe',
+        email: seedA.socioEmail,
+        password: 'password123',
+      });
+      // seedOrganization nunca le fija passwordHash al socio sembrado: es un
+      // mismatch garantizado (Ruling 3 del plan de la PR de Joining), así
+      // que cualquier contraseña enviada da 401, nunca 200/410 — ver
+      // runQrDirectoJoiningChecks más abajo para el camino con una
+      // contraseña real.
+      assert.equal(res.status, 401);
 
-    const estado = await getJson(baseUrl, tokenA, `/api/invitaciones/qr/${qrIdA}/estado`);
-    assert.equal((estado.body as { estado: string }).estado, 'ACTIVO');
-  });
+      const estado = await getJson(baseUrl, tokenA, `/api/invitaciones/qr/${qrIdA}/estado`);
+      assert.equal((estado.body as { estado: string }).estado, 'ACTIVO');
+    },
+  );
 
   const emailNuevo = `qr-directo-nuevo-${RANDOM_SUFFIX}@iso-test.local`;
 
@@ -2026,6 +2106,7 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
     repo: invitacionesRepoPrisma,
     sendEmail: async () => {},
     hashPassword: async (password) => `hashed:${password}`,
+    comparePassword: async (password, hash) => hash === `hashed:${password}`,
     now: () => new Date(),
     frontendUrl: 'https://iso-test-cli.local',
   };
@@ -2181,6 +2262,79 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
       assert.equal(body.user.clubes?.length, 1);
       assert.equal(body.user.clubes?.[0]?.slug, cliSlug);
       assert.equal(body.user.clubes?.[0]?.rol, 'ADMIN');
+    },
+  );
+
+  await check(
+    'tenant:create --admin-email con una cuenta YA existente (en otro club) la vuelve ADMIN del club nuevo mediante sign-in-and-confirm (Ruling 7 del plan de la PR de Joining)',
+    async () => {
+      const preexistenteEmail = `tenant-preexistente-${RANDOM_SUFFIX}@iso-test.local`;
+      const preexistentePassword = 'ya-tengo-cuenta';
+      const preexistente = await runAsPlatform(async () => {
+        const passwordHash = await bcrypt.hash(preexistentePassword, SALT_ROUNDS);
+        return prisma.$transaction(async (tx) => {
+          const user = await tx.user.create({
+            data: {
+              organizationId: seedA.organizationId,
+              email: preexistenteEmail,
+              name: 'Ya Tengo Cuenta',
+              passwordHash,
+              rol: 'SOCIO',
+              emailVerified: true,
+            },
+          });
+          await tx.membresia.create({ data: { organizationId: seedA.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+          return user;
+        });
+      });
+
+      const segundoClubSlug = `iso-test-cli-2-${RANDOM_SUFFIX}`;
+      const input: CrearClubInput = {
+        slug: segundoClubSlug,
+        name: `Iso Test Club CLI 2 ${RANDOM_SUFFIX}`,
+        // MEMBRESIA_B ya la usa el club B sembrado por esta misma suite: se
+        // reutiliza depsConMembresiaLibre (definido más arriba, mismo patrón
+        // que la creación del primer club CLI) porque este check no prueba
+        // la unicidad de membresiaPropia — eso ya lo prueba el primer check
+        // de esta sección — sino el camino de "cuenta ya existente" de
+        // tenant:create --admin-email de punta a punta.
+        membresiaPropia: MEMBRESIA_B,
+        alertEmail: `alert-cli-2-${RANDOM_SUFFIX}@iso-test.local`,
+        contactName: 'Contacto CLI 2',
+        contactEmail: `contacto-cli-2-${RANDOM_SUFFIX}@iso-test.local`,
+        adminEmail: preexistenteEmail,
+      };
+      const creado = await runAsPlatform(() => crearClub(depsConMembresiaLibre, input));
+      assert.equal(creado.ok, true);
+      if (!creado.ok) return;
+      assert.equal(creado.body.invitacion.emitida, true);
+      // Ruling 7: crearInvitacionPlataforma NO 409ea una cuenta existente —
+      // el club queda creado y la invitación, emitida.
+
+      const inviteToken = creado.body.invitacion.emitida
+        ? new URL(creado.body.invitacion.inviteUrl).hash.replace('#invite=', '')
+        : '';
+      const aceptar = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', {
+        token: inviteToken,
+        name: 'Se Ignora',
+        password: preexistentePassword,
+      });
+      assert.equal(aceptar.status, 201);
+
+      const nuevaOrg = await runAsPlatform(() => prisma.organization.findUnique({ where: { slug: segundoClubSlug } }));
+      assert.ok(nuevaOrg);
+      const membresiaNueva = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: nuevaOrg!.id, usuarioId: preexistente.id } },
+        }),
+      );
+      assert.equal(membresiaNueva?.rol, 'ADMIN');
+
+      // El perfil compartido nunca se tocó.
+      const perfil = await runAsPlatform(() => prisma.user.findUnique({ where: { id: preexistente.id } }));
+      assert.equal(perfil?.name, 'Ya Tengo Cuenta');
+
+      await runAsPlatform(() => purgeOrganization(nuevaOrg!.id));
     },
   );
 
@@ -2515,6 +2669,428 @@ async function runClubesFieldChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgS
   });
 }
 
+// ─── Invitar/reenviar/QR-por-correo con una cuenta existente (PR "Joining") ────
+
+async function runInviteJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
+  const tokenAdminA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+
+  await check(
+    'POST /api/invitaciones con el email de una cuenta que ya existe SOLO EN B: A la invita igual (201), no 409',
+    async () => {
+      const res = await postJsonAuth(baseUrl, tokenAdminA, '/api/invitaciones', { email: seedB.adminEmail });
+      assert.equal(res.status, 201);
+    },
+  );
+
+  await check(
+    'POST /api/invitaciones con el email de alguien que YA es socio de A responde 409 "Ya es socio de este club"',
+    async () => {
+      const res = await postJsonAuth(baseUrl, tokenAdminA, '/api/invitaciones', { email: seedA.socioEmail });
+      assert.equal(res.status, 409);
+      assert.deepEqual(res.body, { error: 'Ya es socio de este club' });
+    },
+  );
+
+  await check(
+    'crearInvitacion hace EXACTAMENTE una consulta de cuenta/membresía sin importar si el email existe en otro club o no existe en absoluto (Review Focus #2 — sin canal de tiempo)',
+    async () => {
+      let llamadas = 0;
+      const repoInstrumentado: InvitacionesRepo = {
+        ...invitacionesRepoPrisma,
+        findAccountMembershipStatus: async (email, organizationId) => {
+          llamadas += 1;
+          return invitacionesRepoPrisma.findAccountMembershipStatus(email, organizationId);
+        },
+      };
+      const deps: InvitacionesDeps = {
+        repo: repoInstrumentado,
+        sendEmail: async () => {},
+        hashPassword: async (password) => `hashed:${password}`,
+        comparePassword: async (password, hash) => hash === `hashed:${password}`,
+        now: () => new Date(),
+        frontendUrl: 'https://iso-test.local',
+      };
+      const requester = { id: seedA.adminUserId, organizationId: seedA.organizationId, name: 'Admin A', rol: 'ADMIN' as const };
+
+      llamadas = 0;
+      await runWithOrganization(seedA.organizationId, () =>
+        crearInvitacionService(deps, requester, { email: `enum-sin-cuenta-${RANDOM_SUFFIX}@iso-test.local` }),
+      );
+      const llamadasSinCuenta = llamadas;
+
+      llamadas = 0;
+      await runWithOrganization(seedA.organizationId, () => crearInvitacionService(deps, requester, { email: seedB.adminEmail }));
+      const llamadasConCuentaEnOtroClub = llamadas;
+
+      assert.equal(llamadasSinCuenta, 1);
+      assert.equal(llamadasConCuentaEnOtroClub, 1);
+    },
+  );
+}
+
+// ─── aceptarInvitacion con una cuenta existente (PR "Joining") ────────────────
+
+async function runAcceptJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
+  const tokenAdminA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+  const B_PASSWORD = 'password-b-existente';
+
+  // Una cuenta nueva, propia de B, con contraseña conocida — para poder
+  // probarla como "cuenta existente" al unirse a A.
+  const emailExistenteEnB = `joining-existente-${RANDOM_SUFFIX}@iso-test.local`;
+  const usuarioExistenteEnB = await runAsPlatform(async () => {
+    const passwordHash = await bcrypt.hash(B_PASSWORD, SALT_ROUNDS);
+    return prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { organizationId: seedB.organizationId, email: emailExistenteEnB, name: 'Existente En B', passwordHash, rol: 'SOCIO', emailVerified: true },
+      });
+      await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+      return user;
+    });
+  });
+
+  async function invitarYObtenerToken(email: string, rol: 'SOCIO' | 'LIDER' | 'ADMIN' = 'LIDER'): Promise<string> {
+    const invitar = await postJsonAuth(baseUrl, tokenAdminA, '/api/invitaciones', { email, rol });
+    assert.equal(invitar.status, 201);
+    const inviteUrl = (invitar.body as { inviteUrl: string }).inviteUrl;
+    return new URL(inviteUrl).hash.replace('#invite=', '');
+  }
+
+  await check('aceptar con la contraseña correcta de la cuenta existente crea SOLO la Membresia en A, con el rol de la invitación', async () => {
+    const token = await invitarYObtenerToken(emailExistenteEnB, 'LIDER');
+    const res = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'Nombre Que Se Ignora', password: B_PASSWORD });
+    assert.equal(res.status, 201);
+
+    const membresiaA = await runAsPlatform(() =>
+      prisma.membresia.findUnique({
+        where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: usuarioExistenteEnB.id } },
+      }),
+    );
+    assert.ok(membresiaA);
+    assert.equal(membresiaA?.rol, 'LIDER');
+
+    // El perfil compartido nunca se tocó: sigue el nombre original de B, no
+    // "Nombre Que Se Ignora".
+    const perfil = await runAsPlatform(() => prisma.user.findUnique({ where: { id: usuarioExistenteEnB.id } }));
+    assert.equal(perfil?.name, 'Existente En B');
+  });
+
+  await check(
+    'aceptar con rol/organizationId/email en conflicto en el body: la Membresia real en la DB usa el rol y el club de la INVITACIÓN, nunca los del body',
+    async () => {
+      const emailConflicto = `joining-conflicto-${RANDOM_SUFFIX}@iso-test.local`;
+      const passwordConflicto = 'password-conflicto-existente';
+      const passwordHash = await bcrypt.hash(passwordConflicto, SALT_ROUNDS);
+      const cuenta = await runAsPlatform(async () =>
+        prisma.$transaction(async (tx) => {
+          const user = await tx.user.create({
+            data: { organizationId: seedB.organizationId, email: emailConflicto, name: 'Nombre Original Conflicto', passwordHash, rol: 'SOCIO', emailVerified: true },
+          });
+          await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+          return user;
+        }),
+      );
+      // La invitación otorga LIDER en A — el body de abajo intenta colarse
+      // con otro rol, otro club y hasta otro email.
+      const token = await invitarYObtenerToken(emailConflicto, 'LIDER');
+      const res = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', {
+        token,
+        name: 'Nombre Que Se Ignora',
+        password: passwordConflicto,
+        rol: 'ADMIN',
+        organizationId: seedB.organizationId,
+        email: seedA.adminEmail,
+      });
+      assert.equal(res.status, 201);
+
+      // La Membresia real en A quedó con el rol de la INVITACIÓN (LIDER),
+      // nunca con el 'ADMIN' del body.
+      const membresiaA = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: cuenta.id } },
+        }),
+      );
+      assert.ok(membresiaA);
+      assert.equal(membresiaA?.rol, 'LIDER');
+
+      // No se creó ninguna Membresia extra bajo el organizationId inyectado
+      // en el body (que además coincide con el club real de B: si el bug
+      // existiera, esto seguiría siendo una fila más allá de la ya sembrada
+      // arriba para 'cuenta').
+      const membresiasDeLaCuenta = await runAsPlatform(() => prisma.membresia.findMany({ where: { usuarioId: cuenta.id } }));
+      assert.equal(membresiasDeLaCuenta.length, 2); // la sembrada en B + la nueva en A.
+
+      // El perfil compartido nunca se tocó: sigue el nombre/email original.
+      const perfil = await runAsPlatform(() => prisma.user.findUnique({ where: { id: cuenta.id } }));
+      assert.equal(perfil?.name, 'Nombre Original Conflicto');
+      assert.equal(perfil?.email, emailConflicto);
+    },
+  );
+
+  await check('aceptar con la contraseña incorrecta responde 401 y no crea ninguna Membresia', async () => {
+    const emailOtra = `joining-mal-password-${RANDOM_SUFFIX}@iso-test.local`;
+    const passwordHash = await bcrypt.hash('la-correcta', SALT_ROUNDS);
+    const cuenta = await runAsPlatform(async () =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { organizationId: seedB.organizationId, email: emailOtra, name: 'Mal Password', passwordHash, rol: 'SOCIO', emailVerified: true },
+        });
+        await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+        return user;
+      }),
+    );
+    const token = await invitarYObtenerToken(emailOtra);
+    const res = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'X', password: 'la-incorrecta' });
+    assert.equal(res.status, 401);
+
+    const membresiaA = await runAsPlatform(() =>
+      prisma.membresia.findUnique({
+        where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: cuenta.id } },
+      }),
+    );
+    assert.equal(membresiaA, null);
+  });
+
+  await check('varios intentos de contraseña incorrecta contra el MISMO token siguen fallando 401, nunca 200 (Review Focus #1 — la política de brute force sigue siendo la del rate limiter existente)', async () => {
+    const emailBrute = `joining-brute-${RANDOM_SUFFIX}@iso-test.local`;
+    const passwordHash = await bcrypt.hash('la-real', SALT_ROUNDS);
+    await runAsPlatform(async () =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { organizationId: seedB.organizationId, email: emailBrute, name: 'Brute', passwordHash, rol: 'SOCIO', emailVerified: true },
+        });
+        await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+      }),
+    );
+    const token = await invitarYObtenerToken(emailBrute);
+    // Cada intento debe pasar la validación de forma (mínimo 8 caracteres)
+    // para llegar de verdad a la comparación de contraseña — un intento de
+    // 1 carácter daría 400 (Zod) antes de tocar comparePassword, sin probar
+    // nada sobre el límite de intentos.
+    for (const intento of ['incorrecta-1', 'incorrecta-2', 'incorrecta-3']) {
+      const res = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'X', password: intento });
+      assert.equal(res.status, 401);
+    }
+  });
+
+  await check('aceptar con un Bearer del MISMO email crea la Membresia sin enviar contraseña', async () => {
+    const emailBearer = `joining-bearer-${RANDOM_SUFFIX}@iso-test.local`;
+    const passwordHash = await bcrypt.hash('no-se-usa', SALT_ROUNDS);
+    const cuenta = await runAsPlatform(async () =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { organizationId: seedB.organizationId, email: emailBearer, name: 'Bearer', passwordHash, rol: 'SOCIO', emailVerified: true },
+        });
+        await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+        return user;
+      }),
+    );
+    const token = await invitarYObtenerToken(emailBearer);
+    const bearerCuenta = signToken({ userId: cuenta.id, email: emailBearer });
+    const res = await postJsonAuth(baseUrl, bearerCuenta, '/api/auth/invitaciones/aceptar', { token });
+    assert.equal(res.status, 201);
+
+    const membresiaA = await runAsPlatform(() =>
+      prisma.membresia.findUnique({
+        where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: cuenta.id } },
+      }),
+    );
+    assert.ok(membresiaA);
+  });
+
+  await check('aceptar con un Bearer de OTRO email responde 403 "Esta invitación es para otro correo" (Review Focus #4)', async () => {
+    const emailMismatch = `joining-mismatch-${RANDOM_SUFFIX}@iso-test.local`;
+    const passwordHash = await bcrypt.hash('x', SALT_ROUNDS);
+    await runAsPlatform(async () =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { organizationId: seedB.organizationId, email: emailMismatch, name: 'Mismatch', passwordHash, rol: 'SOCIO', emailVerified: true },
+        });
+        await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+      }),
+    );
+    const token = await invitarYObtenerToken(emailMismatch);
+    // seedA.socioUserId es una cuenta real, pero NO la invitada.
+    const bearerAjeno = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
+    const res = await postJsonAuth(baseUrl, bearerAjeno, '/api/auth/invitaciones/aceptar', { token });
+    assert.equal(res.status, 403);
+    assert.deepEqual(res.body, { error: 'Esta invitación es para otro correo' });
+  });
+
+  await check('dos aceptaciones concurrentes de la MISMA invitación (cuenta existente) crean exactamente una Membresia (Review Focus #3)', async () => {
+    const emailRace = `joining-race-${RANDOM_SUFFIX}@iso-test.local`;
+    const passwordHash = await bcrypt.hash('race-password', SALT_ROUNDS);
+    const cuenta = await runAsPlatform(async () =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { organizationId: seedB.organizationId, email: emailRace, name: 'Race', passwordHash, rol: 'SOCIO', emailVerified: true },
+        });
+        await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+        return user;
+      }),
+    );
+    const token = await invitarYObtenerToken(emailRace);
+    const [primero, segundo] = await Promise.all([
+      postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'X', password: 'race-password' }),
+      postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'X', password: 'race-password' }),
+    ]);
+    const statuses = [primero.status, segundo.status].sort();
+    // Exactamente uno gana (201); el otro pierde la carrera del update
+    // condicional (409, MENSAJE_NO_PENDIENTE).
+    assert.deepEqual(statuses, [201, 409]);
+
+    const membresias = await runAsPlatform(() => prisma.membresia.findMany({ where: { usuarioId: cuenta.id } }));
+    assert.equal(membresias.length, 2); // la de B (seed) + la nueva de A.
+  });
+
+  await check('sin cuenta existente, aceptar sigue creando la cuenta nueva (regresión)', async () => {
+    const emailNuevo = `joining-nuevo-${RANDOM_SUFFIX}@iso-test.local`;
+    const token = await invitarYObtenerToken(emailNuevo, 'SOCIO');
+    const res = await postJson(baseUrl, '/api/auth/invitaciones/aceptar', { token, name: 'Persona Nueva', password: 'password123' });
+    assert.equal(res.status, 201);
+    assert.deepEqual(res.body, { message: 'Cuenta creada. Ya puedes iniciar sesión.', email: emailNuevo });
+  });
+}
+
+// ─── registrarConQrDirecto con una cuenta existente (PR "Joining") ────────────
+
+async function runQrDirectoJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
+  const tokenAdminA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+
+  async function crearQrDirectoYObtenerToken(): Promise<{ id: string; token: string }> {
+    const res = await postJsonAuth(baseUrl, tokenAdminA, '/api/invitaciones/qr', { modo: 'DIRECTO' });
+    assert.equal(res.status, 201);
+    const body = res.body as { codigo: { id: string }; qrUrl: string };
+    return { id: body.codigo.id, token: new URL(body.qrUrl).hash.replace('#qr=', '') };
+  }
+
+  async function crearCuentaEnB(email: string, password: string) {
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    return runAsPlatform(() =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { organizationId: seedB.organizationId, email, name: 'Existente QR', passwordHash, rol: 'SOCIO', emailVerified: true },
+        });
+        await tx.membresia.create({ data: { organizationId: seedB.organizationId, usuarioId: user.id, rol: 'SOCIO' } });
+        return user;
+      }),
+    );
+  }
+
+  await check('QR directo con la contraseña correcta de una cuenta existente crea SOLO la Membresia en A y consume el único uso', async () => {
+    const email = `qr-directo-existe-${RANDOM_SUFFIX}@iso-test.local`;
+    const cuenta = await crearCuentaEnB(email, 'qr-directo-password');
+    const { token } = await crearQrDirectoYObtenerToken();
+
+    const res = await postJson(baseUrl, '/api/qr/registrar', { token, name: 'Se Ignora', email, password: 'qr-directo-password' });
+    assert.equal(res.status, 201);
+
+    const membresiaA = await runAsPlatform(() =>
+      prisma.membresia.findUnique({
+        where: { organizationId_usuarioId: { organizationId: seedA.organizationId, usuarioId: cuenta.id } },
+      }),
+    );
+    assert.ok(membresiaA);
+
+    // El perfil compartido nunca se tocó: sigue el nombre/hash/verificación
+    // originales de B, no "Se Ignora", y la columna heredada (club/rol
+    // primario) sigue apuntando a B — misma comprobación que Task 3
+    // (aceptarInvitacion) sobre la cuenta existente.
+    const perfil = await runAsPlatform(() => prisma.user.findUnique({ where: { id: cuenta.id } }));
+    assert.equal(perfil?.name, cuenta.name);
+    assert.equal(perfil?.passwordHash, cuenta.passwordHash);
+    assert.equal(perfil?.emailVerified, cuenta.emailVerified);
+    assert.equal(perfil?.organizationId, cuenta.organizationId);
+    assert.equal(perfil?.rol, cuenta.rol);
+
+    // Un segundo intento contra el MISMO código (ya de un solo uso) da 410,
+    // aunque la contraseña sea correcta — el uso ya se consumió.
+    const segundo = await postJson(baseUrl, '/api/qr/registrar', { token, name: 'X', email, password: 'qr-directo-password' });
+    assert.equal(segundo.status, 410);
+  });
+
+  await check('QR directo con la contraseña incorrecta responde 401 y NO consume el uso', async () => {
+    const email = `qr-directo-mal-${RANDOM_SUFFIX}@iso-test.local`;
+    await crearCuentaEnB(email, 'la-correcta');
+    const { token } = await crearQrDirectoYObtenerToken();
+
+    const res = await postJson(baseUrl, '/api/qr/registrar', { token, name: 'X', email, password: 'la-incorrecta' });
+    assert.equal(res.status, 401);
+
+    // El uso sigue disponible: un segundo intento con la contraseña correcta
+    // funciona.
+    const segundo = await postJson(baseUrl, '/api/qr/registrar', { token, name: 'X', email, password: 'la-correcta' });
+    assert.equal(segundo.status, 201);
+  });
+
+  await check(
+    'varios intentos de contraseña incorrecta contra el MISMO código directo siguen fallando 401, nunca consumen el uso (Review Focus #1 — la política de brute force sigue siendo la del rate limiter existente)',
+    async () => {
+      const email = `qr-directo-brute-${RANDOM_SUFFIX}@iso-test.local`;
+      await crearCuentaEnB(email, 'la-real-brute');
+      const { id, token } = await crearQrDirectoYObtenerToken();
+
+      const codigoAntes = await runAsPlatform(() => prisma.codigoQrInvitacion.findUnique({ where: { id } }));
+      assert.equal(codigoAntes?.usosRestantes, 1);
+
+      // Cada intento debe pasar la validación de forma (mínimo 8 caracteres)
+      // para llegar de verdad a la comparación de contraseña — un intento de
+      // 1 carácter daría 400 (Zod) antes de tocar comparePassword, sin probar
+      // nada sobre el límite de intentos.
+      for (const intento of ['incorrecta-1', 'incorrecta-2', 'incorrecta-3']) {
+        const res = await postJson(baseUrl, '/api/qr/registrar', { token, name: 'X', email, password: intento });
+        assert.equal(res.status, 401);
+      }
+
+      const codigoDespues = await runAsPlatform(() => prisma.codigoQrInvitacion.findUnique({ where: { id } }));
+      assert.equal(codigoDespues?.usosRestantes, codigoAntes?.usosRestantes);
+      assert.equal(codigoDespues?.registradoUsuarioId, null);
+
+      const membresiaA = await runAsPlatform(() =>
+        prisma.membresia.findFirst({ where: { organizationId: seedA.organizationId, usuario: { email } } }),
+      );
+      assert.equal(membresiaA, null);
+    },
+  );
+
+  await check('QR directo con un Bearer de OTRO email responde 403 "Este código es para otro correo"', async () => {
+    const email = `qr-directo-mismatch-${RANDOM_SUFFIX}@iso-test.local`;
+    await crearCuentaEnB(email, 'x');
+    const { token } = await crearQrDirectoYObtenerToken();
+
+    const bearerAjeno = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
+    const res = await postJsonAuth(baseUrl, bearerAjeno, '/api/qr/registrar', { token, email });
+    assert.equal(res.status, 403);
+    assert.deepEqual(res.body, { error: 'Este código es para otro correo' });
+  });
+
+  await check('dos registros concurrentes con la MISMA cuenta existente y el MISMO código directo consumen el uso exactamente una vez', async () => {
+    const email = `qr-directo-race-${RANDOM_SUFFIX}@iso-test.local`;
+    const cuenta = await crearCuentaEnB(email, 'race-password');
+    const { token } = await crearQrDirectoYObtenerToken();
+
+    const [primero, segundo] = await Promise.all([
+      postJson(baseUrl, '/api/qr/registrar', { token, name: 'X', email, password: 'race-password' }),
+      postJson(baseUrl, '/api/qr/registrar', { token, name: 'X', email, password: 'race-password' }),
+    ]);
+    const statuses = [primero.status, segundo.status].sort();
+    assert.deepEqual(statuses, [201, 410]);
+
+    const membresias = await runAsPlatform(() => prisma.membresia.findMany({ where: { usuarioId: cuenta.id } }));
+    assert.equal(membresias.length, 2); // la de B (seed) + la nueva de A.
+  });
+
+  await check('QR directo sin cuenta existente sigue creando la cuenta nueva (regresión)', async () => {
+    // Email distinto del que usa runQrDirectoChecks más arriba
+    // ('qr-directo-nuevo-...'): ese ya deja una cuenta creada en A antes de
+    // que este check corra, así que reusar el mismo literal entraría por la
+    // rama de cuenta existente en vez de probar el camino sin cuenta.
+    const email = `qr-directo-nuevo-joining-${RANDOM_SUFFIX}@iso-test.local`;
+    const { token } = await crearQrDirectoYObtenerToken();
+    const res = await postJson(baseUrl, '/api/qr/registrar', { token, name: 'Persona Nueva', email, password: 'password123' });
+    assert.equal(res.status, 201);
+  });
+}
+
 // ─── CLI create-user ─────────────────────────────────────────────────────────
 
 interface CreateUserCliResult {
@@ -2523,12 +3099,18 @@ interface CreateUserCliResult {
   stderr: string;
 }
 
+const CREATE_USER_CLI_TIMEOUT_MS = 15_000;
+
 // Corre create-user.ts como proceso real (misma DATABASE_URL, guardada por
 // su propio db:guard). stdin no es una TTY en un proceso hijo con stdio en
 // pipe, así que readPassword() toma la rama de una sola línea (ver
 // create-user.ts, readLineFromStdin): ni confirmación ni eco oculto, una
-// línea con la contraseña basta.
-function runCreateUserCli(args: string[], password: string): Promise<CreateUserCliResult> {
+// línea con la contraseña basta. password=null no escribe NADA en stdin
+// (solo lo cierra) — se usa para probar que un camino determinado no lee
+// contraseña en absoluto; si una regresión hiciera que igual la leyera y
+// se quedara esperando, el timeout de acá mata el proceso hijo en vez de
+// colgar el resto de la suite.
+function runCreateUserCli(args: string[], password: string | null): Promise<CreateUserCliResult> {
   return new Promise((resolve, reject) => {
     const child = spawn('npx', ['tsx', 'src/scripts/create-user.ts', ...args], {
       cwd: process.cwd(),
@@ -2536,15 +3118,39 @@ function runCreateUserCli(args: string[], password: string): Promise<CreateUserC
     });
     let stdout = '';
     let stderr = '';
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill('SIGKILL');
+      reject(
+        new Error(
+          `runCreateUserCli: timeout tras ${CREATE_USER_CLI_TIMEOUT_MS}ms esperando a que el proceso cierre ` +
+            `(args=${JSON.stringify(args)})`,
+        ),
+      );
+    }, CREATE_USER_CLI_TIMEOUT_MS);
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString();
     });
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString();
     });
-    child.on('error', reject);
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
-    child.stdin.write(`${password}\n`);
+    child.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve({ code, stdout, stderr });
+    });
+    if (password !== null) {
+      child.stdin.write(`${password}\n`);
+    }
     child.stdin.end();
   });
 }
@@ -2680,6 +3286,84 @@ async function runCreateUserCliChecks(seedA: OrgSeed, seedB: OrgSeed): Promise<v
       assert.equal(membresias[1]?.rol, 'LIDER');
     },
   );
+
+  await check(
+    'CLI create-user --force en un club NO primario actualiza SOLO el rol de la Membresia, sin pedir ni usar contraseña (Ruling 8 del plan de la PR de Joining)',
+    async () => {
+      const email = `cli-force-no-primario-${RANDOM_SUFFIX}@iso-test.local`;
+      const primero = await runCreateUserCli(
+        ['--email', email, '--name', 'Nombre Primario', '--org', SLUG_A, '--rol', 'SOCIO'],
+        'password123',
+      );
+      assert.equal(primero.code, 0, `stderr: ${primero.stderr}`);
+
+      const usuarioAntes = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+      assert.ok(usuarioAntes);
+      assert.equal(usuarioAntes?.organizationId, seedA.organizationId);
+
+      // Se agrega como socio de B (aditivo, sin --force) y LUEGO se corrige
+      // el rol en B con --force: B nunca fue ni es el club primario de esta
+      // cuenta (ese sigue siendo A).
+      const segundo = await runCreateUserCli(
+        ['--email', email, '--name', 'Nombre Primario', '--org', SLUG_B, '--rol', 'SOCIO'],
+        'password123',
+      );
+      assert.equal(segundo.code, 0, `stderr: ${segundo.stderr}`);
+
+      // Sin contraseña en stdin (password=null, ver runCreateUserCli): el
+      // camino no-primario no debe leerla ni pedirla. Si una regresión
+      // volviera a leer readPassword() acá, este comando fallaría (la
+      // contraseña vacía no pasa la validación mínima) o se quedaría
+      // esperando input — runCreateUserCli tiene su propio timeout para
+      // que ese segundo caso no cuelgue el resto de la suite.
+      const tercero = await runCreateUserCli(
+        ['--email', email, '--name', 'Nombre Que NO Debe Guardarse', '--org', SLUG_B, '--rol', 'LIDER', '--force'],
+        null,
+      );
+      assert.equal(tercero.code, 0, `stderr: ${tercero.stderr}`);
+
+      const usuarioDespues = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+      // El perfil compartido no cambió NADA: ni nombre, ni passwordHash, ni
+      // emailVerified.
+      assert.equal(usuarioDespues?.name, usuarioAntes?.name);
+      assert.equal(usuarioDespues?.passwordHash, usuarioAntes?.passwordHash);
+      assert.equal(usuarioDespues?.emailVerified, usuarioAntes?.emailVerified);
+      // La columna heredada User.organizationId/rol tampoco (B no es el
+      // primario).
+      assert.equal(usuarioDespues?.organizationId, seedA.organizationId);
+      assert.equal(usuarioDespues?.rol, usuarioAntes?.rol);
+
+      // Pero la Membresia de B sí quedó con el rol nuevo.
+      const membresiaB = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedB.organizationId, usuarioId: usuarioDespues!.id } },
+        }),
+      );
+      assert.equal(membresiaB?.rol, 'LIDER');
+    },
+  );
+
+  await check(
+    'CLI create-user --force en el club PRIMARIO sigue actualizando el perfil completo (regresión)',
+    async () => {
+      const email = `cli-force-primario-${RANDOM_SUFFIX}@iso-test.local`;
+      const primero = await runCreateUserCli(
+        ['--email', email, '--name', 'Nombre Viejo', '--org', SLUG_A, '--rol', 'SOCIO'],
+        'password-vieja',
+      );
+      assert.equal(primero.code, 0, `stderr: ${primero.stderr}`);
+
+      const segundo = await runCreateUserCli(
+        ['--email', email, '--name', 'Nombre Nuevo', '--org', SLUG_A, '--rol', 'LIDER', '--force'],
+        'password-nueva',
+      );
+      assert.equal(segundo.code, 0, `stderr: ${segundo.stderr}`);
+
+      const usuario = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+      assert.equal(usuario?.name, 'Nombre Nuevo');
+      assert.equal(usuario?.rol, 'LIDER');
+    },
+  );
 }
 
 // ─── Orquestación ──────────────────────────────────────────────────────────────
@@ -2744,6 +3428,9 @@ async function main(): Promise<void> {
     await runCreateUserCliChecks(seedA, seedB);
     await runAuthMembershipChecks(started.baseUrl, seedA, seedB);
     await runClubesFieldChecks(started.baseUrl, seedA, seedB);
+    await runInviteJoiningChecks(started.baseUrl, seedA, seedB);
+    await runAcceptJoiningChecks(started.baseUrl, seedA, seedB);
+    await runQrDirectoJoiningChecks(started.baseUrl, seedA, seedB);
 
     await check(
       'invariante global: todo usuario de la base tiene al menos una Membresia (ningún alta se saltó el dual write) (Review Focus #1)',

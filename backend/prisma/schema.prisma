@@ -138,20 +138,25 @@ model User {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-  salidas              Salida[]
-  cierres              Cierre[]
-  dashboardLayouts     DashboardLayout[]
-  eventosCreados       Evento[]             @relation("EventoCreador")
-  eventosFinalizados   Evento[]             @relation("EventoFinalizador")
-  inscripciones        Inscripcion[]
-  gestorCategorias     GestorCategoria[]
-  invitacionesEnviadas Invitacion[]         @relation("InvitacionesEnviadas")
-  invitacionAceptada   Invitacion?          @relation("InvitacionAceptada")
-  codigosQrCreados     CodigoQrInvitacion[] @relation("CodigosQrCreados")
-  // El QR directo que dio de alta a este usuario (null para toda cuenta que
-  // nació por otro camino) — ver CodigoQrInvitacion.registradoUsuarioId.
-  codigoQrRegistro     CodigoQrInvitacion?  @relation("CodigoQrRegistro")
-  membresias           Membresia[]
+  salidas               Salida[]
+  cierres               Cierre[]
+  dashboardLayouts      DashboardLayout[]
+  eventosCreados        Evento[]             @relation("EventoCreador")
+  eventosFinalizados    Evento[]             @relation("EventoFinalizador")
+  inscripciones         Inscripcion[]
+  gestorCategorias      GestorCategoria[]
+  invitacionesEnviadas  Invitacion[]         @relation("InvitacionesEnviadas")
+  // Cada invitación aceptada por esta cuenta — una por club al que se unió
+  // así. Antes de la fase "Joining" del diseño multi-club era como mucho una
+  // (Invitacion.usuarioId era @unique en toda la tabla); ver la migración
+  // 20260924090000_allow_second_club_membership y el plan de esta PR
+  // (Ruling 1).
+  invitacionesAceptadas Invitacion[]         @relation("InvitacionAceptada")
+  codigosQrCreados      CodigoQrInvitacion[] @relation("CodigosQrCreados")
+  // Cada QR directo que dio de alta o unió a esta cuenta — uno por club.
+  // Mismo cambio de cardinalidad que invitacionesAceptadas, mismo motivo.
+  codigosQrRegistro     CodigoQrInvitacion[] @relation("CodigoQrRegistro")
+  membresias            Membresia[]
 
   @@index([organizationId])
   @@map("users")
@@ -218,7 +223,10 @@ model Invitacion {
   // — no tiene uno por diseño, no porque haya sido borrado.
   emitidaPorPlataforma Boolean    @default(false) @map("emitida_por_plataforma")
   aceptadaAt           DateTime?  @map("aceptada_at")
-  usuarioId            String?    @unique @map("usuario_id")
+  // Quién aceptó esta invitación. Ya NO @unique en toda la tabla desde la
+  // fase "Joining" (ver la migración de esta PR): la MISMA cuenta puede
+  // aceptar más de una invitación, una por club al que se une.
+  usuarioId            String?    @map("usuario_id")
   revocadaAt           DateTime?  @map("revocada_at")
   createdAt            DateTime   @default(now()) @map("created_at")
 
@@ -251,23 +259,26 @@ model Invitacion {
 // mientras siga activo (ver verCodigoQr) — de ahí el cifrado reversible en
 // vez de solo un hash de un sentido.
 model CodigoQrInvitacion {
-  id             String       @id @default(uuid())
-  organizationId String       @map("organization_id")
-  tokenHash      String       @unique @map("token_hash")
-  tokenCifrado   String       @map("token_cifrado")
-  rol            RolUsuario   @default(SOCIO)
-  etiqueta       String?
-  maxUsos        Int          @map("max_usos")
-  usosRestantes  Int          @map("usos_restantes")
-  expiresAt      DateTime     @map("expires_at")
-  revocadoAt     DateTime?    @map("revocado_at")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  creadoPorId    String?      @map("creado_por_id")
-  modo           ModoCodigoQr @default(CORREO)
+  id                  String       @id @default(uuid())
+  organizationId      String       @map("organization_id")
+  tokenHash           String       @unique @map("token_hash")
+  tokenCifrado        String       @map("token_cifrado")
+  rol                 RolUsuario   @default(SOCIO)
+  etiqueta            String?
+  maxUsos             Int          @map("max_usos")
+  usosRestantes       Int          @map("usos_restantes")
+  expiresAt           DateTime     @map("expires_at")
+  revocadoAt          DateTime?    @map("revocado_at")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  creadoPorId         String?      @map("creado_por_id")
+  modo                ModoCodigoQr @default(CORREO)
   // Solo un código DIRECTO lo llena, y solo una vez (registrarConQrDirecto):
   // el usuario que ese único uso dio de alta — ver codigos-qr.service.ts.
   // Filas existentes (todas CORREO) quedan null.
-  registradoUsuarioId String? @unique @map("registrado_usuario_id")
+  // Ya NO @unique en toda la tabla desde la fase "Joining" (ver la migración
+  // de esta PR): la MISMA cuenta puede unirse por QR directo a más de un
+  // club a lo largo del tiempo.
+  registradoUsuarioId String?      @map("registrado_usuario_id")
 
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   creadoPor         User?        @relation("CodigosQrCreados", fields: [creadoPorId], references: [id], onDelete: SetNull)

@@ -12,7 +12,8 @@ import {
   registrarConQrDirecto as registrarConQrDirectoService,
   type CodigosQrDeps,
 } from '../services/codigos-qr.service.js';
-import type { Requester, ServiceResult } from '../services/invitaciones.service.js';
+import type { Requester, ServiceResult, AuthProof } from '../services/invitaciones.service.js';
+import { verifiedEmailFromAuthHeader } from '../lib/verified-email.js';
 import { codigosQrRepoPrisma } from '../services/codigos-qr.repo.prisma.js';
 import { sendClubEmail } from '../lib/email/club-email.js';
 import { buildInvitationEmail, brandingFor } from '../lib/email-templates.js';
@@ -38,7 +39,7 @@ function buildDeps(organization: OrganizationSummary): CodigosQrDeps {
       await sendClubEmail(organization, {
         to: params.to,
         subject: subjectInvitacion(branding),
-        html: buildInvitationEmail(params, branding, { viaQr: true }),
+        html: buildInvitationEmail(params, branding, { viaQr: true, existingAccount: params.existingAccount }),
         kind: 'notificacion',
       });
     },
@@ -48,6 +49,11 @@ function buildDeps(organization: OrganizationSummary): CodigosQrDeps {
     }),
     withOrganization: async (organizationId, fn) => runWithOrganization(organizationId, fn),
     hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
+    // Comparación de tiempo constante contra un hash ya guardado — la usa la
+    // rama de "cuenta existente" de registrarConQrDirecto (buildPublicDeps
+    // más abajo). Se cablea acá también por uniformidad: CodigosQrDeps es
+    // una sola interfaz para ambos conjuntos de deps.
+    comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
     jwtSecret: requireJwtSecret(),
@@ -70,7 +76,7 @@ function buildPublicDeps(): CodigosQrDeps {
       await sendClubEmail(organization, {
         to: params.to,
         subject: subjectInvitacion(branding),
-        html: buildInvitationEmail(params, branding, { viaQr: true }),
+        html: buildInvitationEmail(params, branding, { viaQr: true, existingAccount: params.existingAccount }),
         kind: 'notificacion',
       });
     },
@@ -84,6 +90,9 @@ function buildPublicDeps(): CodigosQrDeps {
     },
     withOrganization: async (organizationId, fn) => runWithOrganization(organizationId, fn),
     hashPassword: (password) => bcrypt.hash(password, SALT_ROUNDS),
+    // Prueba de titularidad de una cuenta existente (registrarConQrDirecto)
+    // — ver verificarPruebaDeCuentaExistente en invitaciones.service.ts.
+    comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: FRONTEND_URL,
     jwtSecret: requireJwtSecret(),
@@ -233,7 +242,8 @@ export async function solicitarInvitacionQr(req: Request, res: Response): Promis
 }
 
 // POST /api/qr/registrar — contraparte DIRECTO de solicitarInvitacionQr: da
-// de alta la cuenta en el acto, sin correo de por medio.
+// de alta la cuenta en el acto (o une una cuenta existente), sin correo de
+// por medio.
 export async function registrarConQrDirecto(req: Request, res: Response): Promise<void> {
   const parsedToken = tokenField.safeParse(req.body?.token);
   if (!parsedToken.success) {
@@ -241,15 +251,17 @@ export async function registrarConQrDirecto(req: Request, res: Response): Promis
     return;
   }
   try {
-    // Público: el usuario nuevo hereda el organizationId del QR, no de ningún
-    // contexto previo — corre en contexto de plataforma, igual que aceptar
-    // una invitación individual.
+    // Público: el usuario nuevo (o la Membresia nueva) hereda el
+    // organizationId del QR, no de ningún contexto previo — corre en
+    // contexto de plataforma, igual que aceptar una invitación individual.
+    const auth: AuthProof = { verifiedEmail: verifiedEmailFromAuthHeader(req) };
     const result = await runAsPlatform(() =>
-      registrarConQrDirectoService(buildPublicDeps(), parsedToken.data, {
-        name: req.body?.name,
-        email: req.body?.email,
-        password: req.body?.password,
-      }),
+      registrarConQrDirectoService(
+        buildPublicDeps(),
+        parsedToken.data,
+        { name: req.body?.name, email: req.body?.email, password: req.body?.password },
+        auth,
+      ),
     );
     respond(res, result);
   } catch (error) {

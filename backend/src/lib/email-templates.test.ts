@@ -269,6 +269,21 @@ describe('email-templates — branding por club en cada builder', () => {
     assertMentionsClub(html);
   });
 
+  it('buildInvitationEmail sin existingAccount es byte a byte igual que con existingAccount: false', () => {
+    assert.equal(
+      buildInvitationEmail(invitationData, branding),
+      buildInvitationEmail(invitationData, branding, { existingAccount: false }),
+    );
+  });
+
+  it('buildInvitationEmail con existingAccount: true dice "inicia sesión" en vez de "crea tu cuenta"', () => {
+    const html = buildInvitationEmail(invitationData, branding, { existingAccount: true });
+    assert.match(html, /inicia sesión/i);
+    assert.doesNotMatch(html, /crear mi cuenta/i);
+    assertMentionsClub(html);
+    assert.equal(html.includes(invitationData.inviteUrl), true);
+  });
+
   it('buildEventoInscripcionConfirmadaEmail usa branding.frontendUrl en el CTA', () => {
     const html = buildEventoInscripcionConfirmadaEmail('Juan Soto', evento, inscripcion, branding);
     assertMentionsClub(html);

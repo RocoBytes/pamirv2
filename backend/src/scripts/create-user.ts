@@ -163,6 +163,32 @@ async function run(): Promise<void> {
     return;
   }
 
+  // Desde acá: o una cuenta nueva (!existing), o una actualización con
+  // --force de una membresía existente (existing && existingMembresia &&
+  // force). Club NO primario + --force: --force es acá una herramienta de
+  // reparación de ROL para ESTE club, nunca del perfil compartido de la
+  // cuenta (Ruling 8 del plan de la PR de Joining: el mismo motivo por el
+  // que la alta aditiva de arriba tampoco lo toca) — así que esta rama
+  // decide ANTES de pedir contraseña y nunca llama a readPassword()/
+  // bcrypt.hash(): no hay nada que pedir, teclear ni descartar. Cualquier
+  // contraseña que el operador haya puesto a disposición en stdin
+  // simplemente queda sin leer (no es un error).
+  if (existing && existing.organizationId !== organization.id) {
+    await prisma.membresia.upsert({
+      where: { organizationId_usuarioId: { organizationId: organization.id, usuarioId: existing.id } },
+      create: { organizationId: organization.id, usuarioId: existing.id, rol },
+      update: { rol },
+    });
+    console.log(
+      `[create-user] Se actualizó el rol de "${email}" en "${org}" a rol="${rol}" (club no primario: el ` +
+        'perfil compartido de la cuenta no se tocó; no se pidió ni se usó ninguna contraseña).',
+    );
+    return;
+  }
+
+  // Desde acá: cuenta nueva, o --force sobre el club PRIMARIO de la cuenta
+  // (existing.organizationId === organization.id). Ambos caminos necesitan
+  // nombre + contraseña, así que recién acá se pide/hashea.
   const rawPassword = await readPassword();
   if (rawPassword === null) {
     process.exitCode = 1;
@@ -191,8 +217,8 @@ async function run(): Promise<void> {
     return;
   }
 
-  // existing && existingMembresia && force: actualiza el perfil compartido
-  // de la cuenta y el rol de ESTA membresía.
+  // existing && existingMembresia && force && club PRIMARIO: actualiza el
+  // perfil compartido completo (name/contraseña/rol), como siempre.
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.update({
       where: { email },
@@ -204,19 +230,9 @@ async function run(): Promise<void> {
         verificationTokenExpiry: null,
         resetToken: null,
         resetTokenExpiry: null,
-        // Columna heredada de User (fase de expansión, ver schema.prisma):
-        // solo se actualiza cuando este club sigue siendo el club
-        // "primario" de la cuenta (User.organizationId) — igual que
-        // updateUserRol en admin.controller.ts.
-        ...(existing.organizationId === organization.id ? { rol } : {}),
+        rol,
       },
     });
-    // upsert (no update): --force es una herramienta de reparación operativa
-    // (ver su descripción en create-user-args.ts, "actualizarlo") — a
-    // diferencia de PATCH /admin/users/:id/rol (admin.controller.ts), que
-    // falla ruidoso si la Membresia falta, acá se prefiere autosanar: una
-    // fila que falte (backfill incompleto, borrado a mano) no debe bloquear
-    // al operador que está tratando de arreglar justamente ese usuario.
     await tx.membresia.upsert({
       where: { organizationId_usuarioId: { organizationId: organization.id, usuarioId: user.id } },
       create: { organizationId: organization.id, usuarioId: user.id, rol },

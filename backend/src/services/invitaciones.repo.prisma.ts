@@ -10,27 +10,40 @@ import type {
 } from './invitaciones.service.js';
 
 export const invitacionesRepoPrisma: InvitacionesRepo = {
-  // SIEMPRE en contexto de plataforma, sin importar el contexto del llamador:
-  // User.email es único en TODA la plataforma, no por club. Si esta consulta
-  // se dejara heredar el contexto de club ambiente (el del ADMIN/LIDER que
-  // invita), quedaría filtrada por organizationId y un correo que ya tiene
-  // cuenta en OTRO club pasaría la validación de "no existe" acá y fallaría
-  // recién más abajo, con un error de unique constraint en vez del 409 claro
-  // que espera el servicio.
-  async findUserByEmail(email) {
-    return runAsPlatform(() =>
-      prisma.user.findUnique({
-        where: { email },
-        select: { id: true, email: true, name: true, rol: true },
-      }),
-    );
-  },
-
   async findUserById(id) {
     return prisma.user.findUnique({
       where: { id },
       select: { id: true, name: true, rol: true },
     });
+  },
+
+  // Dos consultas de plataforma SIEMPRE, lanzadas en paralelo (Promise.all,
+  // nunca una tras otra) sin importar si la cuenta existe (Ruling 2 del plan
+  // de esta PR): con el generador sin `relationJoins`, un `include`/`select`
+  // anidado sobre una relación es, por debajo, una segunda consulta que
+  // Prisma solo emite cuando la primera encontró una fila — eso es
+  // exactamente el canal de tiempo que el diseño prohíbe (el admin que
+  // invita podría medir "una consulta" vs. "dos consultas" y deducir si el
+  // correo tiene cuenta en otro club). Al crear ambas promesas antes de
+  // esperar cualquiera, las dos viajan siempre, exista o no la cuenta.
+  async findAccountMembershipStatus(email, organizationId) {
+    return runAsPlatform(async () => {
+      const [user, membresia] = await Promise.all([
+        prisma.user.findUnique({ where: { email }, select: { id: true } }),
+        prisma.membresia.findFirst({ where: { organizationId, usuario: { email } }, select: { id: true } }),
+      ]);
+      if (!user) return { cuentaExiste: false, esSocioDeEsteClub: false };
+      return { cuentaExiste: true, esSocioDeEsteClub: membresia !== null };
+    });
+  },
+
+  async findAccountForOwnershipProof(email) {
+    return runAsPlatform(() =>
+      prisma.user.findUnique({
+        where: { email },
+        select: { id: true, email: true, passwordHash: true },
+      }),
+    );
   },
 
   async revokePendingForEmail(email, now) {
@@ -103,6 +116,40 @@ export const invitacionesRepoPrisma: InvitacionesRepo = {
       // transacción ya revirtió el update de aceptadaAt.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         return null;
+      }
+      throw error;
+    }
+  },
+
+  async acceptInvitacionExistente({ invitacionId, organizationId, usuarioId, rol, now }) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        // Mismo update condicional que acceptInvitacion: solo avanza si la
+        // invitación sigue pendiente y vigente.
+        const { count } = await tx.invitacion.updateMany({
+          where: { id: invitacionId, aceptadaAt: null, revocadaAt: null, expiresAt: { gt: now } },
+          data: { aceptadaAt: now },
+        });
+        if (count !== 1) {
+          return false;
+        }
+
+        // A diferencia de acceptInvitacion: NUNCA se toca User acá — solo la
+        // Membresia nueva (Ruling del plan de esta PR: la cuenta existente
+        // nunca se sobreescribe).
+        await tx.membresia.create({ data: { organizationId, usuarioId, rol } });
+        await tx.invitacion.update({ where: { id: invitacionId }, data: { usuarioId } });
+
+        return true;
+      });
+    } catch (error) {
+      // P2002: la Membresia (organizationId, usuarioId) ya existía — una
+      // carrera concurrente contra ESTA MISMA invitación (el update
+      // condicional de arriba solo protege el conteo de filas de
+      // Invitacion, no la unicidad de Membresia). La transacción ya revirtió
+      // el update de aceptadaAt.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return false;
       }
       throw error;
     }

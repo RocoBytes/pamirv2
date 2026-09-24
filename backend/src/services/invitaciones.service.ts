@@ -81,8 +81,14 @@ export interface AceptarInvitacionInput {
 }
 
 export interface InvitacionesRepo {
-  findUserByEmail(email: string): Promise<UsuarioBasico | null>;
   findUserById(id: string): Promise<Pick<UsuarioBasico, 'id' | 'name' | 'rol'> | null>;
+  // Una sola consulta que responde "existe" y "ya es socia de ESTE club" a
+  // la vez — ver AccountMembershipStatus arriba (Ruling 2).
+  findAccountMembershipStatus(email: string, organizationId: string): Promise<AccountMembershipStatus>;
+  // Lo mínimo para verificar titularidad (incluye passwordHash) — separado
+  // de un UsuarioBasico para no exponer el hash a ningún llamador que no lo
+  // necesite.
+  findAccountForOwnershipProof(email: string): Promise<AccountForOwnershipProof | null>;
   revokePendingForEmail(email: string, now: Date): Promise<void>;
   createInvitacion(data: CrearInvitacionData): Promise<InvitacionRow>;
   findByTokenHash(tokenHash: string): Promise<InvitacionRow | null>;
@@ -93,6 +99,20 @@ export interface InvitacionesRepo {
   // solo si la invitación sigue pendiente y vigente (update condicional con
   // affected rows === 1). null = la invitación ya no estaba disponible (carrera).
   acceptInvitacion(input: AceptarInvitacionInput): Promise<UsuarioBasico | null>;
+  // Contraparte de acceptInvitacion para una cuenta YA EXISTENTE: crea SOLO
+  // la Membresia (nunca toca User), consumiendo la invitación en la misma
+  // transacción. true = se unió; false = la invitación ya no estaba
+  // disponible (carrera) — mismo contrato ok/null que acceptInvitacion,
+  // adaptado a que acá no hay un UsuarioBasico nuevo que devolver.
+  acceptInvitacionExistente(input: AceptarInvitacionExistenteInput): Promise<boolean>;
+}
+
+export interface AceptarInvitacionExistenteInput {
+  invitacionId: string;
+  organizationId: string;
+  usuarioId: string;
+  rol: RolUsuario;
+  now: Date;
 }
 
 // ─── Dependencias inyectadas ────────────────────────────────────────────────────
@@ -103,6 +123,11 @@ export interface SendInvitationEmailParams {
   rolLabel: string;
   inviteUrl: string;
   expiraEnDias: number;
+  // La persona invitada ya tiene una cuenta RIALA (en este club o en otro):
+  // el correo debe decir "inicia sesión" en vez de "crea tu cuenta" (ver
+  // lib/email-templates.ts). El admin que invita NUNCA ve este campo ni nada
+  // derivado de él — solo cambia el texto del correo que recibe el invitado.
+  existingAccount: boolean;
 }
 
 export interface InvitacionesDeps {
@@ -112,6 +137,11 @@ export interface InvitacionesDeps {
   // el controlador.
   sendEmail: (params: SendInvitationEmailParams) => Promise<void>;
   hashPassword: (password: string) => Promise<string>;
+  // Comparación de tiempo constante contra un hash ya guardado — usada solo
+  // por la rama de "cuenta existente" de aceptarInvitacion (ver
+  // verificarPruebaDeCuentaExistente). Igual patrón de inyección que
+  // hashPassword: el servicio nunca importa bcrypt directamente.
+  comparePassword: (password: string, hash: string) => Promise<boolean>;
   now: () => Date;
   frontendUrl: string;
   // Resuelve la marca pública (slug/name/shortName) de un club por su id.
@@ -130,6 +160,69 @@ export interface Requester {
   organizationId: string;
   name: string;
   rol: RolUsuario;
+}
+
+// ─── Prueba de titularidad de una cuenta existente (PR "Joining") ─────────────
+// Ver docs/superpowers/specs/2026-09-23-multi-club-membership-design.md §2
+// "Joining a club" y el plan de esta PR (Rulings 2, 3). Compartido por
+// aceptarInvitacion (este archivo) y registrarConQrDirecto
+// (codigos-qr.service.ts, que importa estos símbolos de acá).
+
+// Una consulta, dos datos: si la cuenta existe Y si ya es socia de ESTE
+// club — nunca dos consultas separadas (ver Ruling 2: una consulta extra
+// SOLO cuando la cuenta existe es un canal de tiempo que revela su
+// existencia al admin que invita, algo que el diseño prohíbe
+// explícitamente).
+export interface AccountMembershipStatus {
+  cuentaExiste: boolean;
+  // Solo tiene sentido cuando cuentaExiste es true.
+  esSocioDeEsteClub: boolean;
+}
+
+// Lo mínimo para verificar titularidad — nunca se expone fuera de la rama de
+// prueba de titularidad (nunca se mezcla con UsuarioBasico, que si se
+// serializa en una vista pública).
+export interface AccountForOwnershipProof {
+  id: string;
+  email: string;
+  passwordHash: string | null;
+}
+
+// Ya verificado por el controlador (lib/verified-email.ts) antes de llegar
+// acá — el servicio NUNCA decodifica un JWT él mismo.
+export interface AuthProof {
+  verifiedEmail: string | null;
+}
+
+export type OwnershipProofResult = { ok: true } | { ok: false; status: number; error: string };
+
+// Prueba que quien está aceptando/registrándose es dueño de una cuenta YA
+// EXISTENTE con este email: por Bearer (si coincide exactamente con el email
+// de la cuenta) o, si no hay Bearer, por contraseña (bcrypt, tiempo
+// constante — igual que login). Los mensajes se inyectan porque cada
+// endpoint usa su propio texto (ver Ruling 5 del plan de esta PR).
+export async function verificarPruebaDeCuentaExistente(
+  deps: { comparePassword: (password: string, hash: string) => Promise<boolean> },
+  account: AccountForOwnershipProof,
+  auth: AuthProof,
+  submittedPassword: string | undefined,
+  mensajes: { correoDistinto: string; contrasenaIncorrecta: string },
+): Promise<OwnershipProofResult> {
+  if (auth.verifiedEmail !== null) {
+    if (auth.verifiedEmail !== account.email) {
+      return { ok: false, status: 403, error: mensajes.correoDistinto };
+    }
+    return { ok: true };
+  }
+
+  if (!account.passwordHash || submittedPassword === undefined) {
+    return { ok: false, status: 401, error: mensajes.contrasenaIncorrecta };
+  }
+  const matches = await deps.comparePassword(submittedPassword, account.passwordHash);
+  if (!matches) {
+    return { ok: false, status: 401, error: mensajes.contrasenaIncorrecta };
+  }
+  return { ok: true };
 }
 
 // ─── Resultado discriminado ─────────────────────────────────────────────────────
@@ -183,7 +276,7 @@ async function invitadoPorPublico(
 
 const MENSAJE_SIN_PERMISO = 'No tienes permiso para invitar';
 const MENSAJE_ROL_NO_PERMITIDO = 'No puedes invitar con ese rol';
-const MENSAJE_CUENTA_EXISTENTE = 'Ya existe una cuenta con ese correo';
+const MENSAJE_YA_SOCIO_CLUB = 'Ya es socio de este club';
 const MENSAJE_NO_PENDIENTE = 'La invitación ya no está pendiente';
 const MENSAJE_NO_ENCONTRADA = 'Invitación no encontrada';
 const MENSAJE_TOKEN_INVALIDO = 'La invitación no es válida';
@@ -191,6 +284,10 @@ const MENSAJE_YA_UTILIZADA = 'Esta invitación ya fue utilizada. Inicia sesión.
 const MENSAJE_EXPIRADA = 'La invitación expiró. Pide a quien te invitó que la reenvíe.';
 const MENSAJE_NO_VIGENTE = 'La invitación ya no está vigente';
 const MENSAJE_ROL_INVALIDO = 'Rol inválido';
+// Usados solo por la rama de "cuenta existente" de aceptarInvitacion (PR
+// "Joining", Task 3) — ver verificarPruebaDeCuentaExistente.
+const MENSAJE_INVITACION_OTRO_CORREO = 'Esta invitación es para otro correo';
+const MENSAJE_CONTRASENA_INCORRECTA = 'Ya tienes una cuenta con este correo. Verifica tu contraseña e inténtalo de nuevo.';
 
 // Nombre que se muestra como "invitado por" cuando la invitación la emitió la
 // plataforma (sin invitador) — ver crearInvitacionPlataforma.
@@ -239,9 +336,13 @@ export async function crearInvitacion(
   // que es un subconjunto de RolUsuario.
   const rol = rolInput as RolUsuario;
 
-  const existing = await deps.repo.findUserByEmail(email);
-  if (existing) {
-    return { ok: false, status: 409, error: MENSAJE_CUENTA_EXISTENTE };
+  // Una sola consulta que responde a la vez "existe" y "ya es socia de ESTE
+  // club" (ver Ruling 2 del plan de esta PR) — el admin nunca aprende cuál
+  // de los dos casos restantes ocurrió, ni por el body de la respuesta ni
+  // por el tiempo que tarda: el camino de abajo es idéntico en ambos.
+  const estado = await deps.repo.findAccountMembershipStatus(email, requester.organizationId);
+  if (estado.esSocioDeEsteClub) {
+    return { ok: false, status: 409, error: MENSAJE_YA_SOCIO_CLUB };
   }
 
   const now = deps.now();
@@ -268,6 +369,7 @@ export async function crearInvitacion(
     rolLabel: ROL_LABELS[rol],
     inviteUrl,
     expiraEnDias: INVITE_TTL_DIAS,
+    existingAccount: estado.cuentaExiste,
   });
 
   return {
@@ -374,9 +476,9 @@ export async function reenviarInvitacion(
     return { ok: false, status: 403, error: MENSAJE_ROL_NO_PERMITIDO };
   }
 
-  const existing = await deps.repo.findUserByEmail(inv.email);
-  if (existing) {
-    return { ok: false, status: 409, error: MENSAJE_CUENTA_EXISTENTE };
+  const estadoCuenta = await deps.repo.findAccountMembershipStatus(inv.email, requester.organizationId);
+  if (estadoCuenta.esSocioDeEsteClub) {
+    return { ok: false, status: 409, error: MENSAJE_YA_SOCIO_CLUB };
   }
 
   await deps.repo.markRevoked(id, now);
@@ -403,6 +505,7 @@ export async function reenviarInvitacion(
     rolLabel: ROL_LABELS[inv.rol],
     inviteUrl,
     expiraEnDias: INVITE_TTL_DIAS,
+    existingAccount: estadoCuenta.cuentaExiste,
   });
 
   return {
@@ -510,6 +613,7 @@ export async function aceptarInvitacion(
   deps: InvitacionesDeps,
   token: string,
   body: { name: unknown; password: unknown },
+  auth: AuthProof,
 ): Promise<ServiceResult<AceptarInvitacionBody>> {
   const inv = await deps.repo.findByTokenHash(hashInviteToken(token));
   if (!inv) {
@@ -520,6 +624,52 @@ export async function aceptarInvitacion(
   const vigencia = await verificarVigencia(deps, inv, now);
   if (!('vigente' in vigencia)) return vigencia;
 
+  // El email y el rol nunca se leen del body: solo importan los de la
+  // invitación.
+  const existing = await deps.repo.findAccountForOwnershipProof(inv.email);
+
+  if (existing) {
+    // Cuenta existente (fase "Joining", ver el plan de esta PR): unirse a un
+    // club nuevo requiere PROBAR que se es dueño de esa cuenta. name del
+    // body se ignora siempre — el perfil compartido nunca se toca acá. Si
+    // hay un Bearer verificado, la contraseña ni se valida ni se lee: es la
+    // rama que usará la pantalla de PR 4. Sin Bearer, la contraseña sí es
+    // obligatoria — mismo rate limit por token que login (ver Ruling 4 del
+    // plan de esta PR: app.ts's inviteTokenKey limiter, 10/15min).
+    let submittedPassword: string | undefined;
+    if (auth.verifiedEmail === null) {
+      const passwordParsed = passwordField.safeParse(body.password);
+      if (!passwordParsed.success) {
+        return { ok: false, status: 400, error: passwordParsed.error.issues[0]?.message ?? 'Contraseña inválida' };
+      }
+      submittedPassword = passwordParsed.data;
+    }
+
+    const prueba = await verificarPruebaDeCuentaExistente(deps, existing, auth, submittedPassword, {
+      correoDistinto: MENSAJE_INVITACION_OTRO_CORREO,
+      contrasenaIncorrecta: MENSAJE_CONTRASENA_INCORRECTA,
+    });
+    if (!prueba.ok) return prueba;
+
+    const unido = await deps.repo.acceptInvitacionExistente({
+      invitacionId: inv.id,
+      organizationId: inv.organizationId,
+      usuarioId: existing.id,
+      rol: inv.rol,
+      now,
+    });
+    if (!unido) {
+      return { ok: false, status: 409, error: MENSAJE_NO_PENDIENTE };
+    }
+
+    return {
+      ok: true,
+      status: 201,
+      body: { message: 'Te uniste al club. Ya puedes iniciar sesión.', email: existing.email },
+    };
+  }
+
+  // Sin cuenta: el flujo de siempre (crea User + Membresia).
   const nameParsed = nameField.safeParse(body.name);
   if (!nameParsed.success) {
     return { ok: false, status: 400, error: nameParsed.error.issues[0]?.message ?? 'Nombre inválido' };
@@ -527,13 +677,6 @@ export async function aceptarInvitacion(
   const passwordParsed = passwordField.safeParse(body.password);
   if (!passwordParsed.success) {
     return { ok: false, status: 400, error: passwordParsed.error.issues[0]?.message ?? 'Contraseña inválida' };
-  }
-
-  // El email y el rol nunca se leen del body: solo importan los de la
-  // invitación (lo que llegue en body.email/body.rol se ignora).
-  const existing = await deps.repo.findUserByEmail(inv.email);
-  if (existing) {
-    return { ok: false, status: 409, error: MENSAJE_CUENTA_EXISTENTE };
   }
 
   const passwordHash = await deps.hashPassword(passwordParsed.data);
@@ -589,9 +732,9 @@ export async function crearInvitacionPlataforma(
   }
   const rol = input.rol as RolUsuario;
 
-  const existing = await deps.repo.findUserByEmail(email);
-  if (existing) {
-    return { ok: false, status: 409, error: MENSAJE_CUENTA_EXISTENTE };
+  const estado = await deps.repo.findAccountMembershipStatus(email, input.organizationId);
+  if (estado.esSocioDeEsteClub) {
+    return { ok: false, status: 409, error: MENSAJE_YA_SOCIO_CLUB };
   }
 
   const now = deps.now();
@@ -618,6 +761,7 @@ export async function crearInvitacionPlataforma(
     rolLabel: ROL_LABELS[rol],
     inviteUrl,
     expiraEnDias: INVITE_TTL_DIAS,
+    existingAccount: estado.cuentaExiste,
   });
 
   return {
