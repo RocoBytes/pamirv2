@@ -51,14 +51,19 @@ describe('scopeArgs — contexto de plataforma', () => {
   });
 });
 
-// ─── Modelos globales: la lista está vacía desde que se eliminó el único ──────
-// modelo global que existió (guardaba el refresh token de Google). El
-// mecanismo se conserva tipado para el próximo modelo global; sin ninguna
-// entrada hoy, ningún modelo escapa del aislamiento por esta vía.
+// ─── Modelos globales: User es el primero desde el diseño multi-club ─────────
+// (ver scope-args.ts) — una cuenta ya no pertenece a un único club, así que
+// escapa del aislamiento por organizationId por esta vía.
 
 describe('scopeArgs — GLOBAL_MODELS', () => {
-  it('está vacía', () => {
-    assert.deepEqual(GLOBAL_MODELS, []);
+  it('contiene exactamente User — la única cuenta es global desde el diseño multi-club', () => {
+    assert.deepEqual(GLOBAL_MODELS, ['User']);
+  });
+
+  it('deja pasar los args sin modificar para un modelo global, incluso bajo un contexto de club', () => {
+    const args = { where: { id: '1' } };
+    const result = scopeArgs({ model: 'User', operation: 'findMany', args, store: asA });
+    assert.deepEqual(result, args);
   });
 });
 

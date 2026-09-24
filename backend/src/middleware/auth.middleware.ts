@@ -5,6 +5,23 @@ import { isAdmin, canInvite } from '../lib/authz.js';
 import { categoriasGestionadas } from '../lib/gestores-eventos.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 import { isOrganizationSuspended, CLUB_SUSPENDIDO_MENSAJE } from '../lib/organization-status.js';
+import { xClubHeader } from '../lib/x-club.js';
+
+// Campos de Organization que arma req.user.organization (OrganizationSummary,
+// ver types/index.ts), más "status", que solo se usa acá para el chequeo de
+// suspensión y nunca se copia al objeto final.
+const ORGANIZATION_SELECT = {
+  id: true,
+  slug: true,
+  name: true,
+  shortName: true,
+  status: true,
+  membresiaPropia: true,
+  alertEmail: true,
+  contactName: true,
+  contactEmail: true,
+  logoObjectKey: true,
+} as const;
 
 export async function authMiddleware(
   req: Request,
@@ -23,25 +40,18 @@ export async function authMiddleware(
 
   try {
     const { userId } = verifyToken(token);
-    // La cuenta se busca por id en todo el sistema (no se sabe todavía a qué
-    // club pertenece), así que este findUnique corre en contexto de plataforma.
+    // La cuenta (User) es global desde este PR — ver scope-args.ts — así que
+    // se busca por id en contexto de plataforma, junto con TODAS sus
+    // membresías. El club activo se resuelve aparte, abajo: X-Club decide
+    // CUÁL de las membresías de la cuenta usar, nunca otorga pertenencia por
+    // sí solo (la pertenencia ya la prueba que exista la Membresia).
     const user = await runAsPlatform(() =>
       prisma.user.findUnique({
         where: { id: userId },
         include: {
-          organization: {
-            select: {
-              id: true,
-              slug: true,
-              name: true,
-              shortName: true,
-              status: true,
-              membresiaPropia: true,
-              alertEmail: true,
-              contactName: true,
-              contactEmail: true,
-              logoObjectKey: true,
-            },
+          membresias: {
+            orderBy: { creadoAt: 'asc' },
+            include: { organization: { select: ORGANIZATION_SELECT } },
           },
         },
       }),
@@ -53,35 +63,67 @@ export async function authMiddleware(
       return;
     }
 
-    if (isOrganizationSuspended(user.organization.status)) {
+    const membresias = user.membresias;
+    const xClub = xClubHeader(req);
+
+    let activa: (typeof membresias)[number] | undefined;
+
+    if (xClub !== undefined) {
+      activa = membresias.find((m) => m.organization.slug === xClub);
+      if (!activa) {
+        // Se distingue "el club no existe" de "existe pero no soy socio" sin
+        // filtrar más que eso — ver la tabla de errores del diseño multi-club.
+        const orgExiste = await runAsPlatform(() =>
+          prisma.organization.findUnique({ where: { slug: xClub }, select: { id: true } }),
+        );
+        res.status(orgExiste ? 403 : 404).json({
+          error: orgExiste ? 'No perteneces a este club' : 'Club no encontrado',
+        });
+        return;
+      }
+    } else if (membresias.length === 1) {
+      // Regla de transición: sin X-Club y con una sola membresía, se usa
+      // esa — así un frontend que todavía no envía el header (el único que
+      // existe en este PR) sigue funcionando exactamente igual que antes.
+      activa = membresias[0];
+    } else {
+      // Cero o varias membresías sin X-Club: nada que asumir con seguridad.
+      // (Una cuenta con cero membresías no puede existir hoy — ver el
+      // diseño — así que en la práctica esto es siempre "varias".)
+      res.status(400).json({ error: 'Selecciona un club' });
+      return;
+    }
+
+    if (isOrganizationSuspended(activa.organization.status)) {
       res.status(403).json({ error: CLUB_SUSPENDIDO_MENSAJE });
       return;
     }
 
     req.user = {
       id: user.id,
-      organizationId: user.organizationId,
+      organizationId: activa.organization.id,
       email: user.email,
       name: user.name,
-      rol: user.rol,
+      rol: activa.rol,
       // Resumen cargado una sola vez acá: los controladores lo leen de
       // req.user.organization en vez de volver a consultar Organization.
       organization: {
-        id: user.organization.id,
-        slug: user.organization.slug,
-        name: user.organization.name,
-        shortName: user.organization.shortName,
-        membresiaPropia: user.organization.membresiaPropia,
-        alertEmail: user.organization.alertEmail,
-        contactName: user.organization.contactName,
-        contactEmail: user.organization.contactEmail,
-        logoObjectKey: user.organization.logoObjectKey,
+        id: activa.organization.id,
+        slug: activa.organization.slug,
+        name: activa.organization.name,
+        shortName: activa.organization.shortName,
+        membresiaPropia: activa.organization.membresiaPropia,
+        alertEmail: activa.organization.alertEmail,
+        contactName: activa.organization.contactName,
+        contactEmail: activa.organization.contactEmail,
+        logoObjectKey: activa.organization.logoObjectKey,
       },
     };
     // Todo lo que siga en la cadena de middlewares/handler corre dentro del
-    // contexto del club del usuario: es lo que hace que prisma.ts filtre
-    // automáticamente cada consulta de este request por su organizationId.
-    runWithOrganization(user.organizationId, () => next());
+    // contexto del club ACTIVO (no necesariamente el "primario" de User): es
+    // lo que hace que prisma.ts filtre automáticamente cada consulta de este
+    // request por su organizationId.
+    runWithOrganization(activa.organization.id, () => next());
   } catch {
     req.user = null;
     next();

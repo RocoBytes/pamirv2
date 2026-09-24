@@ -839,13 +839,26 @@ export async function deleteDashboardLayout(req: Request, res: Response): Promis
 
 // ─── Gestión de usuarios (sistema cerrado por invitación) ──────────────────────
 
-// GET /api/admin/users
+// GET /api/admin/users — User es global desde este PR (ver scope-args.ts):
+// se lee por Membresia, que sigue siendo tenant-scoped, para listar solo a
+// quienes son socios del club activo (ver lib/user-global-guard.test.ts).
 export async function listUsers(_req: Request, res: Response): Promise<void> {
   try {
-    const users = await prisma.user.findMany({
-      select: { id: true, email: true, name: true, rol: true, emailVerified: true, createdAt: true },
-      orderBy: { name: 'asc' },
+    const membresias = await prisma.membresia.findMany({
+      select: {
+        rol: true,
+        usuario: { select: { id: true, email: true, name: true, emailVerified: true, createdAt: true } },
+      },
+      orderBy: { usuario: { name: 'asc' } },
     });
+    const users = membresias.map((m) => ({
+      id: m.usuario.id,
+      email: m.usuario.email,
+      name: m.usuario.name,
+      rol: m.rol,
+      emailVerified: m.usuario.emailVerified,
+      createdAt: m.usuario.createdAt,
+    }));
     res.json(users);
   } catch (error) {
     console.error('[listUsers]', error);
@@ -855,7 +868,10 @@ export async function listUsers(_req: Request, res: Response): Promise<void> {
 
 const rolSchema = z.object({ rol: z.enum(['SOCIO', 'LIDER', 'ADMIN']) });
 
-// PATCH /api/admin/users/:id/rol
+// PATCH /api/admin/users/:id/rol — opera sobre la Membresia del club activo,
+// nunca sobre User directamente (que es global desde este PR): un id que no
+// tiene Membresia en este club es "no encontrado" para el admin de este
+// club, sea porque no existe o porque pertenece a otro.
 export async function updateUserRol(req: Request, res: Response): Promise<void> {
   try {
     const parsed = rolSchema.safeParse(req.body);
@@ -873,32 +889,45 @@ export async function updateUserRol(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const existing = await prisma.user.findUnique({ where: { id } });
-    if (!existing) {
+    const organizationId = requireOrganizationId();
+
+    const membresia = await prisma.membresia.findUnique({
+      where: { organizationId_usuarioId: { organizationId, usuarioId: id } },
+      include: {
+        usuario: {
+          select: { id: true, email: true, name: true, emailVerified: true, createdAt: true, organizationId: true },
+        },
+      },
+    });
+    if (!membresia) {
       res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
-    const organizationId = requireOrganizationId();
-    const [updated] = await prisma.$transaction([
-      prisma.user.update({
-        where: { id },
-        data: { rol: parsed.data.rol },
-        select: { id: true, email: true, name: true, rol: true, emailVerified: true, createdAt: true },
-      }),
-      // Dual write: el rol de una cuenta EN ESTE club vive también en su
-      // Membresia — ver schema.prisma. `existing` (arriba) ya probó, vía el
-      // aislamiento por club de User.findUnique, que `id` pertenece al club
-      // vigente, así que esta fila ya existe (todo alta la crea — ver
-      // invitaciones.repo.prisma.ts / codigos-qr.repo.prisma.ts /
-      // create-user.ts). Se usa `update` (no `upsert`): si faltara sería un
-      // bug real que conviene que falle ruidoso, no que se tape en silencio.
-      prisma.membresia.update({
+    const updatedMembresia = await prisma.$transaction(async (tx) => {
+      const updated = await tx.membresia.update({
         where: { organizationId_usuarioId: { organizationId, usuarioId: id } },
         data: { rol: parsed.data.rol },
-      }),
-    ]);
-    res.json(updated);
+      });
+      // Columna heredada de User (fase de expansión, ver schema.prisma): solo
+      // se actualiza cuando el club activo sigue siendo el club "primario"
+      // de la cuenta (User.organizationId) — si en el futuro esta persona
+      // tiene otra membresía primaria, este cambio en OTRO club no le pisa
+      // ese rol (Review Focus #3).
+      if (membresia.usuario.organizationId === organizationId) {
+        await tx.user.update({ where: { id }, data: { rol: parsed.data.rol } });
+      }
+      return updated;
+    });
+
+    res.json({
+      id: membresia.usuario.id,
+      email: membresia.usuario.email,
+      name: membresia.usuario.name,
+      rol: updatedMembresia.rol,
+      emailVerified: membresia.usuario.emailVerified,
+      createdAt: membresia.usuario.createdAt,
+    });
   } catch (error) {
     console.error('[updateUserRol]', error);
     res.status(500).json({ error: 'No se pudo actualizar el rol' });

@@ -31,6 +31,7 @@ import { SALT_ROUNDS } from '../lib/auth-fields.js';
 import { requireJwtSecret } from '../lib/jwt.js';
 import { isOrganizationSuspended } from '../lib/organization-status.js';
 import { toPublicOrganizationBrand } from '../lib/serializers/organization.js';
+import { resolveResetBrandingOrganizationIdForEmail } from '../controllers/auth.controller.js';
 import {
   crearClub,
   listarClubes,
@@ -481,22 +482,14 @@ interface ModelProbe {
   // estos checks (siempre se dispara sobre el id de B desde el contexto de A,
   // que siempre debe fallar antes de tocar la fila).
   updateProbe: Record<string, unknown>;
-  // Filas totales que el club A debe tener de este modelo (default 1). User e
-  // Integrante ahora seedean una fila extra (el socio "de biblioteca" — ver
-  // seedOrganization), así que declaran 2 explícitamente.
+  // Filas totales que el club A debe tener de este modelo (default 1).
+  // Integrante ahora seedea una fila extra (el socio "de biblioteca" — ver
+  // seedOrganization), así que declara 2 explícitamente.
   rowCount?: number;
 }
 
 function buildProbes(seedA: OrgSeed, seedB: OrgSeed): ModelProbe[] {
   return [
-    {
-      name: 'User',
-      delegate: asCheckable(prisma.user),
-      idA: seedA.adminUserId,
-      idB: seedB.adminUserId,
-      updateProbe: { name: 'probe' },
-      rowCount: 2,
-    },
     {
       name: 'Membresia',
       delegate: asCheckable(prisma.membresia),
@@ -814,6 +807,22 @@ async function patchJsonAuth(
   return { status: res.status, body };
 }
 
+// Como getJson, pero con el header X-Club — lo necesitan los checks nuevos de
+// resolución de club activo (ver runAuthMembershipChecks): antes de este PR,
+// ningún check de esta suite necesitaba enviarlo.
+async function getJsonWithClub(
+  baseUrl: string,
+  token: string,
+  urlPath: string,
+  xClub?: string,
+): Promise<{ status: number; body: unknown }> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  if (xClub !== undefined) headers['X-Club'] = xClub;
+  const res = await fetch(`${baseUrl}${urlPath}`, { headers });
+  const body = await res.json().catch(() => undefined);
+  return { status: res.status, body };
+}
+
 // Fecha calendario (YYYY-MM-DD) desplazada `dias` desde ahora — usada para
 // armar la ficha del evento operativo del club nuevo (ver runTenantCliChecks)
 // sin acoplarse a la fecha en que corra la suite.
@@ -868,15 +877,20 @@ async function runHttpChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): P
     },
   );
 
-  await check('GET /api/admin/users — solo los usuarios del propio club', async () => {
+  await check('GET /api/admin/users — solo los usuarios del propio club (por Membresia desde este PR)', async () => {
     const res = await getJson(baseUrl, tokenA, '/api/admin/users');
     assert.equal(res.status, 200);
-    const users = res.body as { email: string }[];
+    const users = res.body as { email: string; rol: string }[];
     // 2: el admin y el socio "de biblioteca" seedeados en el club A.
     assert.equal(users.length, 2);
     const emails = users.map((u) => u.email);
     assert.ok(emails.includes(seedA.adminEmail));
     assert.ok(emails.includes(seedA.socioEmail));
+    // User es global desde este PR (ver scope-args.ts): si listUsers volviera
+    // a listar directo desde User en vez de Membresia, este assert lo
+    // detectaría filtrando personas de OTRO club adentro de la lista de A.
+    assert.ok(!emails.includes(seedB.adminEmail));
+    assert.ok(!emails.includes(seedB.socioEmail));
   });
 
   await check('GET /api/admin/stats — los totales reflejan solo el club del que consulta (predicado SQL crudo)', async () => {
@@ -2147,11 +2161,14 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
   );
 
   await check(
-    'POST /api/auth/login devuelve la organización pública propia del club recién creado (7 campos, sin datos privados)',
+    'POST /api/auth/login devuelve la organización pública propia del club recién creado (7 campos, sin datos privados) y clubes con su única membresía',
     async () => {
       const login = await postJson(baseUrl, '/api/auth/login', { email: cliAdminEmail, password: CLI_PASSWORD });
       assert.equal(login.status, 200);
-      const org = (login.body as { user: { organization?: Record<string, unknown> } }).user.organization;
+      const body = login.body as {
+        user: { organization?: Record<string, unknown>; clubes?: { slug: string; rol: string }[] };
+      };
+      const org = body.user.organization;
       assert.ok(org);
       assert.deepEqual(Object.keys(org!).sort(), [
         'hasLogo', 'id', 'logoVersion', 'membresiaPropia', 'name', 'shortName', 'slug',
@@ -2160,6 +2177,10 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
       assert.equal(org!.logoVersion, null);
       assert.equal(org!.slug, cliSlug);
       assert.equal(org!.membresiaPropia, MEMBRESIA_A);
+
+      assert.equal(body.user.clubes?.length, 1);
+      assert.equal(body.user.clubes?.[0]?.slug, cliSlug);
+      assert.equal(body.user.clubes?.[0]?.rol, 'ADMIN');
     },
   );
 
@@ -2257,7 +2278,7 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
 
 // ─── Cambio de rol y Membresia ──────────────────────────────────────────────
 
-async function runRoleChangeMembresiaChecks(baseUrl: string, seedA: OrgSeed): Promise<void> {
+async function runRoleChangeMembresiaChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
   const tokenA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
 
   await check(
@@ -2277,6 +2298,221 @@ async function runRoleChangeMembresiaChecks(baseUrl: string, seedA: OrgSeed): Pr
       assert.equal(membresia?.rol, 'LIDER');
     },
   );
+
+  await check(
+    'PATCH /api/admin/users/:id/rol — el admin de A no puede cambiar el rol de alguien que solo es socio de B (404, User ya es global) (Review Focus #2)',
+    async () => {
+      const res = await patchJsonAuth(baseUrl, tokenA, `/api/admin/users/${seedB.socioUserId}/rol`, { rol: 'ADMIN' });
+      assert.equal(res.status, 404);
+
+      const membresiaIntacta = await runAsPlatform(() =>
+        prisma.membresia.findUnique({
+          where: { organizationId_usuarioId: { organizationId: seedB.organizationId, usuarioId: seedB.socioUserId } },
+        }),
+      );
+      assert.equal(membresiaIntacta?.rol, 'SOCIO');
+    },
+  );
+}
+
+// ─── Resolución de club activo (X-Club) y membresías múltiples ────────────────
+
+async function runAuthMembershipChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
+  // El socio de A también se hace ADMIN de B — la única cuenta de todo el
+  // fixture con más de una membresía, y con un rol DISTINTO en cada club, así
+  // los checks de abajo prueban que el rol activo es el de la MEMBRESÍA, no
+  // el de User.rol "primario". Nunca se limpia a mano: la purga final de B
+  // borra esta fila junto con el resto de sus membresías.
+  const tokenMulti = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
+  await runAsPlatform(() =>
+    prisma.membresia.create({
+      data: { organizationId: seedB.organizationId, usuarioId: seedA.socioUserId, rol: 'ADMIN' },
+    }),
+  );
+
+  await check('GET /api/me con X-Club resuelve la membresía de ESE club (rol incluido)', async () => {
+    const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', SLUG_A);
+    assert.equal(res.status, 200);
+    const body = res.body as { user: { rol: string; organization: { slug: string } } };
+    assert.equal(body.user.organization.slug, SLUG_A);
+    // LIDER y no SOCIO: runRoleChangeMembresiaChecks ya promovió a este mismo
+    // socio a LIDER en A (su club primario) antes de este punto de la suite,
+    // lo que también actualizó su User.rol heredado por la misma razón. La
+    // prueba de que el rol viene de la MEMBRESÍA activa (y no ciegamente de
+    // User.rol) la da el siguiente check, con la membresía recién creada en
+    // B (ADMIN, distinta del rol primario).
+    assert.equal(body.user.rol, 'LIDER');
+  });
+
+  await check('GET /api/me con X-Club de la OTRA membresía resuelve SU rol ahí (ADMIN, no SOCIO)', async () => {
+    const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', SLUG_B);
+    assert.equal(res.status, 200);
+    const body = res.body as { user: { rol: string; organization: { slug: string } } };
+    assert.equal(body.user.organization.slug, SLUG_B);
+    assert.equal(body.user.rol, 'ADMIN');
+  });
+
+  await check('GET /api/me sin X-Club y con varias membresías responde 400 "Selecciona un club"', async () => {
+    const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', undefined);
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: 'Selecciona un club' });
+  });
+
+  await check('GET /api/me con X-Club de un club inexistente responde 404 "Club no encontrado"', async () => {
+    const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', `iso-test-no-existe-${RANDOM_SUFFIX}`);
+    assert.equal(res.status, 404);
+    assert.deepEqual(res.body, { error: 'Club no encontrado' });
+  });
+
+  await check(
+    'GET /api/me con X-Club de un club real del que NO es socio responde 403 "No perteneces a este club"',
+    async () => {
+      const tokenSoloA = signToken({ userId: seedA.adminUserId, email: seedA.adminEmail });
+      const res = await getJsonWithClub(baseUrl, tokenSoloA, '/api/me', SLUG_B);
+      assert.equal(res.status, 403);
+      assert.deepEqual(res.body, { error: 'No perteneces a este club' });
+    },
+  );
+
+  await check(
+    'GET /api/me con X-Club de un club suspendido responde 403 con el mensaje de club suspendido',
+    async () => {
+      await runAsPlatform(() =>
+        prisma.organization.update({ where: { id: seedA.organizationId }, data: { status: 'SUSPENDED' } }),
+      );
+      try {
+        const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', SLUG_A);
+        assert.equal(res.status, 403);
+        const body = res.body as { error: string };
+        assert.match(body.error, /suspendido/i);
+      } finally {
+        await runAsPlatform(() =>
+          prisma.organization.update({ where: { id: seedA.organizationId }, data: { status: 'ACTIVE' } }),
+        );
+      }
+    },
+  );
+
+  await check(
+    'PATCH /api/admin/users/:id/rol en B no toca la columna heredada User.rol/organizationId cuando B no es el club primario (Review Focus #3)',
+    async () => {
+      const tokenB = signToken({ userId: seedB.adminUserId, email: seedB.adminEmail });
+      const antes = await runAsPlatform(() => prisma.user.findUnique({ where: { id: seedA.socioUserId } }));
+
+      try {
+        const res = await patchJsonAuth(baseUrl, tokenB, `/api/admin/users/${seedA.socioUserId}/rol`, { rol: 'LIDER' });
+        assert.equal(res.status, 200);
+        assert.equal((res.body as { rol: string }).rol, 'LIDER');
+
+        const despues = await runAsPlatform(() => prisma.user.findUnique({ where: { id: seedA.socioUserId } }));
+        // User.organizationId/rol (columna heredada) sigue intacta: A sigue
+        // siendo el club "primario" de la cuenta, y este cambio ocurrió en B.
+        assert.equal(despues?.organizationId, seedA.organizationId);
+        assert.equal(despues?.rol, antes?.rol);
+      } finally {
+        // Deja la membresía de B como la espera runClubesFieldChecks (Task
+        // 3): ADMIN, tal como la creó este mismo fixture.
+        await runAsPlatform(() =>
+          prisma.membresia.update({
+            where: { organizationId_usuarioId: { organizationId: seedB.organizationId, usuarioId: seedA.socioUserId } },
+            data: { rol: 'ADMIN' },
+          }),
+        );
+      }
+    },
+  );
+}
+
+// ─── Campo clubes en /me (login ya se cubre arriba, en runTenantCliChecks) ────
+
+async function runClubesFieldChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
+  // Reutiliza el fixture de runAuthMembershipChecks (socio de A, también
+  // ADMIN de B) — ya existe para cuando esta función corre.
+  const tokenMulti = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
+
+  await check(
+    'GET /api/me devuelve clubes con TODAS las membresías de la cuenta (slug/name/shortName/hasLogo/logoVersion/rol), no solo la activa',
+    async () => {
+      const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', SLUG_A);
+      assert.equal(res.status, 200);
+      const body = res.body as {
+        user: {
+          clubes?: { slug: string; name: string; shortName: string | null; hasLogo: boolean; logoVersion: string | null; rol: string }[];
+        };
+      };
+      const clubes = body.user.clubes;
+      assert.ok(clubes);
+      assert.equal(clubes!.length, 2);
+      assert.deepEqual(Object.keys(clubes![0]!).sort(), ['hasLogo', 'logoVersion', 'name', 'rol', 'shortName', 'slug']);
+      const porSlug = Object.fromEntries(clubes!.map((c) => [c.slug, c]));
+      // LIDER y no SOCIO: runRoleChangeMembresiaChecks ya promovió a este
+      // mismo socio a LIDER en A antes de este punto de la suite (ver el
+      // comentario equivalente en runAuthMembershipChecks, más arriba).
+      assert.equal(porSlug[SLUG_A]?.rol, 'LIDER');
+      assert.equal(porSlug[SLUG_B]?.rol, 'ADMIN');
+    },
+  );
+
+  await check(
+    'POST /api/auth/forgot-password con X-Club de un club ajeno no revienta y responde el mensaje genérico igual',
+    async () => {
+      const res = await fetch(`${baseUrl}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Club': SLUG_B },
+        body: JSON.stringify({ email: seedA.adminEmail }),
+      });
+      const body = await res.json().catch(() => undefined);
+      assert.equal(res.status, 200);
+      assert.deepEqual(body, {
+        message: 'Si el email está registrado, recibirás un enlace para restablecer tu contraseña.',
+      });
+    },
+  );
+
+  // El check HTTP de arriba solo pin-ea la respuesta (invariante a propósito:
+  // no revela si el email existe), así que NO puede detectar una regresión en
+  // el cableado interno — por ejemplo, que forgotPassword empiece a usar el
+  // club del header directamente sin comprobar la membresía. Estos checks
+  // llaman a resolveResetBrandingOrganizationIdForEmail (la función que
+  // forgotPassword ya usa) directamente, en contexto de plataforma, y
+  // verifican el organizationId que devuelve.
+  await check(
+    'resolveResetBrandingOrganizationIdForEmail: X-Club de una membresía propia de la cuenta devuelve ESE club',
+    async () => {
+      const orgId = await runAsPlatform(() => resolveResetBrandingOrganizationIdForEmail(seedA.socioEmail, SLUG_B));
+      assert.equal(orgId, seedB.organizationId);
+    },
+  );
+
+  await check(
+    'resolveResetBrandingOrganizationIdForEmail: X-Club de un club del que la cuenta NO es socia cae a su membresía más antigua, no al club del header',
+    async () => {
+      const orgId = await runAsPlatform(() => resolveResetBrandingOrganizationIdForEmail(seedA.adminEmail, SLUG_B));
+      assert.equal(orgId, seedA.organizationId);
+    },
+  );
+
+  await check('resolveResetBrandingOrganizationIdForEmail: sin X-Club cae a la membresía más antigua', async () => {
+    const orgId = await runAsPlatform(() => resolveResetBrandingOrganizationIdForEmail(seedA.adminEmail, undefined));
+    assert.equal(orgId, seedA.organizationId);
+  });
+
+  await check(
+    'resolveResetBrandingOrganizationIdForEmail: X-Club con un slug inexistente cae a la membresía más antigua',
+    async () => {
+      const orgId = await runAsPlatform(() =>
+        resolveResetBrandingOrganizationIdForEmail(seedA.adminEmail, `iso-test-no-existe-${RANDOM_SUFFIX}`),
+      );
+      assert.equal(orgId, seedA.organizationId);
+    },
+  );
+
+  await check('resolveResetBrandingOrganizationIdForEmail: un email inexistente devuelve null', async () => {
+    const orgId = await runAsPlatform(() =>
+      resolveResetBrandingOrganizationIdForEmail(`no-existe-${RANDOM_SUFFIX}@iso-test.local`, undefined),
+    );
+    assert.equal(orgId, null);
+  });
 }
 
 // ─── CLI create-user ─────────────────────────────────────────────────────────
@@ -2313,7 +2549,7 @@ function runCreateUserCli(args: string[], password: string): Promise<CreateUserC
   });
 }
 
-async function runCreateUserCliChecks(seedA: OrgSeed): Promise<void> {
+async function runCreateUserCliChecks(seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
   await check('CLI create-user: un usuario nuevo obtiene exactamente una Membresia con su rol y club', async () => {
     const email = `cli-nuevo-${RANDOM_SUFFIX}@iso-test.local`;
     const result = await runCreateUserCli(
@@ -2388,6 +2624,62 @@ async function runCreateUserCliChecks(seedA: OrgSeed): Promise<void> {
       assert.equal(membresia?.rol, 'LIDER');
     },
   );
+
+  await check(
+    'CLI create-user sin --force sigue rechazando cuando la cuenta YA es socia de este club',
+    async () => {
+      const email = `cli-rechazo-${RANDOM_SUFFIX}@iso-test.local`;
+      const primero = await runCreateUserCli(
+        ['--email', email, '--name', 'CLI Rechazo', '--org', SLUG_A, '--rol', 'SOCIO'],
+        'password123',
+      );
+      assert.equal(primero.code, 0, `stderr: ${primero.stderr}`);
+
+      const segundo = await runCreateUserCli(
+        ['--email', email, '--name', 'CLI Rechazo', '--org', SLUG_A, '--rol', 'LIDER'],
+        'password123',
+      );
+      assert.notEqual(segundo.code, 0);
+      assert.match(segundo.stderr, /ya es socio de/);
+    },
+  );
+
+  await check(
+    'CLI create-user: cuenta existente en OTRO club recibe la membresía nueva en vez de ser rechazada (Ruling 2 del plan de esta PR)',
+    async () => {
+      const email = `cli-multi-${RANDOM_SUFFIX}@iso-test.local`;
+      const primero = await runCreateUserCli(
+        ['--email', email, '--name', 'CLI Multi Original', '--org', SLUG_B, '--rol', 'SOCIO'],
+        'password123',
+      );
+      assert.equal(primero.code, 0, `stderr: ${primero.stderr}`);
+
+      const segundo = await runCreateUserCli(
+        ['--email', email, '--name', 'CLI Multi Ignorado', '--org', SLUG_A, '--rol', 'LIDER'],
+        'password123',
+      );
+      // Éxito, no rechazo: antes de este PR, un email existente en otro club
+      // siempre fallaba (incluso con --force).
+      assert.equal(segundo.code, 0, `stderr: ${segundo.stderr}`);
+      assert.doesNotMatch(segundo.stdout + segundo.stderr, /pertenece a otra organización/);
+
+      const user = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+      assert.ok(user);
+      // El alta aditiva nunca toca el perfil compartido: el nombre sigue
+      // siendo el original, pese a que el segundo comando pasó otro con
+      // --name (Review Focus #4).
+      assert.equal(user!.name, 'CLI Multi Original');
+
+      const membresias = await runAsPlatform(() =>
+        prisma.membresia.findMany({ where: { usuarioId: user!.id }, orderBy: { creadoAt: 'asc' } }),
+      );
+      assert.equal(membresias.length, 2);
+      assert.equal(membresias[0]?.organizationId, seedB.organizationId);
+      assert.equal(membresias[0]?.rol, 'SOCIO');
+      assert.equal(membresias[1]?.organizationId, seedA.organizationId);
+      assert.equal(membresias[1]?.rol, 'LIDER');
+    },
+  );
 }
 
 // ─── Orquestación ──────────────────────────────────────────────────────────────
@@ -2448,8 +2740,10 @@ async function main(): Promise<void> {
     await runFileDownloadChecks(started.baseUrl, seedA, seedB);
     await runClubLogoChecks(started.baseUrl, seedA, seedB);
     await runTenantCliChecks(started.baseUrl, seedA, seedB);
-    await runRoleChangeMembresiaChecks(started.baseUrl, seedA);
-    await runCreateUserCliChecks(seedA);
+    await runRoleChangeMembresiaChecks(started.baseUrl, seedA, seedB);
+    await runCreateUserCliChecks(seedA, seedB);
+    await runAuthMembershipChecks(started.baseUrl, seedA, seedB);
+    await runClubesFieldChecks(started.baseUrl, seedA, seedB);
 
     await check(
       'invariante global: todo usuario de la base tiene al menos una Membresia (ningún alta se saltó el dual write) (Review Focus #1)',

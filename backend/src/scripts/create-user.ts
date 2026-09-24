@@ -136,19 +136,30 @@ async function run(): Promise<void> {
 
   // Se comprueba antes de pedir la contraseña para no hacerla teclear en vano.
   const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing && !force) {
-    console.error(`[create-user] Ya existe un usuario con email="${email}". Usa --force para actualizarlo.`);
+
+  // Multi-club (ver docs/superpowers/specs/2026-09-23-multi-club-membership-design.md,
+  // Ruling 2 del plan de la PR de backend): una cuenta existente puede no
+  // tener todavía membresía en ESTE club.
+  const existingMembresia = existing
+    ? await prisma.membresia.findUnique({
+        where: { organizationId_usuarioId: { organizationId: organization.id, usuarioId: existing.id } },
+      })
+    : null;
+
+  if (existingMembresia && !force) {
+    console.error(`[create-user] "${email}" ya es socio de "${org}". Usa --force para actualizarlo.`);
     process.exitCode = 1;
     return;
   }
-  // --force nunca traslada un usuario existente a otro club: solo actualiza
-  // su perfil dentro del club al que ya pertenece.
-  if (existing && existing.organizationId !== organization.id) {
-    console.error(
-      `[create-user] El usuario con email="${email}" pertenece a otra organización. ` +
-        '--force no puede cambiarlo de club.',
-    );
-    process.exitCode = 1;
+
+  // Alta de membresía en un club nuevo para una cuenta ya existente: siempre
+  // aditivo (nunca pisa nombre/contraseña de la cuenta compartida), así que
+  // no hace falta --force ni pedir contraseña.
+  if (existing && !existingMembresia) {
+    await prisma.membresia.create({
+      data: { organizationId: organization.id, usuarioId: existing.id, rol },
+    });
+    console.log(`[create-user] Se agregó a "${email}" como socio de "${org}" con rol="${rol}".`);
     return;
   }
 
@@ -180,18 +191,24 @@ async function run(): Promise<void> {
     return;
   }
 
+  // existing && existingMembresia && force: actualiza el perfil compartido
+  // de la cuenta y el rol de ESTA membresía.
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.update({
       where: { email },
       data: {
         name,
         passwordHash,
-        rol,
         emailVerified: true,
         verificationToken: null,
         verificationTokenExpiry: null,
         resetToken: null,
         resetTokenExpiry: null,
+        // Columna heredada de User (fase de expansión, ver schema.prisma):
+        // solo se actualiza cuando este club sigue siendo el club
+        // "primario" de la cuenta (User.organizationId) — igual que
+        // updateUserRol en admin.controller.ts.
+        ...(existing.organizationId === organization.id ? { rol } : {}),
       },
     });
     // upsert (no update): --force es una herramienta de reparación operativa
@@ -206,7 +223,7 @@ async function run(): Promise<void> {
       update: { rol },
     });
   });
-  console.log(`[create-user] Usuario actualizado: email="${email}" rol="${rol}"`);
+  console.log(`[create-user] Usuario actualizado: email="${email}" rol="${rol}" org="${org}"`);
 }
 
 main()
