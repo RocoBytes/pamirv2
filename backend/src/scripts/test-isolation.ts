@@ -2549,7 +2549,7 @@ function runCreateUserCli(args: string[], password: string): Promise<CreateUserC
   });
 }
 
-async function runCreateUserCliChecks(seedA: OrgSeed): Promise<void> {
+async function runCreateUserCliChecks(seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
   await check('CLI create-user: un usuario nuevo obtiene exactamente una Membresia con su rol y club', async () => {
     const email = `cli-nuevo-${RANDOM_SUFFIX}@iso-test.local`;
     const result = await runCreateUserCli(
@@ -2624,6 +2624,62 @@ async function runCreateUserCliChecks(seedA: OrgSeed): Promise<void> {
       assert.equal(membresia?.rol, 'LIDER');
     },
   );
+
+  await check(
+    'CLI create-user sin --force sigue rechazando cuando la cuenta YA es socia de este club',
+    async () => {
+      const email = `cli-rechazo-${RANDOM_SUFFIX}@iso-test.local`;
+      const primero = await runCreateUserCli(
+        ['--email', email, '--name', 'CLI Rechazo', '--org', SLUG_A, '--rol', 'SOCIO'],
+        'password123',
+      );
+      assert.equal(primero.code, 0, `stderr: ${primero.stderr}`);
+
+      const segundo = await runCreateUserCli(
+        ['--email', email, '--name', 'CLI Rechazo', '--org', SLUG_A, '--rol', 'LIDER'],
+        'password123',
+      );
+      assert.notEqual(segundo.code, 0);
+      assert.match(segundo.stderr, /ya es socio de/);
+    },
+  );
+
+  await check(
+    'CLI create-user: cuenta existente en OTRO club recibe la membresía nueva en vez de ser rechazada (Ruling 2 del plan de esta PR)',
+    async () => {
+      const email = `cli-multi-${RANDOM_SUFFIX}@iso-test.local`;
+      const primero = await runCreateUserCli(
+        ['--email', email, '--name', 'CLI Multi Original', '--org', SLUG_B, '--rol', 'SOCIO'],
+        'password123',
+      );
+      assert.equal(primero.code, 0, `stderr: ${primero.stderr}`);
+
+      const segundo = await runCreateUserCli(
+        ['--email', email, '--name', 'CLI Multi Ignorado', '--org', SLUG_A, '--rol', 'LIDER'],
+        'password123',
+      );
+      // Éxito, no rechazo: antes de este PR, un email existente en otro club
+      // siempre fallaba (incluso con --force).
+      assert.equal(segundo.code, 0, `stderr: ${segundo.stderr}`);
+      assert.doesNotMatch(segundo.stdout + segundo.stderr, /pertenece a otra organización/);
+
+      const user = await runAsPlatform(() => prisma.user.findUnique({ where: { email } }));
+      assert.ok(user);
+      // El alta aditiva nunca toca el perfil compartido: el nombre sigue
+      // siendo el original, pese a que el segundo comando pasó otro con
+      // --name (Review Focus #4).
+      assert.equal(user!.name, 'CLI Multi Original');
+
+      const membresias = await runAsPlatform(() =>
+        prisma.membresia.findMany({ where: { usuarioId: user!.id }, orderBy: { creadoAt: 'asc' } }),
+      );
+      assert.equal(membresias.length, 2);
+      assert.equal(membresias[0]?.organizationId, seedB.organizationId);
+      assert.equal(membresias[0]?.rol, 'SOCIO');
+      assert.equal(membresias[1]?.organizationId, seedA.organizationId);
+      assert.equal(membresias[1]?.rol, 'LIDER');
+    },
+  );
 }
 
 // ─── Orquestación ──────────────────────────────────────────────────────────────
@@ -2685,7 +2741,7 @@ async function main(): Promise<void> {
     await runClubLogoChecks(started.baseUrl, seedA, seedB);
     await runTenantCliChecks(started.baseUrl, seedA, seedB);
     await runRoleChangeMembresiaChecks(started.baseUrl, seedA, seedB);
-    await runCreateUserCliChecks(seedA);
+    await runCreateUserCliChecks(seedA, seedB);
     await runAuthMembershipChecks(started.baseUrl, seedA, seedB);
     await runClubesFieldChecks(started.baseUrl, seedA, seedB);
 
