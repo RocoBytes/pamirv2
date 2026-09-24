@@ -171,6 +171,37 @@ export async function getMe(req: Request, res: Response): Promise<void> {
 
 // ─── Forgot password ──────────────────────────────────────────────────────────
 
+// Resuelve el organizationId con cuya marca debe enviarse el correo de
+// restablecimiento, a partir del email de la cuenta y del header X-Club ya
+// leído de la request (ver Ruling 3 del plan de esta PR). Extraída de
+// forgotPassword para que la suite de aislamiento pueda probar el cableado
+// completo (membresías + header → resolveResetBrandingOrganizationId) sin
+// depender solo del cuerpo de la respuesta HTTP, que es invariante a propósito
+// (no revela si el email existe). Asume que quien llama ya abrió el contexto
+// de plataforma (runAsPlatform) — no lo abre por sí misma, igual que el resto
+// de la lógica de la que se extrajo.
+export async function resolveResetBrandingOrganizationIdForEmail(
+  email: string,
+  xClub: string | undefined,
+): Promise<string | null> {
+  const found = await prisma.user.findUnique({ where: { email } });
+  if (!found) return null;
+
+  const memberships = await prisma.membresia.findMany({
+    where: { usuarioId: found.id },
+    orderBy: { creadoAt: 'asc' },
+    select: { organizationId: true },
+  });
+
+  let requestOrganizationId: string | null = null;
+  if (xClub) {
+    const org = await prisma.organization.findUnique({ where: { slug: xClub }, select: { id: true } });
+    requestOrganizationId = org?.id ?? null;
+  }
+
+  return resolveResetBrandingOrganizationId(memberships, requestOrganizationId);
+}
+
 export async function forgotPassword(req: Request, res: Response): Promise<void> {
   const parsed = forgotSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -190,20 +221,8 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
       const found = await prisma.user.findUnique({ where: { email: normalizedEmail } });
       if (!found) return;
 
-      const memberships = await prisma.membresia.findMany({
-        where: { usuarioId: found.id },
-        orderBy: { creadoAt: 'asc' },
-        select: { organizationId: true },
-      });
-
       const xClub = xClubHeader(req);
-      let requestOrganizationId: string | null = null;
-      if (xClub) {
-        const org = await prisma.organization.findUnique({ where: { slug: xClub }, select: { id: true } });
-        requestOrganizationId = org?.id ?? null;
-      }
-
-      const brandingOrgId = resolveResetBrandingOrganizationId(memberships, requestOrganizationId);
+      const brandingOrgId = await resolveResetBrandingOrganizationIdForEmail(normalizedEmail, xClub);
       // Sin membresías: no puede pasar hoy (toda cuenta nace con una — ver
       // el diseño), pero no revienta si pasara — simplemente no hay con qué
       // marca enviar el correo.

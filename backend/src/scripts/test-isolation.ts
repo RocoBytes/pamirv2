@@ -31,6 +31,7 @@ import { SALT_ROUNDS } from '../lib/auth-fields.js';
 import { requireJwtSecret } from '../lib/jwt.js';
 import { isOrganizationSuspended } from '../lib/organization-status.js';
 import { toPublicOrganizationBrand } from '../lib/serializers/organization.js';
+import { resolveResetBrandingOrganizationIdForEmail } from '../controllers/auth.controller.js';
 import {
   crearClub,
   listarClubes,
@@ -2424,7 +2425,7 @@ async function runAuthMembershipChecks(baseUrl: string, seedA: OrgSeed, seedB: O
 
 // ─── Campo clubes en /me (login ya se cubre arriba, en runTenantCliChecks) ────
 
-async function runClubesFieldChecks(baseUrl: string, seedA: OrgSeed): Promise<void> {
+async function runClubesFieldChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): Promise<void> {
   // Reutiliza el fixture de runAuthMembershipChecks (socio de A, también
   // ADMIN de B) — ya existe para cuando esta función corre.
   const tokenMulti = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
@@ -2467,6 +2468,51 @@ async function runClubesFieldChecks(baseUrl: string, seedA: OrgSeed): Promise<vo
       });
     },
   );
+
+  // El check HTTP de arriba solo pin-ea la respuesta (invariante a propósito:
+  // no revela si el email existe), así que NO puede detectar una regresión en
+  // el cableado interno — por ejemplo, que forgotPassword empiece a usar el
+  // club del header directamente sin comprobar la membresía. Estos checks
+  // llaman a resolveResetBrandingOrganizationIdForEmail (la función que
+  // forgotPassword ya usa) directamente, en contexto de plataforma, y
+  // verifican el organizationId que devuelve.
+  await check(
+    'resolveResetBrandingOrganizationIdForEmail: X-Club de una membresía propia de la cuenta devuelve ESE club',
+    async () => {
+      const orgId = await runAsPlatform(() => resolveResetBrandingOrganizationIdForEmail(seedA.socioEmail, SLUG_B));
+      assert.equal(orgId, seedB.organizationId);
+    },
+  );
+
+  await check(
+    'resolveResetBrandingOrganizationIdForEmail: X-Club de un club del que la cuenta NO es socia cae a su membresía más antigua, no al club del header',
+    async () => {
+      const orgId = await runAsPlatform(() => resolveResetBrandingOrganizationIdForEmail(seedA.adminEmail, SLUG_B));
+      assert.equal(orgId, seedA.organizationId);
+    },
+  );
+
+  await check('resolveResetBrandingOrganizationIdForEmail: sin X-Club cae a la membresía más antigua', async () => {
+    const orgId = await runAsPlatform(() => resolveResetBrandingOrganizationIdForEmail(seedA.adminEmail, undefined));
+    assert.equal(orgId, seedA.organizationId);
+  });
+
+  await check(
+    'resolveResetBrandingOrganizationIdForEmail: X-Club con un slug inexistente cae a la membresía más antigua',
+    async () => {
+      const orgId = await runAsPlatform(() =>
+        resolveResetBrandingOrganizationIdForEmail(seedA.adminEmail, `iso-test-no-existe-${RANDOM_SUFFIX}`),
+      );
+      assert.equal(orgId, seedA.organizationId);
+    },
+  );
+
+  await check('resolveResetBrandingOrganizationIdForEmail: un email inexistente devuelve null', async () => {
+    const orgId = await runAsPlatform(() =>
+      resolveResetBrandingOrganizationIdForEmail(`no-existe-${RANDOM_SUFFIX}@iso-test.local`, undefined),
+    );
+    assert.equal(orgId, null);
+  });
 }
 
 // ─── CLI create-user ─────────────────────────────────────────────────────────
@@ -2641,7 +2687,7 @@ async function main(): Promise<void> {
     await runRoleChangeMembresiaChecks(started.baseUrl, seedA, seedB);
     await runCreateUserCliChecks(seedA);
     await runAuthMembershipChecks(started.baseUrl, seedA, seedB);
-    await runClubesFieldChecks(started.baseUrl, seedA);
+    await runClubesFieldChecks(started.baseUrl, seedA, seedB);
 
     await check(
       'invariante global: todo usuario de la base tiene al menos una Membresia (ningún alta se saltó el dual write) (Review Focus #1)',
