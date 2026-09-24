@@ -12,7 +12,7 @@ import { FRONTEND_URL } from '../lib/config.js';
 import { runAsPlatform, runWithOrganization } from '../lib/tenant-context.js';
 import { categoriasGestionadas } from '../lib/gestores-eventos.js';
 import { isOrganizationSuspended, CLUB_SUSPENDIDO_MENSAJE } from '../lib/organization-status.js';
-import { toPublicOrganization } from '../lib/serializers/organization.js';
+import { toPublicOrganization, toPublicOrganizationBrand } from '../lib/serializers/organization.js';
 
 const loginSchema = z.object({ email: emailField, password: z.string().min(1, 'Contraseña requerida') });
 const forgotSchema = z.object({ email: emailField });
@@ -107,6 +107,18 @@ export async function login(req: Request, res: Response): Promise<void> {
     // autenticado.
     const gestorCategorias = await runWithOrganization(user.organizationId, () => categoriasGestionadas(user));
 
+    // Todas las membresías de la cuenta (plataforma-wide: el club activo de
+    // esta respuesta sigue siendo el de arriba, User.organizationId — ver
+    // Ruling 3 del plan de esta PR). Ordenadas por antigüedad: el frontend
+    // (PR 4) las usa para "Mis clubes".
+    const clubes = await runAsPlatform(() =>
+      prisma.membresia.findMany({
+        where: { usuarioId: user.id },
+        orderBy: { creadoAt: 'asc' },
+        select: { rol: true, organization: { select: { slug: true, name: true, shortName: true, logoObjectKey: true } } },
+      }),
+    ).then((rows) => rows.map((m) => ({ ...toPublicOrganizationBrand(m.organization), rol: m.rol })));
+
     res.json({
       token,
       user: {
@@ -118,6 +130,7 @@ export async function login(req: Request, res: Response): Promise<void> {
         rol: user.rol,
         gestorCategorias,
         organization: toPublicOrganization(user.organization),
+        clubes,
       },
     });
   } catch (error) {
@@ -134,8 +147,19 @@ export async function getMe(req: Request, res: Response): Promise<void> {
   try {
     const { id, organizationId, email, name, rol, organization } = req.user!;
     const gestorCategorias = await categoriasGestionadas(req.user!);
+    // Plataforma-wide a propósito (ver login más arriba): el club activo
+    // sigue siendo el que authMiddleware ya resolvió (con X-Club o el
+    // fallback de una sola membresía) — clubes es la lista completa.
+    const clubes = await runAsPlatform(() =>
+      prisma.membresia.findMany({
+        where: { usuarioId: id },
+        orderBy: { creadoAt: 'asc' },
+        select: { rol: true, organization: { select: { slug: true, name: true, shortName: true, logoObjectKey: true } } },
+      }),
+    ).then((rows) => rows.map((m) => ({ ...toPublicOrganizationBrand(m.organization), rol: m.rol })));
+
     res.json({
-      user: { id, organizationId, email, name, rol, gestorCategorias, organization: toPublicOrganization(organization) },
+      user: { id, organizationId, email, name, rol, gestorCategorias, organization: toPublicOrganization(organization), clubes },
     });
   } catch (error) {
     console.error('[getMe]', error);

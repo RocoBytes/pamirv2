@@ -2160,11 +2160,14 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
   );
 
   await check(
-    'POST /api/auth/login devuelve la organización pública propia del club recién creado (7 campos, sin datos privados)',
+    'POST /api/auth/login devuelve la organización pública propia del club recién creado (7 campos, sin datos privados) y clubes con su única membresía',
     async () => {
       const login = await postJson(baseUrl, '/api/auth/login', { email: cliAdminEmail, password: CLI_PASSWORD });
       assert.equal(login.status, 200);
-      const org = (login.body as { user: { organization?: Record<string, unknown> } }).user.organization;
+      const body = login.body as {
+        user: { organization?: Record<string, unknown>; clubes?: { slug: string; rol: string }[] };
+      };
+      const org = body.user.organization;
       assert.ok(org);
       assert.deepEqual(Object.keys(org!).sort(), [
         'hasLogo', 'id', 'logoVersion', 'membresiaPropia', 'name', 'shortName', 'slug',
@@ -2173,6 +2176,10 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
       assert.equal(org!.logoVersion, null);
       assert.equal(org!.slug, cliSlug);
       assert.equal(org!.membresiaPropia, MEMBRESIA_A);
+
+      assert.equal(body.user.clubes?.length, 1);
+      assert.equal(body.user.clubes?.[0]?.slug, cliSlug);
+      assert.equal(body.user.clubes?.[0]?.rol, 'ADMIN');
     },
   );
 
@@ -2415,6 +2422,37 @@ async function runAuthMembershipChecks(baseUrl: string, seedA: OrgSeed, seedB: O
   );
 }
 
+// ─── Campo clubes en /me (login ya se cubre arriba, en runTenantCliChecks) ────
+
+async function runClubesFieldChecks(baseUrl: string, seedA: OrgSeed): Promise<void> {
+  // Reutiliza el fixture de runAuthMembershipChecks (socio de A, también
+  // ADMIN de B) — ya existe para cuando esta función corre.
+  const tokenMulti = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
+
+  await check(
+    'GET /api/me devuelve clubes con TODAS las membresías de la cuenta (slug/name/shortName/hasLogo/logoVersion/rol), no solo la activa',
+    async () => {
+      const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', SLUG_A);
+      assert.equal(res.status, 200);
+      const body = res.body as {
+        user: {
+          clubes?: { slug: string; name: string; shortName: string | null; hasLogo: boolean; logoVersion: string | null; rol: string }[];
+        };
+      };
+      const clubes = body.user.clubes;
+      assert.ok(clubes);
+      assert.equal(clubes!.length, 2);
+      assert.deepEqual(Object.keys(clubes![0]!).sort(), ['hasLogo', 'logoVersion', 'name', 'rol', 'shortName', 'slug']);
+      const porSlug = Object.fromEntries(clubes!.map((c) => [c.slug, c]));
+      // LIDER y no SOCIO: runRoleChangeMembresiaChecks ya promovió a este
+      // mismo socio a LIDER en A antes de este punto de la suite (ver el
+      // comentario equivalente en runAuthMembershipChecks, más arriba).
+      assert.equal(porSlug[SLUG_A]?.rol, 'LIDER');
+      assert.equal(porSlug[SLUG_B]?.rol, 'ADMIN');
+    },
+  );
+}
+
 // ─── CLI create-user ─────────────────────────────────────────────────────────
 
 interface CreateUserCliResult {
@@ -2587,6 +2625,7 @@ async function main(): Promise<void> {
     await runRoleChangeMembresiaChecks(started.baseUrl, seedA, seedB);
     await runCreateUserCliChecks(seedA);
     await runAuthMembershipChecks(started.baseUrl, seedA, seedB);
+    await runClubesFieldChecks(started.baseUrl, seedA);
 
     await check(
       'invariante global: todo usuario de la base tiene al menos una Membresia (ningún alta se saltó el dual write) (Review Focus #1)',
