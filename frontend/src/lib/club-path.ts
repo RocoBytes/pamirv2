@@ -21,7 +21,10 @@ const RESERVED_TOP_LEVEL_SLUGS = new Set([
   'api',
   'www',
   'app',
-  'riala',
+  // 'riala' NO va acá aunque SLUGS_RESERVADOS del backend lo incluya: allá
+  // impide CREAR otro club con ese slug, pero `riala` es el club casa, un
+  // club real que se abre en /riala. Tratarlo como ruta reservada dejaba a
+  // sus socios en un bucle de redirección infinito (/ → /riala → /).
   'assets',
   'auth',
   'brand',

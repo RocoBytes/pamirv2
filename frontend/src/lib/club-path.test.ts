@@ -27,10 +27,14 @@ describe('clubSlugFromPath', () => {
   })
 
   it('devuelve null para cada ruta reservada de nivel superior', () => {
-    const reservadas = ['assets', 'auth', 'brand', 'api', 'platform', 'plataforma', 'admin', 'www', 'app', 'riala']
+    const reservadas = ['assets', 'auth', 'brand', 'api', 'platform', 'plataforma', 'admin', 'www', 'app']
     for (const slug of reservadas) {
       expect(clubSlugFromPath(`/${slug}`)).toBeNull()
     }
+  })
+
+  it('reconoce /riala como club: es el club casa, no una ruta reservada', () => {
+    expect(clubSlugFromPath('/riala')).toBe('riala')
   })
 
   it('devuelve null para una ruta reservada aunque haya más path después', () => {

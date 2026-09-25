@@ -23,6 +23,30 @@ test.describe('Redirección transparente — una sola membresía', () => {
     await expect(page).toHaveURL(/\/pamir$/)
     await expect(page.getByText('Mis Salidas')).toBeVisible()
   })
+
+  // Regresión: `riala` (el club casa) está en SLUGS_RESERVADOS del backend y
+  // el frontend lo trataba como ruta reservada → / → /riala → / sin fin.
+  test('una cuenta cuyo único club es riala (el club casa) entra a /riala sin bucle de redirección', async ({ page }) => {
+    const rialaOrg = { ...PAMIR_ORG, slug: 'riala', name: 'RIALA', shortName: 'RIALA' }
+    const userRiala = {
+      ...MOCK_USER,
+      organization: { ...MOCK_USER.organization, slug: 'riala', name: 'RIALA', shortName: 'RIALA' },
+      clubes: [{ ...rialaOrg, hasLogo: false, logoVersion: null, rol: 'ADMIN', suspendido: false }],
+    }
+    await setAuth(page, userRiala)
+    await mockMe(page, userRiala)
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+
+    let navegaciones = 0
+    page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) navegaciones++ })
+    await page.goto('/')
+    await expect(page).toHaveURL(/\/riala$/)
+    await expect(page.getByText('Mis Salidas')).toBeVisible()
+    // / y el único redirect a /riala; un bucle seguiría navegando.
+    await page.waitForTimeout(1500)
+    expect(navegaciones).toBeLessThanOrEqual(2)
+  })
 })
 
 test.describe('Mis clubes — varias membresías', () => {
