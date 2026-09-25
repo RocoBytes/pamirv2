@@ -205,6 +205,8 @@ function createDeps(overrides: Partial<CodigosQrDeps> = {}, extraUsers: FakeUser
     comparePassword: async (password, hash) => hash === `hashed:${password}`,
     now: () => NOW,
     frontendUrl: 'https://andinoclubpamir.app',
+    // Mismo club que BRAND_ORG_1 (org-1, el de ADMIN/LIDER/SOCIO).
+    organizationSlug: 'club-1',
     jwtSecret: JWT_SECRET,
     logError: (error) => errors.push(error),
     ...overrides,
@@ -287,6 +289,7 @@ describe('crearCodigoQr', () => {
     assert.equal(result.ok, true);
     if (!result.ok) return;
 
+    assert.match(result.body.qrUrl, /^https:\/\/andinoclubpamir\.app\/club-1\/#qr=/);
     const token = result.body.qrUrl.split('#qr=')[1] ?? '';
     assert.ok(token.length > 0);
 
@@ -402,7 +405,10 @@ describe('verCodigoQr — reapertura', () => {
 
     const visto = await verCodigoQr(deps, ADMIN, creado.body.codigo.id);
     assert.equal(visto.ok, true);
-    if (visto.ok) assert.equal(visto.body.qrUrl, creado.body.qrUrl);
+    if (visto.ok) {
+      assert.equal(visto.body.qrUrl, creado.body.qrUrl);
+      assert.match(visto.body.qrUrl, /^https:\/\/andinoclubpamir\.app\/club-1\/#qr=/);
+    }
   });
 
   it('un tokenCifrado que no descifra con el secreto vigente da 409 ("otro entorno")', async () => {
@@ -598,6 +604,9 @@ describe('solicitarInvitacionQr', () => {
     assert.equal(invitaciones[0]?.invitadoPorId, ADMIN.id);
     assert.equal(sentEmails.length, 1);
     assert.equal(sentEmails[0]?.to, 'nuevo@club.cl');
+    // El slug del club DUEÑO DEL QR (BRAND_ORG_1.brand.slug), nunca
+    // deps.organizationSlug — ver el comentario de solicitarInvitacionQr.
+    assert.match(sentEmails[0]?.inviteUrl ?? '', /^https:\/\/andinoclubpamir\.app\/club-1\/#invite=/);
   });
 
   it('withOrganization se llama con el club del código', async () => {

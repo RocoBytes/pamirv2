@@ -113,13 +113,27 @@ export async function login(req: Request, res: Response): Promise<void> {
     // esta respuesta sigue siendo el de arriba, User.organizationId — ver
     // Ruling 3 del plan de esta PR). Ordenadas por antigüedad: el frontend
     // (PR 4) las usa para "Mis clubes".
+    // suspendido se calcula acá, NUNCA dentro de toPublicOrganizationBrand
+    // (esa función también arma la marca pública de OTROS clubes — p.ej.
+    // fetchMarcaClub, consultarInvitacion — donde filtrar por suspensión
+    // filtraría datos de un club que no es el propio): solo tiene sentido
+    // para las propias membresías de quien inicia sesión.
     const clubes = await runAsPlatform(() =>
       prisma.membresia.findMany({
         where: { usuarioId: user.id },
         orderBy: { creadoAt: 'asc' },
-        select: { rol: true, organization: { select: { slug: true, name: true, shortName: true, logoObjectKey: true } } },
+        select: {
+          rol: true,
+          organization: { select: { slug: true, name: true, shortName: true, logoObjectKey: true, status: true } },
+        },
       }),
-    ).then((rows) => rows.map((m) => ({ ...toPublicOrganizationBrand(m.organization), rol: m.rol })));
+    ).then((rows) =>
+      rows.map((m) => ({
+        ...toPublicOrganizationBrand(m.organization),
+        rol: m.rol,
+        suspendido: isOrganizationSuspended(m.organization.status),
+      })),
+    );
 
     res.json({
       token,
@@ -152,13 +166,23 @@ export async function getMe(req: Request, res: Response): Promise<void> {
     // Plataforma-wide a propósito (ver login más arriba): el club activo
     // sigue siendo el que authMiddleware ya resolvió (con X-Club o el
     // fallback de una sola membresía) — clubes es la lista completa.
+    // Mismo criterio que login: ver el comentario ahí.
     const clubes = await runAsPlatform(() =>
       prisma.membresia.findMany({
         where: { usuarioId: id },
         orderBy: { creadoAt: 'asc' },
-        select: { rol: true, organization: { select: { slug: true, name: true, shortName: true, logoObjectKey: true } } },
+        select: {
+          rol: true,
+          organization: { select: { slug: true, name: true, shortName: true, logoObjectKey: true, status: true } },
+        },
       }),
-    ).then((rows) => rows.map((m) => ({ ...toPublicOrganizationBrand(m.organization), rol: m.rol })));
+    ).then((rows) =>
+      rows.map((m) => ({
+        ...toPublicOrganizationBrand(m.organization),
+        rol: m.rol,
+        suspendido: isOrganizationSuspended(m.organization.status),
+      })),
+    );
 
     res.json({
       user: { id, organizationId, email, name, rol, gestorCategorias, organization: toPublicOrganization(organization), clubes },

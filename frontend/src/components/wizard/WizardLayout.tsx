@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Users, Radio, Map, X } from 'lucide-react'
 import type { SalidaFormData, User } from '../../types/salida'
 import { saveDraft, loadDraft, loadDraftStep, clearDraft, saveDraftStep } from '../../lib/storage'
+import { clubSlugFromPath } from '../../lib/club-path'
 import { createSalida, uploadGpx, uploadPronostico } from '../../lib/api'
 import type { RevealOrigin } from '../../lib/reveal-geometry'
 import { useStepDirection } from '../../hooks/useStepDirection'
@@ -75,7 +76,7 @@ const EMPTY_FORM: Omit<SalidaFormData, 'gpxFile'> = {
 }
 
 function hasDraft(): boolean {
-  const draft = loadDraft()
+  const draft = loadDraft(undefined, clubSlugFromPath() ?? undefined)
   return !!(draft && Object.keys(draft).length > 0)
 }
 
@@ -103,8 +104,9 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
   }, [currentStep])
 
   const restoreDraft = useCallback(() => {
-    const draft = loadDraft()
-    const step = loadDraftStep() as StepId
+    const clubSlug = clubSlugFromPath() ?? undefined
+    const draft = loadDraft(undefined, clubSlug)
+    const step = loadDraftStep(undefined, clubSlug) as StepId
     if (draft) {
       setFormData((prev) => ({ ...prev, ...draft }))
     }
@@ -115,7 +117,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
   }, [])
 
   const discardDraft = useCallback(() => {
-    clearDraft()
+    clearDraft(undefined, clubSlugFromPath() ?? undefined)
     setShowDraftBanner(false)
     setFormData(EMPTY_FORM)
     setCurrentStep(1)
@@ -125,7 +127,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
     (data: Partial<Omit<SalidaFormData, 'gpxFile'>>) => {
       setFormData((prev) => {
         const updated = { ...prev, ...data }
-        saveDraft(updated)
+        saveDraft(updated, undefined, clubSlugFromPath() ?? undefined)
         return updated
       })
     },
@@ -140,7 +142,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
       if (stepId < 5) {
         const next = (stepId + 1) as StepId
         setCurrentStep(next)
-        saveDraftStep(next)
+        saveDraftStep(next, undefined, clubSlugFromPath() ?? undefined)
       }
     },
     [updateFormData],
@@ -150,7 +152,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
     if (currentStep > 1) {
       const prev = (currentStep - 1) as StepId
       setCurrentStep(prev)
-      saveDraftStep(prev)
+      saveDraftStep(prev, undefined, clubSlugFromPath() ?? undefined)
     }
   }, [currentStep])
 
@@ -181,7 +183,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
           setNumeroSalida(salida.numeroSalida ?? null)
         }
 
-        clearDraft()
+        clearDraft(undefined, clubSlugFromPath() ?? undefined)
         setSubmitSuccess(true)
         // El `setTimeout(onDone, 1500)` que había acá se fue: ahora navega
         // SuccessReveal cuando la confirmación terminó de leerse, en vez de un

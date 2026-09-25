@@ -8,8 +8,9 @@ import { ClubLogo } from './ClubLogo'
 import { AuthVisualPanel } from './auth/AuthVisualPanel'
 import { clubDisplayName, PLATFORM_LOGO_FULL, PLATFORM_NAME } from '../lib/club-brand'
 import { clubPreferido } from '../lib/club-preferido'
+import { clubSlugFromPath } from '../lib/club-path'
 import { useIsDesktop } from '../hooks/useMediaQuery'
-import { forgotPassword, resetPassword, consultarInvitacion, aceptarInvitacion, fetchMarcaClub } from '../lib/api'
+import { forgotPassword, resetPassword, consultarInvitacion, aceptarInvitacion, fetchMarcaClub, ApiError } from '../lib/api'
 import type { ConsultarInvitacionResponse } from '../types/invitacion'
 import type { OrganizationBrand } from '../types/salida'
 
@@ -89,16 +90,28 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
     }
   }, [inviteToken])
 
-  // Club preferido (ver club-preferido.ts): ?club=<slug> en la URL, o si no
-  // viene, el último club con el que se inició sesión en este navegador.
-  // Gobierna SOLO la marca del login — nunca antes de resolver una invitación
-  // en curso, que ya trae su propio club (inviteOrg más abajo tiene
-  // prioridad). Si no hay slug o la consulta falla, queda el neutral de hoy.
+  // Marca del login (nunca antes de resolver una invitación en curso, que ya
+  // trae su propio club — inviteOrg más abajo tiene prioridad):
+  // 1. El slug del PATH (riala.cl/<slug>) — es el club exacto que la persona
+  //    está visitando, más confiable que cualquier preferencia recordada.
+  // 2. Si no hay slug en el path, el club preferido de siempre (ver
+  //    club-preferido.ts): ?club=<slug> o el último club con el que se
+  //    inició sesión en este navegador.
+  // Si ninguno resuelve (o la consulta falla), queda el neutral de hoy.
   const [preferredOrg, setPreferredOrg] = useState<OrganizationBrand | null>(null)
+  // true SOLO cuando el slug vino del PATH (riala.cl/<slug>, no de
+  // ?club=/club recordado — clubPreferido() más abajo) y el backend
+  // confirmó con un 404 que ese club no existe (Tabla de routing, Design
+  // §3: "unknown slug" → "Club no encontrado" tanto sin sesión como con
+  // ella). Cualquier otro error (sin conexión, 5xx) NUNCA lo enciende y cae
+  // al login neutral de siempre — alguien sin señal en la montaña debe poder
+  // seguir iniciando sesión con lo que tenga.
+  const [clubNotFound, setClubNotFound] = useState(false)
 
   useEffect(() => {
     if (inviteToken) return
-    const slug = clubPreferido()
+    const pathSlug = clubSlugFromPath()
+    const slug = pathSlug ?? clubPreferido()
     if (!slug) return
     let cancelled = false
     fetchMarcaClub(slug)
@@ -106,8 +119,14 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
         if (cancelled) return
         setPreferredOrg(org)
       })
-      .catch(() => {
-        // Sin conexión, club borrado, etc.: queda el neutral de hoy
+      .catch((err: unknown) => {
+        if (cancelled) return
+        if (pathSlug && err instanceof ApiError && err.status === 404) {
+          setClubNotFound(true)
+          return
+        }
+        // Sin conexión, club borrado (slug recordado/?club=), 5xx, etc.:
+        // queda el neutral de hoy
       })
     return () => {
       cancelled = true
@@ -202,6 +221,34 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
   // (?club=<slug> o el recordado); sin ninguno de los dos, el neutral de hoy.
   const inviteOrg = view === 'accept-invite' ? (inviteInfo?.organization ?? null) : null
   const logoOrg = inviteOrg ?? preferredOrg
+
+  // Club no encontrado, ANTES de iniciar sesión: mismo caso que
+  // ClubAccessErrorPage cubre para una sesión ya autenticada (App.tsx), pero
+  // acá nunca hubo sesión que cerrar — el destino es volver al dominio raíz
+  // para entrar con el club correcto, no un botón de "Cerrar sesión". Se
+  // muestra ANTES que cualquier vista del wizard de login (nunca compite con
+  // 'accept-invite'/'reset': ambas ramas ya volvieron temprano en el efecto
+  // de arriba en cuanto hay inviteToken, y este componente no monta en el
+  // flujo de QR — ver App.tsx, que renderiza QrInvitacionPage aparte).
+  if (clubNotFound) {
+    return (
+      <div className="min-h-screen bg-alpine-canvas flex items-center justify-center px-4">
+        <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-secondary/15 p-6 text-center flex flex-col items-center gap-4">
+          <AlertCircle size={32} className="text-error" />
+          <h1 className="text-headline-lg text-slate-800">Club no encontrado</h1>
+          <p className="text-sm text-slate-700" role="alert">
+            No existe ningún club con esa dirección. Revisa el enlace o ingresa desde riala.cl.
+          </p>
+          <a
+            href="/"
+            className="inline-flex w-full items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition-colors duration-150 hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            Ir a riala.cl
+          </a>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-2">

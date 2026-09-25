@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { MotionConfig } from 'motion/react'
 import { useAuth } from './hooks/useAuth'
 import { OrganizationProvider } from './contexts/OrganizationContext'
 import { NavPreferencesProvider } from './contexts/NavPreferencesContext'
 import { documentTitle, esSocioDelClub } from './lib/club-brand'
+import { clubSlugFromPath, redirectLegacyClubQueryParam, puedeAbrirClub } from './lib/club-path'
+import { migrateUnkeyedDraftToCurrentClub } from './lib/storage'
 import { AuthPage } from './components/AuthPage'
 import { Dashboard } from './components/Dashboard'
 import { WizardLayout } from './components/wizard/WizardLayout'
@@ -20,9 +22,11 @@ import { AdminDashboard } from './components/AdminDashboard'
 import { SalidaEditForm } from './components/SalidaEditForm'
 import { InvitarPage } from './components/invitaciones/InvitarPage'
 import { QrInvitacionPage } from './components/QrInvitacionPage'
+import { MisClubesPage } from './components/MisClubesPage'
+import { ClubAccessErrorPage } from './components/ClubAccessErrorPage'
 import { Button } from './components/ui/Button'
-import { fetchMyIntegrante } from './lib/api'
-import type { IntegranteRecord } from './types/salida'
+import { fetchMyIntegrante, fetchMarcaClub } from './lib/api'
+import type { IntegranteRecord, OrganizationBrand } from './types/salida'
 import { parseInviteToken, parseQrToken } from './lib/invite-token'
 import { puedeInvitar } from './lib/roles'
 
@@ -41,10 +45,15 @@ const Spinner = () => (
   </div>
 )
 
+// Corre una sola vez, antes del primer render: reescribe un link legacy
+// ?club=<slug> a /<slug> (ver Global Constraints del plan de esta PR) antes
+// de que cualquier componente lea window.location.
+redirectLegacyClubQueryParam()
+
 // Recibe la sesión ya resuelta por App() en vez de llamar useAuth() de nuevo
 // (crearía un segundo estado independiente): así App() puede envolver todo
 // este árbol en OrganizationProvider con el club de la MISMA sesión.
-function AppContent({ user, token, isLoading, loginWithCredentials, logout, refreshSession }: ReturnType<typeof useAuth>) {
+function AppContent({ user, token, isLoading, loginWithCredentials, logout, refreshSession, clubAccessError, sessionChecked }: ReturnType<typeof useAuth>) {
   const [route, setRoute] = useState<Route>('dashboard')
   const [actionSalidaId, setActionSalidaId] = useState<string | null>(null)
   const [actionEventoId, setActionEventoId] = useState<string | null>(null)
@@ -90,6 +99,110 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   // Sistema cerrado por invitación: solo ADMIN y LIDER pueden invitar.
   const puedeInvitarUsuario = puedeInvitar(user?.rol)
 
+  const pathSlug = useMemo(() => clubSlugFromPath(), [])
+  const clubes = user?.clubes ?? null
+  // Ruling 2: con 2+ membresías YA CONOCIDAS y sin slug en el path,
+  // authHeaders() (ver lib/api.ts) no manda X-Club — pedir la ficha de
+  // integrante ahí sería un 400 "Selecciona un club" garantizado (silencioso,
+  // pero real e inútil). clubes desconocido (undefined/null — incluida una
+  // sesión guardada de antes de esta fase) NUNCA cuenta como "2+": mismo
+  // criterio que el propio efecto de montaje de useAuth.ts para su
+  // fetchMe() (`(clubes?.length ?? 0) > 1`), para no dejar de pedir la
+  // ficha en el caso de siempre. Se usa tanto para gatear el fetch como
+  // para no bloquear el Spinner esperando una respuesta que nunca sale
+  // (Mis Clubes no la necesita).
+  const debePedirIntegrante = !!pathSlug || (clubes?.length ?? 0) <= 1
+
+  // Migración de una sola vez del draft sin club — antes de que cualquier
+  // pantalla del wizard pueda leerlo. Migra a la clave que WizardLayout
+  // (único lector/escritor del draft) realmente usa: clubSlugFromPath(), NO
+  // user.organization.slug — son distintos hasta que corre el redirect
+  // transparente de más abajo (bare domain con una sola membresía todavía
+  // sin slug en el path), y migrar contra el slug de la SESIÓN ahí borraría
+  // pamir_draft antes de que exista ningún lector con ese mismo path.
+  // Gateado por puedeAbrirClub, no solo por pathSlug: un /<slug> con un
+  // typo, de un club ajeno, o de un club suspendido NUNCA mueve el draft
+  // ahí — lo dejaría escondido en una clave que nadie puede abrir. Y
+  // gateado por sessionChecked && !clubAccessError, no solo por clubes: al
+  // montar, `clubes` es el caché sincrónico de pamir_auth — si la
+  // membresía se revocó o suspendió del lado del servidor desde el login,
+  // el caché todavía dice "sí" en la ventana antes de que el /me de
+  // montaje (para ESTE path) resuelva. Recién una vez sessionChecked es
+  // true Y no llegó clubAccessError, `clubes` refleja lo que el servidor
+  // confirmó para este path — ver Ruling del round 2 de review de esta PR.
+  //
+  // draftMigrationSessionKey: guarda el TOKEN de la sesión para la que la
+  // decisión de migración YA TUVO SU OPORTUNIDAD de correr (haya migrado o
+  // no) — nunca un simple booleano. Se ajusta DURANTE EL RENDER (no en un
+  // useEffect, mismo patrón que prevAuthenticated más abajo), a propósito:
+  // un efecto corre DESPUÉS de confirmado el render/commit, así que en el
+  // mismo render donde la sesión queda lista para decidir, un efecto
+  // todavía no habría corrido — la decisión de qué pintar en ESE MISMO
+  // render (dashboard, y sobre todo WizardLayout) necesita la migración YA
+  // resuelta, no una promesa de que correrá en el próximo ciclo.
+  //
+  // Por qué el token y no un booleano con reset manual (como
+  // integranteChecked/prevAuthenticated más abajo): en el mismo render
+  // donde isAuthenticated pasa a true (un login fresco), el ORDEN entre
+  // "resetear el booleano" y "decidir la migración" importaría — si el
+  // reset corriera después en el código fuente, su setState(false) pisaría
+  // el setState(true) de esta misma decisión (mismo setter, misma pasada de
+  // render: gana la última llamada), y la migración recién correría en un
+  // render extra. Comparar contra el token evita el problema de raíz: cada
+  // login (o el estado inicial, sin sesión) trae un token DISTINTO, así que
+  // "¿ya decidí para ESTE token?" se resetea solo, sin ningún bloque de
+  // reset aparte que pueda desordenarse con este.
+  //
+  // Y por qué también exige isAuthenticated && user, no solo
+  // sessionChecked: sessionChecked arranca en true en CUALQUIER pestaña sin
+  // sesión guardada (nada que verificar — ver useAuth.ts), incluida la
+  // primera visita de alguien sin sesión que recién va a iniciarla. Con el
+  // gate viejo (solo sessionChecked), ese primer render sin sesión ya
+  // consumía el latch — clubes era null, así que puedeAbrirClub daba false
+  // y no migraba nada, pero el latch quedaba en true para siempre. Un login
+  // fresco después nunca volvía a evaluar la migración: el draft legacy
+  // quedaba huérfano — finding A del round 4 de review de esta PR. Exigir
+  // isAuthenticated && user hace que ese primer render sin sesión NUNCA
+  // toque el latch, dejándolo listo para la decisión real en el render del
+  // login.
+  const [draftMigrationSessionKey, setDraftMigrationSessionKey] = useState<string | null>(null)
+  const draftMigrationDone = draftMigrationSessionKey === token
+  if (isAuthenticated && user && sessionChecked && !draftMigrationDone) {
+    setDraftMigrationSessionKey(token)
+    if (!clubAccessError && puedeAbrirClub(pathSlug, clubes)) {
+      migrateUnkeyedDraftToCurrentClub(undefined, pathSlug!)
+    }
+  }
+
+  // Redirección transparente: una sola membresía y sin slug en el path →
+  // /<slug>, preservando el resto de la URL (query/hash ya se consumieron
+  // arriba en los efectos de inviteToken/qrToken, así que no hace falta
+  // reenviarlos acá). No se dispara mientras clubes todavía no se conoce
+  // (Ruling 3: undefined es "no se sabe todavía", nunca "cero clubes"), ni
+  // mientras haya un token de invitación/QR pendiente en el fragmento: un
+  // signed-in de un solo club que abre un link legacy de OTRO club necesita
+  // ver el interstitial correspondiente antes que nada — un replace() acá
+  // tira la navegación entera (y con ella el estado en memoria del token)
+  // antes de que React llegue a pintarlo.
+  useEffect(() => {
+    if (!isAuthenticated || pathSlug || !clubes || inviteToken || qrToken) return
+    if (clubes.length === 1) window.location.replace(`/${clubes[0]!.slug}`)
+  }, [isAuthenticated, pathSlug, clubes, inviteToken, qrToken])
+
+  // Marca pública del club del path cuando la sesión NO puede entrar a él
+  // (clubAccessError): la única pantalla que necesita branding de un club
+  // ajeno a la sesión activa, resuelta vía el mismo fetchMarcaClub público
+  // que ya usa AuthPage.
+  const [pathSlugOrg, setPathSlugOrg] = useState<OrganizationBrand | null>(null)
+  useEffect(() => {
+    if (!pathSlug || !clubAccessError) return
+    let cancelled = false
+    fetchMarcaClub(pathSlug)
+      .then((org) => { if (!cancelled) setPathSlugOrg(org) })
+      .catch(() => { /* club-not-found ya cubre esto con org: null */ })
+    return () => { cancelled = true }
+  }, [pathSlug, clubAccessError])
+
   // Contexto del chrome compartido (header, barra inferior, pie). Se arma una
   // sola vez acá y cada pantalla que usa AppShell lo recibe entero, para que
   // agregar un destino no obligue a cambiar la firma de cada componente.
@@ -120,7 +233,9 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   }
 
   useEffect(() => {
-    if (!isAuthenticated) return
+    // Ruling 2 (ver debePedirIntegrante más arriba): sin esto, nada que
+    // pedir — Mis Clubes no lee la ficha de integrante.
+    if (!isAuthenticated || !debePedirIntegrante) return
     // `cancelled` descarta respuestas que lleguen después de un logout
     let cancelled = false
     fetchMyIntegrante()
@@ -135,7 +250,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
         setIntegranteChecked(true)
       })
     return () => { cancelled = true }
-  }, [isAuthenticated])
+  }, [isAuthenticated, debePedirIntegrante])
 
   const verifiedParam = getQueryParam('verified')
   const resetToken = getQueryParam('reset')
@@ -163,7 +278,32 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
     )
   }
 
-  if (isLoading || (isAuthenticated && !integranteChecked)) {
+  // debePedirIntegrante: si no se va a pedir (Ruling 2, Mis Clubes), no hay
+  // nada por lo que esperar — el Spinner no debe bloquear por una respuesta
+  // que el efecto de arriba decidió no pedir.
+  //
+  // pathSlug && !draftMigrationDone: en una sesión autenticada CON slug en
+  // el path, ninguna pantalla de club (el dashboard, y sobre todo
+  // WizardLayout) puede montar antes de que la migración del draft haya
+  // corrido de verdad — fetchMyIntegrante() y el /me de montaje son dos
+  // pedidos independientes en carrera; si /api/integrantes/me contesta
+  // primero, integranteChecked se pone true solo, y sin este gate el
+  // dashboard (y desde ahí el wizard) quedarían accesibles ANTES de la
+  // migración: WizardLayout lee `hasDraft()` una sola vez al montar (su
+  // useState inicial), contra la clave con club todavía vacía — el banner
+  // de "continuar borrador" nunca aparecería, la persona empezaría a
+  // escribir en esa clave, y cuando la migración por fin corriera
+  // encontraría el destino ocupado y haría no-op: el borrador viejo
+  // quedaría huérfano, invisible para siempre en la UI. No se aplica sin
+  // slug en el path (Mis Clubes, Ruling 2): ahí sessionChecked ya se
+  // asienta en true de inmediato (sin red) y la migración no aplica de
+  // todos modos (puedeAbrirClub exige un slug) — Ruling del round 3 de
+  // review de esta PR.
+  if (
+    isLoading ||
+    (isAuthenticated && debePedirIntegrante && !integranteChecked) ||
+    (isAuthenticated && !!pathSlug && !draftMigrationDone)
+  ) {
     return <Spinner />
   }
 
@@ -198,6 +338,39 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
         </div>
       </div>
     )
+  }
+
+  // La sesión existe pero el backend acaba de rechazarla para el club del
+  // path (no es socio, club suspendido, o el club no existe) — Tabla de
+  // routing (Design §3). Se resuelve antes que cualquier ruta del dashboard.
+  if (isAuthenticated && clubAccessError) {
+    // "Mis clubes" (ir a la raíz) es una salida real salvo en un caso: la
+    // cuenta tiene una única membresía cacheada y es justo esta — la raíz
+    // sin slug la redirige transparentemente de vuelta a /<slug> (el efecto
+    // de arriba), que vuelve a mostrar esta misma pantalla: un callejón sin
+    // salida. NO se condiciona a clubes[0].suspendido: clubAccessError
+    // implica que el /me de montaje para este path ya falló, así que
+    // `clubes` es el caché SIN VERIFICAR (pudo suspenderse o revocarse del
+    // lado del servidor después del login) — el suspendido cacheado podría
+    // seguir en false y el loop sería igual de real (Ruling del round 2 de
+    // review de esta PR). Ahí no se ofrece el botón; Cerrar sesión pasa a
+    // ser la única (y primaria) acción.
+    const misClubesEsUnaSalida = !(clubes && clubes.length === 1 && clubes[0]!.slug === pathSlug)
+    return (
+      <ClubAccessErrorPage
+        status={clubAccessError.status}
+        message={clubAccessError.message}
+        org={pathSlugOrg}
+        onLogout={logout}
+        onMisClubes={misClubesEsUnaSalida ? () => window.location.assign('/') : undefined}
+      />
+    )
+  }
+
+  // Raíz sin slug y varias membresías: nunca hay "el club actual" todavía
+  // (Ruling 2), así que se muestra el selector en vez de cualquier ruta.
+  if (isAuthenticated && !pathSlug && clubes && clubes.length > 1) {
+    return <MisClubesPage clubes={clubes} onLogout={logout} />
   }
 
   if ((route === 'nueva-salida' || route === 'nuevo-integrante') && user) {

@@ -186,6 +186,9 @@ function createDeps(overrides: Partial<InvitacionesDeps> = {}, extraUsers: FakeU
     comparePassword: async (password, hash) => hash === `hashed:${password}`,
     now: () => new Date('2026-01-01T00:00:00.000Z'),
     frontendUrl: 'https://andinoclubpamir.app',
+    // Club de ADMIN/LIDER/SOCIO (org-1) — el mismo para los tres, como sus
+    // organizationId.
+    organizationSlug: 'club-test',
     ...overrides,
   };
   return { deps, users, invitaciones, membresias, sentEmails };
@@ -322,13 +325,21 @@ describe('crearInvitacion', () => {
     assert.equal(invitaciones.length, 1);
   });
 
+  it('crearInvitacion arma inviteUrl con el slug del club antes del fragmento', async () => {
+    const { deps } = createDeps({ organizationSlug: 'el-montanista' });
+    const result = await crearInvitacion(deps, ADMIN, { email: 'nueva@example.com' });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.match(result.body.inviteUrl, /^https:\/\/andinoclubpamir\.app\/el-montanista\/#invite=/);
+  });
+
   it('inviteUrl usa el fragmento /#invite= y el registro solo guarda el hash', async () => {
     const { deps, invitaciones } = createDeps();
     const result = await crearInvitacion(deps, ADMIN, { email: 'frag@club.cl' });
     assert.equal(result.ok, true);
     if (!result.ok) return;
 
-    assert.match(result.body.inviteUrl, /^https:\/\/andinoclubpamir\.app\/#invite=/);
+    assert.match(result.body.inviteUrl, /^https:\/\/andinoclubpamir\.app\/club-test\/#invite=/);
     const token = result.body.inviteUrl.split('#invite=')[1] ?? '';
     assert.ok(token.length > 0);
 
@@ -512,6 +523,7 @@ describe('reenviarInvitacion', () => {
     assert.equal(result.ok, true);
     if (result.ok) {
       assert.notEqual(result.body.inviteUrl, creada.body.inviteUrl);
+      assert.match(result.body.inviteUrl, /^https:\/\/andinoclubpamir\.app\/club-test\/#invite=/);
     }
   });
 
@@ -597,7 +609,34 @@ describe('consultarInvitacion', () => {
       assert.equal(result.body.rolLabel, 'Líder');
       assert.equal(result.body.invitadoPor, 'Ada Admin');
       assert.equal(result.body.organization, null);
+      assert.equal(result.body.cuentaExistente, false);
     }
+  });
+
+  it('consultarInvitacion informa cuentaExistente:true cuando el email invitado ya tiene cuenta', async () => {
+    const { deps } = createDeps({}, [
+      { id: 'existente-consulta', organizationId: 'otro-club', email: 'existente@example.com', name: 'X', rol: 'SOCIO', emailVerified: true },
+    ]);
+    const creada = await crearInvitacion(deps, ADMIN, { email: 'existente@example.com' });
+    assert.equal(creada.ok, true);
+    if (!creada.ok) return;
+    const token = extractTokenFromInviteUrl(creada.body.inviteUrl);
+
+    const result = await consultarInvitacion(deps, token);
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.body.cuentaExistente, true);
+  });
+
+  it('consultarInvitacion informa cuentaExistente:false cuando el email invitado no tiene cuenta', async () => {
+    const { deps } = createDeps();
+    const creada = await crearInvitacion(deps, ADMIN, { email: 'sin-cuenta@example.com' });
+    assert.equal(creada.ok, true);
+    if (!creada.ok) return;
+    const token = extractTokenFromInviteUrl(creada.body.inviteUrl);
+
+    const result = await consultarInvitacion(deps, token);
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.body.cuentaExistente, false);
   });
 
   it('incluye la marca del club cuando deps expone getOrganizationBrand', async () => {
@@ -1022,6 +1061,7 @@ describe('crearInvitacionPlataforma', () => {
       assert.equal(result.body.invitacion.emitidaPorPlataforma, true);
       assert.equal(result.body.invitacion.rol, 'ADMIN');
       assert.equal(result.body.emailEnviado, true);
+      assert.match(result.body.inviteUrl, /^https:\/\/andinoclubpamir\.app\/club-test\/#invite=/);
     }
 
     const guardada = invitaciones.find((i) => i.email === 'primer-admin@club-nuevo.cl');

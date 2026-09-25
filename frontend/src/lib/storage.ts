@@ -5,6 +5,11 @@ import { recordarClub } from './club-preferido'
 // lo que guardan (p.ej. no son "de Pamir" en un sistema multi-club): renombrar
 // alguna cerraría la sesión de todo el mundo y perdería borradores en vivo de
 // gente en la montaña. pamir_owner es la única clave nueva de esta fase.
+//
+// DRAFT/DRAFT_STEP/INTEGRANTES son BASES: la clave real agrega ":<slug>"
+// cuando se pasa un club (ver draftKey/draftStepKey/integrantesKey abajo).
+// pamir_auth y pamir_owner siguen siendo únicos por navegador, sin club — la
+// sesión y su dueño no son datos de un club, son datos de la persona.
 const KEYS = {
   AUTH: 'pamir_auth',
   DRAFT: 'pamir_draft',
@@ -12,6 +17,20 @@ const KEYS = {
   INTEGRANTES: 'pamir_integrantes',
   OWNER: 'pamir_owner',
 } as const
+
+// Sin slug, la clave de siempre (compatibilidad hacia atrás: una sesión ya
+// abierta antes de esta fase, o cualquier caller que todavía no pasa club).
+function draftKey(clubSlug?: string): string {
+  return clubSlug ? `${KEYS.DRAFT}:${clubSlug}` : KEYS.DRAFT
+}
+
+function draftStepKey(clubSlug?: string): string {
+  return clubSlug ? `${KEYS.DRAFT_STEP}:${clubSlug}` : KEYS.DRAFT_STEP
+}
+
+function integrantesKey(clubSlug?: string): string {
+  return clubSlug ? `${KEYS.INTEGRANTES}:${clubSlug}` : KEYS.INTEGRANTES
+}
 
 // Toda función acepta un Storage inyectado (default window.localStorage) para
 // poder probarse sin jsdom, con un objeto en memoria como doble de prueba.
@@ -117,25 +136,32 @@ export function isAuthRemembered(pair?: AuthStoragePair): boolean {
 
 // ─── Draft persistence ────────────────────────────────────────────────────────
 
-export function saveDraft(data: Partial<Omit<SalidaFormData, 'gpxFile'>>, storage?: Storage): void {
+export function saveDraft(
+  data: Partial<Omit<SalidaFormData, 'gpxFile'>>,
+  storage?: Storage,
+  clubSlug?: string,
+): void {
   try {
-    resolve(storage).setItem(KEYS.DRAFT, JSON.stringify(data))
+    resolve(storage).setItem(draftKey(clubSlug), JSON.stringify(data))
   } catch {
     // Storage might be full
   }
 }
 
-export function saveDraftStep(step: number, storage?: Storage): void {
+export function saveDraftStep(step: number, storage?: Storage, clubSlug?: string): void {
   try {
-    resolve(storage).setItem(KEYS.DRAFT_STEP, String(step))
+    resolve(storage).setItem(draftStepKey(clubSlug), String(step))
   } catch {
     // ignore
   }
 }
 
-export function loadDraft(storage?: Storage): Partial<Omit<SalidaFormData, 'gpxFile'>> | null {
+export function loadDraft(
+  storage?: Storage,
+  clubSlug?: string,
+): Partial<Omit<SalidaFormData, 'gpxFile'>> | null {
   try {
-    const raw = resolve(storage).getItem(KEYS.DRAFT)
+    const raw = resolve(storage).getItem(draftKey(clubSlug))
     if (!raw) return null
     return JSON.parse(raw) as Partial<Omit<SalidaFormData, 'gpxFile'>>
   } catch {
@@ -143,9 +169,9 @@ export function loadDraft(storage?: Storage): Partial<Omit<SalidaFormData, 'gpxF
   }
 }
 
-export function loadDraftStep(storage?: Storage): number {
+export function loadDraftStep(storage?: Storage, clubSlug?: string): number {
   try {
-    const raw = resolve(storage).getItem(KEYS.DRAFT_STEP)
+    const raw = resolve(storage).getItem(draftStepKey(clubSlug))
     if (!raw) return 0
     const n = parseInt(raw, 10)
     return isNaN(n) ? 0 : n
@@ -154,13 +180,59 @@ export function loadDraftStep(storage?: Storage): number {
   }
 }
 
-export function clearDraft(storage?: Storage): void {
+export function clearDraft(storage?: Storage, clubSlug?: string): void {
   try {
     const s = resolve(storage)
-    s.removeItem(KEYS.DRAFT)
-    s.removeItem(KEYS.DRAFT_STEP)
+    s.removeItem(draftKey(clubSlug))
+    s.removeItem(draftStepKey(clubSlug))
   } catch {
     // ignore
+  }
+}
+
+// Migración de una sola vez: un draft guardado ANTES de esta fase vive en la
+// clave sin club (pamir_draft). Al primer load posterior al release, se
+// asigna al club ACTUAL — nadie pierde una ficha que estaba llenando en la
+// montaña. Nunca pisa un draft que YA exista en la clave del club actual (si
+// alguien ya empezó de cero ahí, ese draft gana), y nunca borra el draft sin
+// club si el destino está ocupado — se queda huérfano mejor que perderse (un
+// caso raro: dos sesiones/pestañas distintas en el mismo navegador, una
+// vieja y una ya migrada). Sin slug (raíz del dominio, sin club activo) es
+// un no-op: no hay clave de club a la cual migrar todavía.
+export function migrateUnkeyedDraftToCurrentClub(storage?: Storage, clubSlug?: string): void {
+  if (!clubSlug) return
+  try {
+    const s = resolve(storage)
+    const legacy = s.getItem(KEYS.DRAFT)
+    const legacyStep = s.getItem(KEYS.DRAFT_STEP)
+
+    if (!legacy) {
+      // Un paso legacy huérfano (sin su draft — storage corrupto o una
+      // limpieza parcial anterior) no significa nada por sí solo: nunca se
+      // migra un paso sin ficha. Se descarta para que no resurja en la raíz
+      // si más adelante alguien vuelve a guardar un borrador sin club.
+      if (legacyStep !== null) s.removeItem(KEYS.DRAFT_STEP)
+      return
+    }
+    if (s.getItem(draftKey(clubSlug)) !== null) return
+
+    // El draft se copia y se borra de la clave legacy ANTES de tocar el
+    // paso: si algo falla copiando/borrando el paso (el catch de abajo lo
+    // atrapa), el draft ya quedó a salvo en la clave del club Y removido de
+    // la legacy — nunca puede "resucitar" con contenido viejo en la raíz.
+    // Nunca se borra la clave legacy antes de que su copia haya tenido
+    // éxito (si el setItem de arriba lanza, el catch corta acá y no se
+    // borra nada).
+    s.setItem(draftKey(clubSlug), legacy)
+    s.removeItem(KEYS.DRAFT)
+
+    if (legacyStep !== null) {
+      s.setItem(draftStepKey(clubSlug), legacyStep)
+      s.removeItem(KEYS.DRAFT_STEP)
+    }
+  } catch {
+    // Storage bloqueado: la migración es una conveniencia, nunca debe romper
+    // el arranque de la app.
   }
 }
 
@@ -169,25 +241,25 @@ export function clearDraft(storage?: Storage): void {
 // conserva porque purgarla en un cambio de dueño de sesión es parte del
 // contrato de esta fase, no porque algo la consuma hoy.
 
-export function saveIntegrante(integrante: IntegranteRecord, storage?: Storage): void {
+export function saveIntegrante(integrante: IntegranteRecord, storage?: Storage, clubSlug?: string): void {
   try {
     const s = resolve(storage)
-    const existing = loadIntegrantes(s)
+    const existing = loadIntegrantes(s, clubSlug)
     const idx = existing.findIndex((i) => i.id === integrante.id)
     if (idx >= 0) {
       existing[idx] = integrante
     } else {
       existing.unshift(integrante)
     }
-    s.setItem(KEYS.INTEGRANTES, JSON.stringify(existing))
+    s.setItem(integrantesKey(clubSlug), JSON.stringify(existing))
   } catch {
     // ignore
   }
 }
 
-export function loadIntegrantes(storage?: Storage): IntegranteRecord[] {
+export function loadIntegrantes(storage?: Storage, clubSlug?: string): IntegranteRecord[] {
   try {
-    const raw = resolve(storage).getItem(KEYS.INTEGRANTES)
+    const raw = resolve(storage).getItem(integrantesKey(clubSlug))
     if (!raw) return []
     return JSON.parse(raw) as IntegranteRecord[]
   } catch {
@@ -195,9 +267,9 @@ export function loadIntegrantes(storage?: Storage): IntegranteRecord[] {
   }
 }
 
-export function clearIntegrantesCache(storage?: Storage): void {
+export function clearIntegrantesCache(storage?: Storage, clubSlug?: string): void {
   try {
-    resolve(storage).removeItem(KEYS.INTEGRANTES)
+    resolve(storage).removeItem(integrantesKey(clubSlug))
   } catch {
     // ignore
   }
@@ -213,6 +285,46 @@ export function clearIntegrantesCache(storage?: Storage): void {
 // pamir_auth. Cerrar sesión a propósito NO purga nada: ese es el
 // comportamiento deseado (recargar en la montaña sin señal no debe perder la
 // ficha en curso).
+
+// Purga TOTAL de borrador + caché de integrantes al cambiar de dueño: la
+// clave legacy sin club Y toda clave por club, sin importar cuál. Un dueño
+// nuevo en este navegador no debe heredar ni el borrador legacy ni el de
+// NINGÚN club anterior (ver establishSession más abajo, único llamador —
+// solo en la rama 'purge' de decideDraftOwnership; re-loguearse el MISMO
+// dueño nunca pasa por acá).
+//
+// No hay ningún índice de "qué clubes tienen datos guardados acá", así que
+// hay que escanear las claves del storage. Los prefijos incluyen los dos
+// puntos a propósito: 'pamir_draft:' nunca hace match con 'pamir_auth',
+// 'pamir_owner', 'pamir_draftx' (otra clave que solo comparte texto) ni con
+// una clave de otra app/librería en el mismo dominio — solo con
+// 'pamir_draft:<algo>' exactamente como lo generan draftKey/draftStepKey/
+// integrantesKey.
+const CLUB_KEY_PREFIXES = [`${KEYS.DRAFT}:`, `${KEYS.DRAFT_STEP}:`, `${KEYS.INTEGRANTES}:`]
+
+export function purgeAllDrafts(storage?: Storage): void {
+  try {
+    const s = resolve(storage)
+    s.removeItem(KEYS.DRAFT)
+    s.removeItem(KEYS.DRAFT_STEP)
+    s.removeItem(KEYS.INTEGRANTES)
+
+    // Primero se juntan las claves a borrar y RECIÉN DESPUÉS se borran: irlas
+    // removiendo dentro del mismo recorrido correría el índice de s.key(i)
+    // a mitad de camino (el comportamiento de Storage al borrar mientras se
+    // itera no está garantizado) y podría saltarse alguna.
+    const toRemove: string[] = []
+    for (let i = 0; i < s.length; i++) {
+      const key = s.key(i)
+      if (key && CLUB_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+        toRemove.push(key)
+      }
+    }
+    toRemove.forEach((key) => s.removeItem(key))
+  } catch {
+    // Storage bloqueado (modo privado): no debe romper el login.
+  }
+}
 
 export type DraftOwnershipDecision = 'keep' | 'purge'
 
@@ -274,8 +386,7 @@ export function establishSession(next: { user: User; token: string }, options?: 
       nextUserId: next.user.id,
     })
     if (decision === 'purge') {
-      clearDraft(local)
-      clearIntegrantesCache(local)
+      purgeAllDrafts(local)
     }
     saveOwnerId(next.user.id, local)
     saveAuth(next, chosen)

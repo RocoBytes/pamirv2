@@ -10,6 +10,7 @@ import type {
   PostulantesResponse,
 } from '../types/evento'
 import { getAuthToken } from './auth-token'
+import { clubSlugFromPath } from './club-path'
 import type {
   Rol,
   Invitacion,
@@ -38,9 +39,22 @@ const API_BASE = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
   : '/api'
 
-function authHeaders(): Record<string, string> {
+// Único punto de integración de X-Club: cada una de las ~40 llamadas
+// autenticadas de este archivo pasa por acá, así que agregar el header acá
+// alcanza para todas. Ausente en la raíz sin slug (riala.cl) — el backend ya
+// sabe resolver ese caso con una sola membresía (ver authMiddleware) y
+// App.tsx nunca deja que una cuenta con varias membresías llegue a llamar acá
+// sin antes haber navegado a /<slug> (ver Ruling 2 del plan de esta PR).
+// Exportado solo para su test unitario (api.test.ts) — ningún otro módulo
+// fuera de este archivo debe importarlo: cada llamada autenticada sigue
+// pasando por las funciones de arriba, no por este helper directamente.
+export function authHeaders(): Record<string, string> {
   const token = getAuthToken()
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const slug = clubSlugFromPath()
+  if (slug) headers['X-Club'] = slug
+  return headers
 }
 
 // Conserva el status HTTP junto al mensaje: los controles de descarga de
@@ -105,9 +119,14 @@ export async function resetPassword(
   return handleResponse<{ message: string }>(res)
 }
 
-export async function fetchMe(): Promise<{ user: User }> {
+// signal es opcional y solo lo usa el /me de montaje de useAuth.ts, para
+// acotarlo a unos segundos en una conexión de montaña que cuelga el pedido
+// sin nunca resolver — ver el efecto de montaje. Cualquier otro llamador
+// (refreshSession, etc.) sigue sin timeout, exactamente como antes.
+export async function fetchMe(signal?: AbortSignal): Promise<{ user: User }> {
   const res = await fetch(`${API_BASE}/me`, {
     headers: authHeaders(),
+    signal,
   })
   return handleResponse<{ user: User }>(res)
 }

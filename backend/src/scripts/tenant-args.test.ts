@@ -129,7 +129,10 @@ describe('parseTenantArgs — create', () => {
     assert.equal(result.success, false);
   });
 
-  for (const slugReservado of ['iso-test-foo', 'ISO-TEST-FOO', 'platform', 'plataforma', 'admin', 'api', 'www', 'app', 'riala']) {
+  for (const slugReservado of [
+    'iso-test-foo', 'ISO-TEST-FOO', 'platform', 'plataforma', 'admin', 'api', 'www', 'app', 'riala',
+    'assets', 'auth', 'brand',
+  ]) {
     it(`rechaza el slug reservado "${slugReservado}"`, () => {
       const args = [...CREATE_VALIDO];
       args[args.indexOf('--slug') + 1] = slugReservado;
@@ -166,6 +169,14 @@ describe('parseTenantArgs — suspend / activate', () => {
     it(`"${command}" rechaza un slug reservado`, () => {
       const result = parseTenantArgs([command, '--slug', 'admin']);
       assert.equal(result.success, false);
+    });
+
+    it(`"${command}" rechaza "brand" como slug reservado`, () => {
+      const result = parseTenantArgs([command, '--slug', 'brand']);
+      assert.equal(result.success, false);
+      if (!result.success) {
+        assert.ok(result.errors.some((e) => e.includes('reservad')));
+      }
     });
 
     it(`"${command}" rechaza un flag desconocido`, () => {

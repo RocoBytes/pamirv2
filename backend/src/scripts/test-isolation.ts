@@ -873,6 +873,27 @@ async function getJsonWithClub(
   return { status: res.status, body };
 }
 
+// Como postJsonAuth, pero con el header X-Club — lo necesita el check de
+// slug-en-el-link de más abajo (ver runClubesFieldChecks): a diferencia de
+// postJsonAuth, la cuenta que golpea el endpoint tiene más de una membresía,
+// así que necesita decir con cuál está actuando (mismo motivo que
+// getJsonWithClub, arriba).
+async function postJsonWithClub(
+  baseUrl: string,
+  token: string,
+  urlPath: string,
+  xClub: string,
+  payload: unknown,
+): Promise<{ status: number; body: unknown }> {
+  const res = await fetch(`${baseUrl}${urlPath}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Club': xClub },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => undefined);
+  return { status: res.status, body };
+}
+
 // Fecha calendario (YYYY-MM-DD) desplazada `dias` desde ahora — usada para
 // armar la ficha del evento operativo del club nuevo (ver runTenantCliChecks)
 // sin acoplarse a la fecha en que corra la suite.
@@ -1062,6 +1083,8 @@ async function runHttpChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSeed): P
     comparePassword: async (password, hash) => hash === `hashed:${password}`,
     now: () => new Date(),
     frontendUrl: 'https://iso-test.local',
+    // Las dos únicas llamadas de esta sección son siempre para el club A.
+    organizationSlug: SLUG_A,
   };
 
   await check(
@@ -1306,6 +1329,10 @@ function buildFakeCodigosQrDeps(capturedEmails: SendCodigoQrInvitationEmailParam
     comparePassword: (password, hash) => bcrypt.compare(password, hash),
     now: () => new Date(),
     frontendUrl: 'https://iso-test.local',
+    // Nunca se usa: el único consumidor de este fake es
+    // solicitarInvitacionQrService, que arma su link con
+    // vigencia.org.brand.slug, no con deps.organizationSlug.
+    organizationSlug: '',
     jwtSecret: requireJwtSecret(),
     logError: () => {},
   };
@@ -2102,7 +2129,7 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
   // Repositorio real + invitación de plataforma con correo falso (nunca
   // contacta Gmail/SMTP) — mismo patrón que fakeInvitacionDeps más arriba,
   // pero envuelto por tenants.service.ts en vez de llamado directo.
-  const fakeInvitacionDepsCli: InvitacionesDeps = {
+  const fakeInvitacionDepsCli: Omit<InvitacionesDeps, 'organizationSlug'> = {
     repo: invitacionesRepoPrisma,
     sendEmail: async () => {},
     hashPassword: async (password) => `hashed:${password}`,
@@ -2110,10 +2137,19 @@ async function runTenantCliChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgSee
     now: () => new Date(),
     frontendUrl: 'https://iso-test-cli.local',
   };
+  // organizationSlug se resuelve por llamada (no un valor fijo arriba): esta
+  // sección reutiliza crearInvitacionAdminFake para MÁS de un club (ver "un
+  // segundo club" más abajo, que reusa depsConMembresiaLibre/
+  // crearInvitacionAdminFake con un organizationId distinto) — mismo criterio
+  // que crearInvitacionAdmin real en scripts/tenant.ts.
   const crearInvitacionAdminFake: TenantsDeps['crearInvitacionAdmin'] = (organizationId, email) =>
-    runWithOrganization(organizationId, () =>
-      crearInvitacionPlataforma(fakeInvitacionDepsCli, { organizationId, email, rol: 'ADMIN' }),
-    );
+    runWithOrganization(organizationId, async () => {
+      const organization = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
+      return crearInvitacionPlataforma(
+        { ...fakeInvitacionDepsCli, organizationSlug: organization.slug },
+        { organizationId, email, rol: 'ADMIN' },
+      );
+    });
 
   const depsOperativos: TenantsDeps = {
     repo: tenantsRepoPrisma,
@@ -2584,26 +2620,73 @@ async function runClubesFieldChecks(baseUrl: string, seedA: OrgSeed, seedB: OrgS
   // ADMIN de B) — ya existe para cuando esta función corre.
   const tokenMulti = signToken({ userId: seedA.socioUserId, email: seedA.socioEmail });
 
+  await check('crearInvitacion (HTTP) devuelve inviteUrl con /<slug>/ antes del fragmento', async () => {
+    // tokenMulti tiene MÁS de una membresía (A y B) — X-Club es obligatorio
+    // para que el endpoint sepa con cuál actuar (LIDER en A desde
+    // runRoleChangeMembresiaChecks, así que puede invitar).
+    const res = await postJsonWithClub(baseUrl, tokenMulti, '/api/invitaciones', SLUG_A, {
+      email: `slug-link-${RANDOM_SUFFIX}@iso-test.local`,
+    });
+    assert.equal(res.status, 201);
+    const body = res.body as { inviteUrl: string };
+    assert.match(body.inviteUrl, new RegExp(`/${SLUG_A}/#invite=`));
+  });
+
   await check(
-    'GET /api/me devuelve clubes con TODAS las membresías de la cuenta (slug/name/shortName/hasLogo/logoVersion/rol), no solo la activa',
+    'GET /api/me devuelve clubes con TODAS las membresías de la cuenta (slug/name/shortName/hasLogo/logoVersion/rol/suspendido), no solo la activa',
     async () => {
       const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', SLUG_A);
       assert.equal(res.status, 200);
       const body = res.body as {
         user: {
-          clubes?: { slug: string; name: string; shortName: string | null; hasLogo: boolean; logoVersion: string | null; rol: string }[];
+          clubes?: {
+            slug: string;
+            name: string;
+            shortName: string | null;
+            hasLogo: boolean;
+            logoVersion: string | null;
+            rol: string;
+            suspendido: boolean;
+          }[];
         };
       };
       const clubes = body.user.clubes;
       assert.ok(clubes);
       assert.equal(clubes!.length, 2);
-      assert.deepEqual(Object.keys(clubes![0]!).sort(), ['hasLogo', 'logoVersion', 'name', 'rol', 'shortName', 'slug']);
+      assert.deepEqual(
+        Object.keys(clubes![0]!).sort(),
+        ['hasLogo', 'logoVersion', 'name', 'rol', 'shortName', 'slug', 'suspendido'],
+      );
       const porSlug = Object.fromEntries(clubes!.map((c) => [c.slug, c]));
       // LIDER y no SOCIO: runRoleChangeMembresiaChecks ya promovió a este
       // mismo socio a LIDER en A antes de este punto de la suite (ver el
       // comentario equivalente en runAuthMembershipChecks, más arriba).
       assert.equal(porSlug[SLUG_A]?.rol, 'LIDER');
       assert.equal(porSlug[SLUG_B]?.rol, 'ADMIN');
+      // Ninguno de los dos clubes está suspendido en este punto de la suite.
+      assert.equal(porSlug[SLUG_A]?.suspendido, false);
+      assert.equal(porSlug[SLUG_B]?.suspendido, false);
+    },
+  );
+
+  await check(
+    'clubes[] marca suspendido:true para un club suspendido, sin bloquear la respuesta (aunque X-Club apunte a OTRO club, activo)',
+    async () => {
+      await runAsPlatform(() =>
+        prisma.organization.update({ where: { id: seedB.organizationId }, data: { status: 'SUSPENDED' } }),
+      );
+      try {
+        const res = await getJsonWithClub(baseUrl, tokenMulti, '/api/me', SLUG_A);
+        assert.equal(res.status, 200);
+        const body = res.body as { user: { clubes?: { slug: string; suspendido: boolean }[] } };
+        const porSlug = Object.fromEntries((body.user.clubes ?? []).map((c) => [c.slug, c]));
+        assert.equal(porSlug[SLUG_A]?.suspendido, false);
+        assert.equal(porSlug[SLUG_B]?.suspendido, true);
+      } finally {
+        await runAsPlatform(() =>
+          prisma.organization.update({ where: { id: seedB.organizationId }, data: { status: 'ACTIVE' } }),
+        );
+      }
     },
   );
 
@@ -2709,6 +2792,8 @@ async function runInviteJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: Or
         comparePassword: async (password, hash) => hash === `hashed:${password}`,
         now: () => new Date(),
         frontendUrl: 'https://iso-test.local',
+        // Las dos llamadas de abajo son siempre para el club A.
+        organizationSlug: SLUG_A,
       };
       const requester = { id: seedA.adminUserId, organizationId: seedA.organizationId, name: 'Admin A', rol: 'ADMIN' as const };
 
@@ -2754,6 +2839,24 @@ async function runAcceptJoiningChecks(baseUrl: string, seedA: OrgSeed, seedB: Or
     const inviteUrl = (invitar.body as { inviteUrl: string }).inviteUrl;
     return new URL(inviteUrl).hash.replace('#invite=', '');
   }
+
+  await check(
+    'consultarInvitacion informa cuentaExistente según si el email invitado ya tiene cuenta',
+    async () => {
+      const tokenNueva = await invitarYObtenerToken(`joining-consulta-nueva-${RANDOM_SUFFIX}@iso-test.local`, 'SOCIO');
+      const nueva = await postJson(baseUrl, '/api/auth/invitaciones/consultar', { token: tokenNueva });
+      assert.equal(nueva.status, 200);
+      assert.equal((nueva.body as { cuentaExistente: boolean }).cuentaExistente, false);
+
+      // seedB.adminEmail ya tiene cuenta (ADMIN de B), pero todavía no es
+      // socia de A — mismo fixture que ya usan los checks de enumeración de
+      // runInviteJoiningChecks.
+      const tokenExistente = await invitarYObtenerToken(seedB.adminEmail, 'SOCIO');
+      const existente = await postJson(baseUrl, '/api/auth/invitaciones/consultar', { token: tokenExistente });
+      assert.equal(existente.status, 200);
+      assert.equal((existente.body as { cuentaExistente: boolean }).cuentaExistente, true);
+    },
+  );
 
   await check('aceptar con la contraseña correcta de la cuenta existente crea SOLO la Membresia en A, con el rol de la invitación', async () => {
     const token = await invitarYObtenerToken(emailExistenteEnB, 'LIDER');
