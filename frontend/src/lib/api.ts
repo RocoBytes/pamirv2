@@ -45,7 +45,10 @@ const API_BASE = import.meta.env.VITE_API_URL
 // sabe resolver ese caso con una sola membresía (ver authMiddleware) y
 // App.tsx nunca deja que una cuenta con varias membresías llegue a llamar acá
 // sin antes haber navegado a /<slug> (ver Ruling 2 del plan de esta PR).
-function authHeaders(): Record<string, string> {
+// Exportado solo para su test unitario (api.test.ts) — ningún otro módulo
+// fuera de este archivo debe importarlo: cada llamada autenticada sigue
+// pasando por las funciones de arriba, no por este helper directamente.
+export function authHeaders(): Record<string, string> {
   const token = getAuthToken()
   const headers: Record<string, string> = {}
   if (token) headers['Authorization'] = `Bearer ${token}`

@@ -97,6 +97,32 @@ test.describe('No perteneces a este club / club no encontrado', () => {
   })
 })
 
+test.describe('Club no encontrado antes de iniciar sesión (visitante sin sesión)', () => {
+  test('un slug desconocido con la marca en 404 muestra Club no encontrado, no el login neutral', async ({ page }) => {
+    await page.route('**/api/clubes/no-existe/marca', (route) => {
+      void route.fulfill({ status: 404, json: { error: 'Club no encontrado' } })
+    })
+
+    await page.goto('/no-existe')
+    await expect(page.getByText('Club no encontrado')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toHaveCount(0)
+  })
+
+  test('un slug desconocido sin conexión (la marca aborta) sigue mostrando el login neutral', async ({ page }) => {
+    // Distingue 404 confirmado (club-not-found real) de un fallo de
+    // red/servidor: alguien sin conexión en la montaña debe poder seguir
+    // iniciando sesión con lo que tenga cacheado, no quedar atrapado en una
+    // pantalla de error que ni siquiera pudo confirmar.
+    await page.route('**/api/clubes/no-existe/marca', (route) => {
+      void route.abort('internetdisconnected')
+    })
+
+    await page.goto('/no-existe')
+    await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
+    await expect(page.getByText('Club no encontrado')).toHaveCount(0)
+  })
+})
+
 test.describe('Legacy ?club= redirige a /<slug>', () => {
   test('riala.cl/?club=<slug> reescribe la URL a /<slug> antes del primer render, sin sesión', async ({ page }) => {
     await page.goto('/?club=el-montanista')
@@ -420,7 +446,10 @@ test.describe('La migración también corre en un login fresco, no solo en una s
     await page.route('**/api/me', () => {})
 
     await page.goto('/pamir')
-    await expect(page.getByText('Mis Salidas')).toBeVisible({ timeout: 10_000 })
+    // 15s de margen sobre el timeout de 8s de useAuth.ts (no se toca el
+    // bound de producción, solo la espera del test, para no flakear bajo
+    // carga cuando la máquina de CI/local anda lenta).
+    await expect(page.getByText('Mis Salidas')).toBeVisible({ timeout: 15_000 })
 
     await page.getByRole('button', { name: /Formulario de Salida/i }).click()
     await page.getByRole('button', { name: 'Continuar borrador' }).click()

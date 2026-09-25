@@ -27,8 +27,17 @@ const RESERVED_TOP_LEVEL_SLUGS = new Set([
   'brand',
 ])
 
+// 2..40 caracteres, igual que validarSlug en backend/src/scripts/tenant-args.ts
+// (la fuente de verdad): un club real nunca tiene un slug fuera de ese rango,
+// así que un segmento de 1 char o larguísimo que cumpliera SLUG_PATTERN nunca
+// debe tratarse como club ni viajar en el header X-Club de api.ts.
 function isClubSlug(value: string): boolean {
-  return SLUG_PATTERN.test(value) && !RESERVED_TOP_LEVEL_SLUGS.has(value)
+  return (
+    value.length >= 2 &&
+    value.length <= 40 &&
+    SLUG_PATTERN.test(value) &&
+    !RESERVED_TOP_LEVEL_SLUGS.has(value)
+  )
 }
 
 // pathname es inyectable (mismo criterio que storage.ts/club-preferido.ts,

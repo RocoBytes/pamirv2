@@ -36,6 +36,28 @@ describe('clubSlugFromPath', () => {
   it('devuelve null para una ruta reservada aunque haya más path después', () => {
     expect(clubSlugFromPath('/assets/logo.png')).toBeNull()
   })
+
+  // El backend (tenant-args.ts, validarSlug) exige 2..40 caracteres para
+  // --slug: un club real nunca tiene un slug fuera de ese rango. Sin este
+  // bound, un segmento de 1 char o larguísimo que cumpliera SLUG_PATTERN se
+  // trataría igual como club — nunca puede serlo, así que nunca debe viajar
+  // en el header X-Club de api.ts.
+  it('devuelve null para un segmento de un solo caracter (bajo el mínimo de 2 del backend)', () => {
+    expect(clubSlugFromPath('/a')).toBeNull()
+  })
+
+  it('acepta un segmento de exactamente 2 caracteres (el mínimo del backend)', () => {
+    expect(clubSlugFromPath('/ab')).toBe('ab')
+  })
+
+  it('devuelve null para un segmento de más de 40 caracteres (sobre el máximo del backend)', () => {
+    expect(clubSlugFromPath(`/${'a'.repeat(41)}`)).toBeNull()
+  })
+
+  it('acepta un segmento de exactamente 40 caracteres (el máximo del backend)', () => {
+    const slug = 'a'.repeat(40)
+    expect(clubSlugFromPath(`/${slug}`)).toBe(slug)
+  })
 })
 
 describe('redirectLegacyClubQueryParam', () => {
