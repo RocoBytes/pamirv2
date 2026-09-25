@@ -186,7 +186,12 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   // antes de que React llegue a pintarlo.
   useEffect(() => {
     if (!isAuthenticated || pathSlug || !clubes || inviteToken || qrToken) return
-    if (clubes.length === 1) window.location.replace(`/${clubes[0]!.slug}`)
+    // Solo redirige a un slug que esta misma app reconoce como club en el
+    // path: si no, /<slug> volvería a verse como raíz y la redirección se
+    // repetiría para siempre (pasó con el club casa `riala`).
+    if (clubes.length === 1 && clubSlugFromPath(`/${clubes[0]!.slug}`) === clubes[0]!.slug) {
+      window.location.replace(`/${clubes[0]!.slug}`)
+    }
   }, [isAuthenticated, pathSlug, clubes, inviteToken, qrToken])
 
   // Marca pública del club del path cuando la sesión NO puede entrar a él
