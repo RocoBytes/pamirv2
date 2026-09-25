@@ -575,11 +575,25 @@ test.describe('Cambiar de club', () => {
     await page.goto('/el-montanista')
     await expect(page.getByText('Mis Salidas')).toBeVisible()
 
+    // Control: en el club DUEÑO del borrador, el wizard sí lo ofrece — esto
+    // prueba que el borrador de verdad existe (no que "Continuar borrador"
+    // está ausente en todos lados por alguna otra razón, p.ej. un texto que
+    // cambió). Sin este control, el assert de ausencia de más abajo sería
+    // vacuamente cierto incluso si el aislamiento por club estuviera roto.
+    await page.getByRole('button', { name: /Formulario de Salida/i }).click()
+    await expect(page.getByRole('button', { name: 'Cancelar y volver' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Continuar borrador' })).toBeVisible()
+    await page.getByRole('button', { name: 'Cancelar y volver' }).click()
+
     await page.getByRole('button', { name: 'Cambiar de club' }).click()
     await page.getByRole('link', { name: PAMIR_ORG.name }).click()
     await expect(page).toHaveURL(/\/pamir$/)
 
     await page.getByRole('button', { name: /Formulario de Salida/i }).click()
+    // El wizard SÍ montó en el club nuevo (no un click que se perdió contra
+    // una pantalla vacía) — recién sobre esa base tiene sentido afirmar que
+    // el banner del borrador ajeno está ausente.
+    await expect(page.getByRole('button', { name: 'Cancelar y volver' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Continuar borrador' })).toHaveCount(0)
 
     // El borrador de El Montañista sigue ahí (no se perdió ni se migró) —
