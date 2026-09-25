@@ -28,6 +28,15 @@ interface UseAuthReturn extends AuthState {
   // del plan de esta PR: ahí el comportamiento sigue siendo el silencioso de
   // siempre).
   clubAccessError: ClubAccessError | null
+  // false solo durante la ventana entre "hay una sesión guardada" y "el /me
+  // de montaje para ESTE path ya resolvió (éxito o error)". El resto del
+  // tiempo (sin sesión guardada, tras un login fresco, o una vez la
+  // verificación de montaje se asentó) es true: `user` refleja datos
+  // confirmados por el servidor, no solo lo cacheado en pamir_auth. App.tsx
+  // lo usa para no decidir nada sensible al club (p.ej. migrar el borrador
+  // sin club) contra `clubes` todavía no verificado — ver Ruling del
+  // round 2 de review de esta PR.
+  sessionChecked: boolean
 }
 
 function buildInitialState(): { user: User | null; token: string | null } {
@@ -43,6 +52,14 @@ export function useAuth(): UseAuthReturn {
   const [state, setState] = useState(buildInitialState)
   const [isLoading, setIsLoading] = useState(false)
   const [clubAccessError, setClubAccessError] = useState<ClubAccessError | null>(null)
+  // Arranca en false SOLO cuando hay una sesión guardada con token (algo que
+  // efectivamente hay que verificar contra el servidor); sin sesión no hay
+  // nada que esperar. Ver el efecto de montaje más abajo, que lo asienta en
+  // true apenas fetchMe() resuelve (éxito o error) — o de inmediato en el
+  // único caso donde Ruling 2 decide NO llamarlo (bare domain, 2+
+  // membresías ya conocidas: ahí "Mis clubes" confía en el caché a
+  // propósito, es una decisión aparte de esta bandera).
+  const [sessionChecked, setSessionChecked] = useState(() => !loadAuth()?.token)
 
   useEffect(() => {
     if (state.token) setAuthToken(state.token)
@@ -73,9 +90,14 @@ export function useAuth(): UseAuthReturn {
     // membresías YA conocidas por una sesión guardada, esta llamada
     // recibiría siempre 400 "Selecciona un club" (authMiddleware) — se
     // evita a propósito; App.tsx muestra "Mis clubes" con los datos
-    // guardados sin esperar ninguna red.
+    // guardados sin esperar ninguna red. sessionChecked se asienta en true
+    // igual: esta rama es la propia decisión de Ruling 2 de confiar en el
+    // caché, no la ventana de verificación que sessionChecked cubre.
     const slug = clubSlugFromPath()
-    if (!slug && (saved.user?.clubes?.length ?? 0) > 1) return
+    if (!slug && (saved.user?.clubes?.length ?? 0) > 1) {
+      setSessionChecked(true)
+      return
+    }
 
     fetchMe()
       .then(({ user }) => {
@@ -92,6 +114,7 @@ export function useAuth(): UseAuthReturn {
         }
         // Token inválido/expirado o red caída: no se toca el estado
       })
+      .finally(() => setSessionChecked(true))
   }, [applyUser])
 
   const refreshSession = useCallback(async (): Promise<void> => {
@@ -109,6 +132,9 @@ export function useAuth(): UseAuthReturn {
       setAuthToken(token)
       establishSession({ user, token }, { remember })
       setClubAccessError(null)
+      // user acá viene directo de la respuesta del servidor (no del caché
+      // de pamir_auth): ya está verificado, sin ventana que esperar.
+      setSessionChecked(true)
       setState({ user, token })
     } finally {
       setIsLoading(false)
@@ -119,6 +145,9 @@ export function useAuth(): UseAuthReturn {
     clearAuth()
     setAuthToken(null)
     setClubAccessError(null)
+    // Sin sesión no hay nada que verificar — igual que el estado inicial
+    // sin pamir_auth guardado.
+    setSessionChecked(true)
     setState({ user: null, token: null })
   }, [])
 
@@ -130,5 +159,6 @@ export function useAuth(): UseAuthReturn {
     logout,
     refreshSession,
     clubAccessError,
+    sessionChecked,
   }
 }

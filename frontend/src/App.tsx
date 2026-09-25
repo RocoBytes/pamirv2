@@ -53,7 +53,7 @@ redirectLegacyClubQueryParam()
 // Recibe la sesión ya resuelta por App() en vez de llamar useAuth() de nuevo
 // (crearía un segundo estado independiente): así App() puede envolver todo
 // este árbol en OrganizationProvider con el club de la MISMA sesión.
-function AppContent({ user, token, isLoading, loginWithCredentials, logout, refreshSession, clubAccessError }: ReturnType<typeof useAuth>) {
+function AppContent({ user, token, isLoading, loginWithCredentials, logout, refreshSession, clubAccessError, sessionChecked }: ReturnType<typeof useAuth>) {
   const [route, setRoute] = useState<Route>('dashboard')
   const [actionSalidaId, setActionSalidaId] = useState<string | null>(null)
   const [actionEventoId, setActionEventoId] = useState<string | null>(null)
@@ -122,16 +122,19 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   // pamir_draft antes de que exista ningún lector con ese mismo path.
   // Gateado por puedeAbrirClub, no solo por pathSlug: un /<slug> con un
   // typo, de un club ajeno, o de un club suspendido NUNCA mueve el draft
-  // ahí — lo dejaría escondido en una clave que nadie puede abrir. No
-  // alcanza con gatear por clubAccessError (se resuelve async, DESPUÉS de
-  // que este efecto ya habría corrido con el pathSlug crudo): clubes ya se
-  // conoce sincrónicamente desde el storage al montar, así que se usa
-  // directo.
+  // ahí — lo dejaría escondido en una clave que nadie puede abrir. Y
+  // gateado por sessionChecked && !clubAccessError, no solo por clubes: al
+  // montar, `clubes` es el caché sincrónico de pamir_auth — si la
+  // membresía se revocó o suspendió del lado del servidor desde el login,
+  // el caché todavía dice "sí" en la ventana antes de que el /me de
+  // montaje (para ESTE path) resuelva. Recién una vez sessionChecked es
+  // true Y no llegó clubAccessError, `clubes` refleja lo que el servidor
+  // confirmó para este path — ver Ruling del round 2 de review de esta PR.
   useEffect(() => {
-    if (puedeAbrirClub(pathSlug, clubes)) {
+    if (sessionChecked && !clubAccessError && puedeAbrirClub(pathSlug, clubes)) {
       migrateUnkeyedDraftToCurrentClub(undefined, pathSlug!)
     }
-  }, [pathSlug, clubes])
+  }, [sessionChecked, clubAccessError, pathSlug, clubes])
 
   // Redirección transparente: una sola membresía y sin slug en el path →
   // /<slug>, preservando el resto de la URL (query/hash ya se consumieron
@@ -282,14 +285,17 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   // routing (Design §3). Se resuelve antes que cualquier ruta del dashboard.
   if (isAuthenticated && clubAccessError) {
     // "Mis clubes" (ir a la raíz) es una salida real salvo en un caso: la
-    // cuenta tiene una única membresía y es justo esta, suspendida — la
-    // raíz sin slug la redirige transparentemente de vuelta a /<slug> (el
-    // efecto de arriba), que vuelve a mostrar esta misma pantalla: un
-    // callejón sin salida. Ahí no se ofrece el botón; Cerrar sesión pasa a
+    // cuenta tiene una única membresía cacheada y es justo esta — la raíz
+    // sin slug la redirige transparentemente de vuelta a /<slug> (el efecto
+    // de arriba), que vuelve a mostrar esta misma pantalla: un callejón sin
+    // salida. NO se condiciona a clubes[0].suspendido: clubAccessError
+    // implica que el /me de montaje para este path ya falló, así que
+    // `clubes` es el caché SIN VERIFICAR (pudo suspenderse o revocarse del
+    // lado del servidor después del login) — el suspendido cacheado podría
+    // seguir en false y el loop sería igual de real (Ruling del round 2 de
+    // review de esta PR). Ahí no se ofrece el botón; Cerrar sesión pasa a
     // ser la única (y primaria) acción.
-    const misClubesEsUnaSalida = !(
-      clubes && clubes.length === 1 && clubes[0]!.slug === pathSlug && clubes[0]!.suspendido
-    )
+    const misClubesEsUnaSalida = !(clubes && clubes.length === 1 && clubes[0]!.slug === pathSlug)
     return (
       <ClubAccessErrorPage
         status={clubAccessError.status}

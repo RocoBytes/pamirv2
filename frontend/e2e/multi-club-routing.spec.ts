@@ -170,6 +170,27 @@ test.describe('Club suspendido — única membresía: sin callejón sin salida',
     await expect(page.getByRole('button', { name: 'Mis clubes' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
   })
+
+  test('caché dice suspendido:false pero el servidor rechazó la única membresía (revocada/suspendida desde el login): tampoco "Mis clubes"', async ({ page }) => {
+    // El caché miente a propósito en este test (suspendido: false): lo que
+    // importa es que clubAccessError diga que el /me de montaje para este
+    // path YA falló — el caché nunca es la fuente de verdad una vez hay un
+    // error de acceso confirmado por el servidor (Ruling del round 2).
+    const userClubCacheDesactualizado = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    await setAuth(page, userClubCacheDesactualizado)
+    await page.route('**/api/me', (route) => {
+      void route.fulfill({ status: 403, json: { error: 'No perteneces a este club' } })
+    })
+
+    await page.goto('/')
+    // El redirect transparente la manda a /pamir igual (confía en el caché
+    // para decidir A DÓNDE ir, no en si puede quedarse), y ahí el servidor
+    // la rechaza.
+    await expect(page).toHaveURL(/\/pamir$/)
+    await expect(page.getByText('No perteneces a este club')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Mis clubes' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
+  })
 })
 
 test.describe('Migración del draft sin club — solo si la cuenta puede abrir ESE club', () => {
@@ -208,5 +229,25 @@ test.describe('Migración del draft sin club — solo si la cuenta puede abrir E
 
     expect(await page.evaluate(() => localStorage.getItem('pamir_draft'))).toBeNull()
     expect(await page.evaluate(() => localStorage.getItem('pamir_draft:pamir'))).not.toBeNull()
+  })
+
+  test('el caché dice que puedo abrir el club, pero el servidor rechaza /me: NO migra (la membresía pudo revocarse/suspenderse desde el login)', async ({ page }) => {
+    // Caché "abierto" a propósito (slug del path presente, sin suspender):
+    // bajo el gate viejo (solo caché) esto migraría de inmediato, antes de
+    // que /me confirmara nada. El gate correcto espera la verificación.
+    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    await setAuth(page, userConUnClub)
+    await page.addInitScript(() => {
+      localStorage.setItem('pamir_draft', JSON.stringify({ nombreActividad: 'Borrador previo' }))
+    })
+    await page.route('**/api/me', (route) => {
+      void route.fulfill({ status: 403, json: { error: 'No perteneces a este club' } })
+    })
+
+    await page.goto('/pamir')
+    await expect(page.getByText('No perteneces a este club')).toBeVisible()
+
+    expect(await page.evaluate(() => localStorage.getItem('pamir_draft'))).not.toBeNull()
+    expect(await page.evaluate(() => localStorage.getItem('pamir_draft:pamir'))).toBeNull()
   })
 })
