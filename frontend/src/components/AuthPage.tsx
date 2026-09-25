@@ -545,18 +545,20 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
             {view === 'login' && (
               <>
                 <div className="flex flex-col items-start gap-4">
-                  {/* Sin club resuelto (ni ?club=, ni invitación): la marca de la
-                      PLATAFORMA (RIALA), no el tile+logo de un club. Con club
-                      resuelto, el tile de siempre. */}
+                  {/* Sin club resuelto (ni ruta /<slug>, ni invitación): la marca
+                      de la PLATAFORMA (RIALA). Con club resuelto, su logo. En
+                      ambos casos grande, centrado sobre el formulario y sin
+                      recuadro de color: el logo es la identidad del club. */}
                   {logoOrg ? (
-                    <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shrink-0 overflow-hidden">
-                      <ClubLogo org={logoOrg} alt="" className="w-9 h-9 object-contain" />
-                    </div>
+                    <ClubLogo
+                      org={logoOrg}
+                      className="self-center h-28 sm:h-32 w-auto max-w-full object-contain"
+                    />
                   ) : (
                     <img
                       src={PLATFORM_LOGO_FULL}
                       alt={PLATFORM_NAME}
-                      className="h-24 sm:h-28 w-auto object-contain"
+                      className="self-center h-28 sm:h-32 w-auto max-w-full object-contain"
                     />
                   )}
                   <div className="flex flex-col gap-2">
