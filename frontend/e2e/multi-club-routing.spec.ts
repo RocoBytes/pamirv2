@@ -487,3 +487,118 @@ test.describe('Branding pre-login por slug del path', () => {
     await expect(logo).toHaveAttribute('src', '/logos/el-montanista.png')
   })
 })
+
+test.describe('Cambiar de club', () => {
+  test('con dos membresías, el header ofrece Cambiar de club y navega a Mis clubes', async ({ page }) => {
+    const userConDosClubes = {
+      ...MOCK_ADMIN_MONTANISTA,
+      clubes: [
+        { ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false },
+        { ...EL_MONTANISTA_ORG, hasLogo: false, logoVersion: null, rol: 'ADMIN', suspendido: false },
+      ],
+    }
+    await setAuth(page, userConDosClubes)
+    await mockMe(page, userConDosClubes)
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+
+    await page.goto('/el-montanista')
+    await expect(page.getByText('Mis Salidas')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Cambiar de club' }).click()
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByRole('heading', { name: 'Mis clubes' })).toBeVisible()
+  })
+
+  test('con una sola membresía, el header NO ofrece Cambiar de club', async ({ page }) => {
+    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    await setAuth(page, userConUnClub)
+    await mockMe(page, userConUnClub)
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+
+    await page.goto('/pamir')
+    await expect(page.getByText('Mis Salidas')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Cambiar de club' })).toHaveCount(0)
+  })
+
+  test('elegir el otro club en Mis clubes navega a su propio slug (recarga completa, no en memoria)', async ({ page }) => {
+    const userConDosClubes = {
+      ...MOCK_ADMIN_MONTANISTA,
+      clubes: [
+        { ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false },
+        { ...EL_MONTANISTA_ORG, hasLogo: false, logoVersion: null, rol: 'ADMIN', suspendido: false },
+      ],
+    }
+    await setAuth(page, userConDosClubes)
+    await mockMe(page, userConDosClubes)
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+
+    await page.goto('/el-montanista')
+    await expect(page.getByText('Mis Salidas')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Cambiar de club' }).click()
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByRole('heading', { name: 'Mis clubes' })).toBeVisible()
+
+    await page.getByRole('link', { name: PAMIR_ORG.name }).click()
+    await expect(page).toHaveURL(/\/pamir$/)
+    await expect(page.getByText('Mis Salidas')).toBeVisible()
+  })
+
+  test('un borrador guardado en un club no queda visible al cambiar al otro club', async ({ page }) => {
+    const userConDosClubes = {
+      ...MOCK_ADMIN_MONTANISTA,
+      clubes: [
+        { ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false },
+        { ...EL_MONTANISTA_ORG, hasLogo: false, logoVersion: null, rol: 'ADMIN', suspendido: false },
+      ],
+    }
+    await setAuth(page, userConDosClubes)
+    // Borrador dejado en El Montañista, con clave propia del club (Ruling de
+    // aislamiento de 4a — ver lib/storage.ts draftKey). "Cambiar de club" es
+    // una navegación completa (window.location.assign), así que el árbol de
+    // React se remonta contra /pamir sin arrastrar nada en memoria; lo único
+    // que podría filtrarse sería la clave de localStorage, y esa ya vive
+    // aislada por slug.
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'pamir_draft:el-montanista',
+        JSON.stringify({ nombreActividad: 'Borrador de El Montañista' }),
+      )
+    })
+    await mockMe(page, userConDosClubes)
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+
+    await page.goto('/el-montanista')
+    await expect(page.getByText('Mis Salidas')).toBeVisible()
+
+    // Control: en el club DUEÑO del borrador, el wizard sí lo ofrece — esto
+    // prueba que el borrador de verdad existe (no que "Continuar borrador"
+    // está ausente en todos lados por alguna otra razón, p.ej. un texto que
+    // cambió). Sin este control, el assert de ausencia de más abajo sería
+    // vacuamente cierto incluso si el aislamiento por club estuviera roto.
+    await page.getByRole('button', { name: /Formulario de Salida/i }).click()
+    await expect(page.getByRole('button', { name: 'Cancelar y volver' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Continuar borrador' })).toBeVisible()
+    await page.getByRole('button', { name: 'Cancelar y volver' }).click()
+
+    await page.getByRole('button', { name: 'Cambiar de club' }).click()
+    await page.getByRole('link', { name: PAMIR_ORG.name }).click()
+    await expect(page).toHaveURL(/\/pamir$/)
+
+    await page.getByRole('button', { name: /Formulario de Salida/i }).click()
+    // El wizard SÍ montó en el club nuevo (no un click que se perdió contra
+    // una pantalla vacía) — recién sobre esa base tiene sentido afirmar que
+    // el banner del borrador ajeno está ausente.
+    await expect(page.getByRole('button', { name: 'Cancelar y volver' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Continuar borrador' })).toHaveCount(0)
+
+    // El borrador de El Montañista sigue ahí (no se perdió ni se migró) —
+    // simplemente no es visible desde el club nuevo.
+    expect(await page.evaluate(() => localStorage.getItem('pamir_draft:el-montanista'))).not.toBeNull()
+    expect(await page.evaluate(() => localStorage.getItem('pamir_draft:pamir'))).toBeNull()
+  })
+})

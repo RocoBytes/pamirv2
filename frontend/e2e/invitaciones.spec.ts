@@ -9,6 +9,7 @@ import {
   MOCK_ADMIN,
   MOCK_LIDER,
   PAMIR_ORG,
+  EL_MONTANISTA_ORG,
 } from './helpers'
 
 function mockConsultarInvitacion(status: number, json: unknown) {
@@ -27,6 +28,7 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
         rolLabel: 'Socio',
         invitadoPor: 'Admin Seguridad',
         organization: PAMIR_ORG,
+        cuentaExistente: false,
       }),
     )
     await page.route('**/api/auth/invitaciones/aceptar', (route) => {
@@ -91,6 +93,7 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
         rolLabel: 'Socio',
         invitadoPor: 'Admin Seguridad',
         organization: PAMIR_ORG,
+        cuentaExistente: false,
       }),
     )
     let aceptarLlamado = false
@@ -108,6 +111,108 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
     await page.getByRole('button', { name: 'Crear cuenta' }).click()
 
     await expect(page.getByText('Las contraseñas no coinciden')).toBeVisible()
+    expect(aceptarLlamado).toBe(false)
+  })
+
+  test('cuenta existente: pide solo la contraseña, se une al club y aterriza en /<slug> del club nuevo (no del club primario)', async ({ page }) => {
+    await page.route(
+      '**/api/auth/invitaciones/consultar',
+      mockConsultarInvitacion(200, {
+        email: 'existente@example.com',
+        rol: 'SOCIO',
+        rolLabel: 'Socio',
+        invitadoPor: 'Admin Montañista',
+        organization: EL_MONTANISTA_ORG,
+        cuentaExistente: true,
+      }),
+    )
+    await page.route('**/api/auth/invitaciones/aceptar', (route) => {
+      void route.fulfill({
+        status: 201,
+        json: { message: 'Te uniste al club. Ya puedes iniciar sesión.', email: 'existente@example.com' },
+      })
+    })
+    await page.route('**/api/auth/login', (route) => {
+      void route.fulfill({
+        status: 200,
+        // El login SIEMPRE devuelve el club PRIMARIO de la cuenta (Pamir en
+        // este fixture) — nunca el club recién unido (Ruling 1 del plan de
+        // esta PR): esto prueba que la pantalla NO confía en este valor para
+        // decidir a dónde navegar.
+        json: {
+          user: { id: 'user-existente-001', email: 'existente@example.com', name: 'Existente', rol: 'SOCIO', gestorCategorias: [], organization: PAMIR_ORG, clubes: [] },
+          token: 'mock-jwt-existente',
+        },
+      })
+    })
+
+    await page.goto('/el-montanista#invite=tokExistente')
+
+    await expect(page.getByText('Ya tienes una cuenta RIALA')).toBeVisible()
+    await expect(page.getByLabel('Nombre completo')).toHaveCount(0)
+    await expect(page.getByRole('textbox', { name: 'Confirmar contraseña', exact: true })).toHaveCount(0)
+
+    await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('miClaveDeSiempre')
+    await page.getByRole('button', { name: 'Iniciar sesión y unirme' }).click()
+
+    await expect(page).toHaveURL(/\/el-montanista$/)
+  })
+
+  test('cuenta existente: contraseña incorrecta muestra el error del backend sin crear nada', async ({ page }) => {
+    await page.route(
+      '**/api/auth/invitaciones/consultar',
+      mockConsultarInvitacion(200, {
+        email: 'existente@example.com',
+        rol: 'SOCIO',
+        rolLabel: 'Socio',
+        invitadoPor: 'Admin Montañista',
+        organization: EL_MONTANISTA_ORG,
+        cuentaExistente: true,
+      }),
+    )
+    await page.route('**/api/auth/invitaciones/aceptar', (route) => {
+      void route.fulfill({
+        status: 401,
+        json: { error: 'Ya tienes una cuenta con este correo. Verifica tu contraseña e inténtalo de nuevo.' },
+      })
+    })
+
+    await page.goto('/el-montanista#invite=tokExistente')
+    await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('claveIncorrecta')
+    await page.getByRole('button', { name: 'Iniciar sesión y unirme' }).click()
+
+    await expect(page.getByText('Ya tienes una cuenta con este correo. Verifica tu contraseña e inténtalo de nuevo.')).toBeVisible()
+  })
+
+  test('cuenta existente: sin club resuelto en la invitación, no permite aceptar y muestra error neutral', async ({ page }) => {
+    await page.route(
+      '**/api/auth/invitaciones/consultar',
+      mockConsultarInvitacion(200, {
+        email: 'existente@example.com',
+        rol: 'SOCIO',
+        rolLabel: 'Socio',
+        invitadoPor: 'Admin Montañista',
+        organization: null,
+        cuentaExistente: true,
+      }),
+    )
+    let aceptarLlamado = false
+    await page.route('**/api/auth/invitaciones/aceptar', (route) => {
+      aceptarLlamado = true
+      void route.fulfill({ status: 201, json: { message: 'ok', email: 'existente@example.com' } })
+    })
+
+    await page.goto('/el-montanista#invite=tokSinClub')
+
+    await expect(page.getByText('No pudimos identificar el club de esta invitación. Pide una nueva invitación.')).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Contraseña', exact: true })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Iniciar sesión y unirme' })).toBeDisabled()
+
+    // Defensa en profundidad: aunque algo dispare un submit del form sin
+    // pasar por los controles deshabilitados, el handler jamás debe llamar a
+    // aceptarInvitacion sin saber a qué club aterrizar (Ruling 1).
+    await page.evaluate(() => document.querySelector('form')?.requestSubmit())
+
     expect(aceptarLlamado).toBe(false)
   })
 })

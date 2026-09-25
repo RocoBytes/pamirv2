@@ -61,6 +61,13 @@ declaración jurada vigente; recién después emite la invitación. Si el correo
 falla, **el club queda creado igual** y el comando imprime el
 `npm run tenant:invite` para reintentar solo la invitación.
 
+Si el correo de `--admin-email` ya tiene una cuenta RIALA (de otro club), la
+invitación de plataforma igual se emite: la persona la acepta iniciando
+sesión con su contraseña de siempre en vez de crear una cuenta nueva, y se le
+agrega la membresía `ADMIN` de este club sin tocar su perfil compartido — ver
+`docs/superpowers/specs/2026-09-23-multi-club-membership-design.md` y el plan
+`docs/superpowers/plans/2026-09-24-multi-club-03-joining.md` (Ruling 7).
+
 `FRONTEND_URL` decide el dominio del enlace: si es `localhost`, el CLI lo
 advierte y ese link solo sirve en la máquina local.
 

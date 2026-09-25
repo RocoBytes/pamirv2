@@ -211,6 +211,12 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
     canSeeDocumentos: esSocioClubActual || isAdmin,
     onLogout: logout,
     onNavigate: (key) => setRoute(key === 'inicio' ? 'dashboard' : key),
+    // Solo ofrece "Cambiar de club" con MÁS de una membresía — spec Design §3
+    // ("solo para gente con más de una membresía"). Navega a la raíz sin
+    // slug: AppContent (bloque de Mis clubes agregado en 4a, arriba) ya
+    // decide ahí mismo mostrar el picker en vez de redirigir, porque
+    // clubes.length > 1.
+    onCambiarClub: (user?.clubes?.length ?? 0) > 1 ? () => window.location.assign('/') : undefined,
   }
 
   // document.title sigue al club de la sesión; sin sesión (o mientras /me no

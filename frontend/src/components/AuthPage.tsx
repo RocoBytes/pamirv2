@@ -66,6 +66,10 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
   const [inviteConfirmPassword, setInviteConfirmPassword] = useState('')
   const [inviteSubmitting, setInviteSubmitting] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
+  // Rama "cuenta existente" (inviteInfo.cuentaExistente): un solo campo de
+  // contraseña, sin nombre ni confirmación — ver Global Constraints del plan
+  // de esta PR.
+  const [existingPassword, setExistingPassword] = useState('')
 
   useEffect(() => {
     if (!inviteToken) return
@@ -135,7 +139,8 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
 
   function clearError() { setError(null) }
 
-  async function handleAcceptInvite(e: React.FormEvent) {
+  // Rama "cuenta nueva": comportamiento de siempre.
+  async function handleAcceptInviteNueva(e: React.FormEvent) {
     e.preventDefault()
     setInviteError(null)
 
@@ -154,13 +159,58 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
 
     setInviteSubmitting(true)
     try {
-      const { email: aceptadoEmail } = await aceptarInvitacion(inviteToken!, inviteName.trim(), invitePassword)
+      const { message, email: aceptadoEmail } = await aceptarInvitacion(inviteToken!, inviteName.trim(), invitePassword)
       try {
         // Cuenta recién creada, sin checkbox de "recordar" en esta vista:
         // se recuerda por defecto, igual que el comportamiento de siempre.
+        // El club primario de una cuenta NUEVA ES el club de la invitación
+        // (se crea así), así que el login normal ya aterriza en el lugar
+        // correcto — a diferencia de la rama de cuenta existente, ver
+        // handleAcceptInviteExistente y Ruling 1 del plan de esta PR.
         await onLogin(aceptadoEmail, invitePassword, true)
       } catch {
-        setLoginNote('Tu cuenta fue creada. Inicia sesión con tu nueva contraseña.')
+        setLoginNote(message)
+        setView('login')
+      }
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : 'No se pudo aceptar la invitación')
+    } finally {
+      setInviteSubmitting(false)
+    }
+  }
+
+  // Rama "cuenta existente" (Ruling 1, 2 y 3 del plan de esta PR): un solo
+  // campo de contraseña, sin Authorization (nunca hay sesión abierta acá —
+  // ver Ruling 2), y tras el login SIEMPRE navega explícitamente al club de
+  // ESTA invitación, nunca al que devuelva el login (que es el club PRIMARIO
+  // de la cuenta, no el recién unido).
+  async function handleAcceptInviteExistente(e: React.FormEvent) {
+    e.preventDefault()
+    setInviteError(null)
+
+    // Fix round 1 (Ruling 1): sin el slug de ESTA invitación no hay adónde
+    // redirigir tras el login (que siempre resuelve el club PRIMARIO de la
+    // cuenta, nunca el recién unido) — la vista ya deja el formulario
+    // deshabilitado y muestra el error de forma permanente más abajo cuando
+    // esto pasa; este guard es la última línea de defensa para que JAMÁS se
+    // llegue a aceptar la invitación sin saber a qué club aterrizar.
+    const targetSlug = inviteInfo?.organization?.slug
+    if (!targetSlug) return
+
+    if (!existingPassword) {
+      setInviteError('La contraseña es requerida')
+      return
+    }
+
+    setInviteSubmitting(true)
+    try {
+      const { message, email: aceptadoEmail } = await aceptarInvitacion(inviteToken!, '', existingPassword)
+      try {
+        await onLogin(aceptadoEmail, existingPassword, true)
+        window.location.assign(`/${targetSlug}`)
+        return
+      } catch {
+        setLoginNote(message)
         setView('login')
       }
     } catch (err) {
@@ -332,7 +382,62 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                   </div>
                 )}
 
-                {!inviteLoading && !inviteLoadError && inviteInfo && (
+                {!inviteLoading && !inviteLoadError && inviteInfo && inviteInfo.cuentaExistente && (
+                  <>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2 text-secondary">
+                        <ShieldCheck size={18} />
+                        <h1 className="text-xl font-bold text-slate-800">Ya tienes una cuenta RIALA</h1>
+                      </div>
+                      <p className="text-on-surface-variant text-sm">
+                        <span className="font-semibold text-slate-700">{inviteInfo.invitadoPor}</span> te invitó a
+                        unirse a <span className="font-semibold text-slate-700">{clubDisplayName(inviteInfo.organization)}</span>{' '}
+                        como <span className="font-semibold text-slate-700">{inviteInfo.rolLabel}</span>. Inicia sesión
+                        con tu correo y tu contraseña de siempre para unirte.
+                      </p>
+                    </div>
+
+                    <form onSubmit={(e) => void handleAcceptInviteExistente(e)} className="flex flex-col gap-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-semibold text-primary">Email</span>
+                        <p
+                          className="w-full rounded-xl border border-secondary/40 bg-surface-container-low px-3 py-2 text-sm text-on-surface-variant"
+                          aria-label="Email de la invitación"
+                        >
+                          {inviteInfo.email}
+                        </p>
+                      </div>
+
+                      {/* Fix round 1 (Ruling 1): sin el slug del club de ESTA
+                          invitación no hay adónde redirigir tras el login —
+                          el formulario queda deshabilitado de forma
+                          permanente, no solo tras un intento de envío. */}
+                      {!inviteInfo.organization?.slug && (
+                        <p className="text-xs text-error" role="alert">
+                          No pudimos identificar el club de esta invitación. Pide una nueva invitación.
+                        </p>
+                      )}
+
+                      <PasswordInput
+                        label="Contraseña"
+                        value={existingPassword}
+                        onChange={(e) => { setExistingPassword(e.target.value); setInviteError(null) }}
+                        required
+                        autoComplete="current-password"
+                        leftIcon={<Lock size={16} />}
+                        disabled={!inviteInfo.organization?.slug}
+                      />
+
+                      {inviteError && <p className="text-xs text-error" role="alert">{inviteError}</p>}
+
+                      <Button type="submit" fullWidth disabled={inviteSubmitting || !inviteInfo.organization?.slug}>
+                        {inviteSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Iniciar sesión y unirme'}
+                      </Button>
+                    </form>
+                  </>
+                )}
+
+                {!inviteLoading && !inviteLoadError && inviteInfo && !inviteInfo.cuentaExistente && (
                   <>
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2 text-secondary">
@@ -346,7 +451,7 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                       </p>
                     </div>
 
-                    <form onSubmit={(e) => void handleAcceptInvite(e)} className="flex flex-col gap-4">
+                    <form onSubmit={(e) => void handleAcceptInviteNueva(e)} className="flex flex-col gap-4">
                       <div className="flex flex-col gap-1">
                         <span className="text-sm font-semibold text-primary">Email</span>
                         <p

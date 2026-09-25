@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Loader2, AlertCircle, CheckCircle2, QrCode as QrCodeIcon, Clock, UserPlus, AtSign, Lock } from 'lucide-react'
 import { consultarCodigoQr, solicitarInvitacionQr, registrarConQrDirecto, ApiError } from '../lib/api'
 import type { OrganizationBrand } from '../types/salida'
@@ -18,8 +18,12 @@ type ViewState =
   | { kind: 'confirmation'; organization: OrganizationBrand; message: string }
   // Modo DIRECTO: registro en el acto, sin correo — ver registrarConQrDirecto.
   | { kind: 'form-directo'; organization: OrganizationBrand }
-  | { kind: 'conflicto-directo'; organization: OrganizationBrand }
   | { kind: 'creado-sin-sesion'; organization: OrganizationBrand }
+  // Rama "ya tengo cuenta" con auto-login fallido: a diferencia de
+  // creado-sin-sesion, acá NO se creó ninguna cuenta ni cambió la
+  // contraseña — solo se sumó la membresía al club. Copy distinto a
+  // propósito (ver Fix round 1 de esta PR).
+  | { kind: 'unido-sin-sesion'; organization: OrganizationBrand }
   | { kind: 'rate-limited'; organization: OrganizationBrand | null }
 
 interface QrInvitacionPageProps {
@@ -85,11 +89,42 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  // Modo DIRECTO
+  // Modo DIRECTO — crear cuenta (comportamiento de siempre)
   const [directoName, setDirectoName] = useState('')
   const [directoEmail, setDirectoEmail] = useState('')
   const [directoPassword, setDirectoPassword] = useState('')
   const [directoConfirmPassword, setDirectoConfirmPassword] = useState('')
+
+  // Modo DIRECTO — "ya tengo cuenta" (Global Constraints del plan de esta
+  // PR: nunca se consulta al backend si el email escrito tiene cuenta; es
+  // una elección de la persona, no una respuesta del servidor).
+  const [directoModo, setDirectoModo] = useState<'crear' | 'iniciar-sesion'>('crear')
+  const [signInEmail, setSignInEmail] = useState('')
+  const [signInPassword, setSignInPassword] = useState('')
+
+  // Primer campo de cada formulario del modo DIRECTO, para devolverle el
+  // foco al alternar entre "crear cuenta" e "iniciar sesión" (ver el efecto
+  // más abajo).
+  const crearNombreInputRef = useRef<HTMLInputElement>(null)
+  const signInEmailInputRef = useRef<HTMLInputElement>(null)
+  const isFirstDirectoModoRenderRef = useRef(true)
+
+  // Al alternar de modo: mueve el foco al primer campo del formulario que
+  // aparece — sin esto queda en el botón que se acaba de ocultar/reemplazar.
+  // Se omite en el montaje inicial (mismo patrón que RegistroIntegrante.tsx
+  // con isFirstRenderRef): la página ya abre en modo "crear" sin que nadie
+  // haya alternado nada, y no hace falta robarle el foco a esa carga inicial.
+  useEffect(() => {
+    if (isFirstDirectoModoRenderRef.current) {
+      isFirstDirectoModoRenderRef.current = false
+      return
+    }
+    if (directoModo === 'crear') {
+      crearNombreInputRef.current?.focus()
+    } else {
+      signInEmailInputRef.current?.focus()
+    }
+  }, [directoModo])
 
   useEffect(() => {
     let cancelled = false
@@ -145,6 +180,9 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
     }
   }
 
+  // Rama "crear cuenta" — comportamiento de siempre. El club PRIMARIO de una
+  // cuenta NUEVA ES el club del QR (se crea así), así que el login normal ya
+  // aterriza en el lugar correcto — a diferencia de handleSubmitDirectoIniciarSesion.
   async function handleSubmitDirecto(e: FormEvent) {
     e.preventDefault()
     if (state.kind !== 'form-directo') return
@@ -175,24 +213,67 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
         setState({ kind: 'rate-limited', organization })
         return
       }
-      if (err instanceof ApiError && err.status === 409) {
-        setState({ kind: 'conflicto-directo', organization })
-        return
-      }
       setSubmitError(err instanceof Error ? err.message : 'No se pudo completar el registro')
       return
     }
 
-    // Cuenta creada: inicia sesión con las mismas credenciales, igual que el
-    // flujo de aceptar una invitación (AuthPage.handleAcceptInvite). Este
-    // componente puede desmontarse apenas onIrALaApp() actualiza el estado
-    // del padre, así que ningún setState corre después de eso.
     try {
       await onLogin(emailValor, directoPassword, true)
       onIrALaApp()
     } catch {
       setSubmitting(false)
       setState({ kind: 'creado-sin-sesion', organization })
+    }
+  }
+
+  // Rama "ya tengo cuenta" (Ruling 1 y 2 del plan de esta PR): un solo campo
+  // de contraseña, sin nombre ni confirmación, sin Authorization (nunca hay
+  // sesión abierta acá). registrarConQrDirecto ya trata la contraseña
+  // enviada como prueba de titularidad de una cuenta existente (backend PR
+  // 3) — este handler solo cambia qué campos pide y a dónde navega después.
+  async function handleSubmitDirectoIniciarSesion(e: FormEvent) {
+    e.preventDefault()
+    if (state.kind !== 'form-directo') return
+    setSubmitError(null)
+
+    const emailValor = signInEmail.trim()
+    if (!emailValor) {
+      setSubmitError('El email es obligatorio')
+      return
+    }
+    if (!signInPassword) {
+      setSubmitError('La contraseña es requerida')
+      return
+    }
+
+    const organization = state.organization
+
+    setSubmitting(true)
+    try {
+      await registrarConQrDirecto(token, { name: '', email: emailValor, password: signInPassword })
+    } catch (err) {
+      setSubmitting(false)
+      if (err instanceof ApiError && err.status === 429) {
+        setState({ kind: 'rate-limited', organization })
+        return
+      }
+      setSubmitError(err instanceof Error ? err.message : 'No se pudo completar el registro')
+      return
+    }
+
+    try {
+      await onLogin(emailValor, signInPassword, true)
+      // A diferencia de la rama "crear cuenta": el club PRIMARIO de esta
+      // cuenta puede ser OTRO club (se estaba uniendo a un SEGUNDO club) —
+      // navega explícitamente al club del QR, nunca al que devuelva el
+      // login (ver Ruling 1 del plan de esta PR).
+      window.location.assign(`/${organization.slug}`)
+    } catch {
+      setSubmitting(false)
+      // Distinto de la rama "crear cuenta": acá no se creó ninguna cuenta ni
+      // cambió la contraseña, solo se sumó la membresía — creado-sin-sesion
+      // diría "Cuenta creada", que sería falso.
+      setState({ kind: 'unido-sin-sesion', organization })
     }
   }
 
@@ -263,13 +344,13 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
     )
   }
 
-  if (state.kind === 'conflicto-directo') {
+  if (state.kind === 'creado-sin-sesion') {
     return (
       <Shell org={state.organization}>
         <CenteredMessage
-          icon={<AlertCircle size={32} className="text-error" />}
-          title="Ya existe una cuenta con ese correo"
-          text="Inicia sesión con tu contraseña habitual."
+          icon={<CheckCircle2 size={36} className="text-emerald-600" />}
+          title="¡Cuenta creada!"
+          text="No pudimos iniciar tu sesión automáticamente. Inicia sesión con tu nueva contraseña."
         />
         <div className="flex justify-center">
           <Button onClick={onIrALaApp}>Iniciar sesión</Button>
@@ -278,13 +359,13 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
     )
   }
 
-  if (state.kind === 'creado-sin-sesion') {
+  if (state.kind === 'unido-sin-sesion') {
     return (
       <Shell org={state.organization}>
         <CenteredMessage
           icon={<CheckCircle2 size={36} className="text-emerald-600" />}
-          title="¡Cuenta creada!"
-          text="No pudimos iniciar tu sesión automáticamente. Inicia sesión con tu nueva contraseña."
+          title="¡Listo!"
+          text={`Ya eres parte de ${clubDisplayName(state.organization)}. Inicia sesión con tu contraseña de RIALA para entrar.`}
         />
         <div className="flex justify-center">
           <Button onClick={onIrALaApp}>Iniciar sesión</Button>
@@ -303,81 +384,139 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
             <UserPlus size={14} />
             Registro directo
           </div>
-          <h1 className="text-xl font-bold text-slate-900">Únete a {clubDisplayName(state.organization)}</h1>
+          <h1 className="text-xl font-bold text-slate-900">
+            {directoModo === 'crear' ? `Únete a ${clubDisplayName(state.organization)}` : `Inicia sesión para unirte a ${clubDisplayName(state.organization)}`}
+          </h1>
           <p className="text-sm text-on-surface-variant mt-1">
-            Completa tus datos y quedarás adentro al instante — este código sirve una sola vez.
+            {directoModo === 'crear'
+              ? 'Completa tus datos y quedarás adentro al instante — este código sirve una sola vez.'
+              : 'Ya tienes una cuenta RIALA: inicia sesión con tu correo y tu contraseña de siempre para unirte a este club.'}
           </p>
         </div>
 
-        <form
-          onSubmit={(e) => void handleSubmitDirecto(e)}
-          className="flex flex-col gap-4 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 sm:p-6"
-        >
-          <Input
-            type="text"
-            label="Nombre completo"
-            value={directoName}
-            onChange={(e) => {
-              setDirectoName(e.target.value)
-              setSubmitError(null)
-            }}
-            required
-            autoComplete="name"
-            disabled={submitting}
-          />
+        {directoModo === 'crear' ? (
+          <form
+            onSubmit={(e) => void handleSubmitDirecto(e)}
+            className="flex flex-col gap-4 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 sm:p-6"
+          >
+            <Input
+              ref={crearNombreInputRef}
+              type="text"
+              label="Nombre completo"
+              value={directoName}
+              onChange={(e) => { setDirectoName(e.target.value); setSubmitError(null) }}
+              required
+              autoComplete="name"
+              disabled={submitting}
+            />
 
-          <Input
-            type="email"
-            label="Correo electrónico"
-            value={directoEmail}
-            onChange={(e) => {
-              setDirectoEmail(e.target.value)
-              setSubmitError(null)
-            }}
-            placeholder="persona@ejemplo.com"
-            required
-            autoComplete="email"
-            disabled={submitting}
-            leftIcon={<AtSign size={16} />}
-          />
+            <Input
+              type="email"
+              label="Correo electrónico"
+              value={directoEmail}
+              onChange={(e) => { setDirectoEmail(e.target.value); setSubmitError(null) }}
+              placeholder="persona@ejemplo.com"
+              required
+              autoComplete="email"
+              disabled={submitting}
+              leftIcon={<AtSign size={16} />}
+            />
 
-          <PasswordInput
-            label="Contraseña"
-            hint="Mínimo 8 caracteres"
-            value={directoPassword}
-            onChange={(e) => {
-              setDirectoPassword(e.target.value)
-              setSubmitError(null)
-            }}
-            required
-            autoComplete="new-password"
-            disabled={submitting}
-            leftIcon={<Lock size={16} />}
-          />
+            <PasswordInput
+              label="Contraseña"
+              hint="Mínimo 8 caracteres"
+              value={directoPassword}
+              onChange={(e) => { setDirectoPassword(e.target.value); setSubmitError(null) }}
+              required
+              autoComplete="new-password"
+              disabled={submitting}
+              leftIcon={<Lock size={16} />}
+            />
 
-          <PasswordInput
-            label="Confirmar contraseña"
-            value={directoConfirmPassword}
-            onChange={(e) => {
-              setDirectoConfirmPassword(e.target.value)
-              setSubmitError(null)
-            }}
-            required
-            autoComplete="new-password"
-            disabled={submitting}
-            leftIcon={<Lock size={16} />}
-          />
+            <PasswordInput
+              label="Confirmar contraseña"
+              value={directoConfirmPassword}
+              onChange={(e) => { setDirectoConfirmPassword(e.target.value); setSubmitError(null) }}
+              required
+              autoComplete="new-password"
+              disabled={submitting}
+              leftIcon={<Lock size={16} />}
+            />
 
-          {submitError && (
-            <p className="text-xs text-error" role="alert">
-              {submitError}
-            </p>
-          )}
+            {submitError && <p className="text-xs text-error" role="alert">{submitError}</p>}
 
-          <Button type="submit" loading={submitting} fullWidth>
-            {submitting ? 'Creando cuenta...' : 'Unirme ahora'}
-          </Button>
-        </form>
+            <Button type="submit" loading={submitting} fullWidth>
+              {submitting ? 'Creando cuenta...' : 'Unirme ahora'}
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => {
+                // Deja el formulario de "crear cuenta" limpio antes de
+                // esconderlo: una contraseña tipeada acá no debe reaparecer
+                // si la persona alterna de vuelta (ver Fix round 1 de esta PR).
+                setDirectoName('')
+                setDirectoEmail('')
+                setDirectoPassword('')
+                setDirectoConfirmPassword('')
+                setSubmitError(null)
+                setDirectoModo('iniciar-sesion')
+              }}
+              className="text-sm text-secondary text-center hover:underline underline-offset-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              ¿Ya tienes cuenta RIALA? Inicia sesión para unirte a {clubDisplayName(state.organization)}
+            </button>
+          </form>
+        ) : (
+          <form
+            onSubmit={(e) => void handleSubmitDirectoIniciarSesion(e)}
+            className="flex flex-col gap-4 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 sm:p-6"
+          >
+            <Input
+              ref={signInEmailInputRef}
+              type="email"
+              label="Correo electrónico"
+              value={signInEmail}
+              onChange={(e) => { setSignInEmail(e.target.value); setSubmitError(null) }}
+              placeholder="persona@ejemplo.com"
+              required
+              autoComplete="email"
+              disabled={submitting}
+              leftIcon={<AtSign size={16} />}
+            />
+
+            <PasswordInput
+              label="Contraseña"
+              value={signInPassword}
+              onChange={(e) => { setSignInPassword(e.target.value); setSubmitError(null) }}
+              required
+              autoComplete="current-password"
+              disabled={submitting}
+              leftIcon={<Lock size={16} />}
+            />
+
+            {submitError && <p className="text-xs text-error" role="alert">{submitError}</p>}
+
+            <Button type="submit" loading={submitting} fullWidth>
+              {submitting ? 'Iniciando sesión...' : 'Iniciar sesión y unirme'}
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => {
+                // Simétrico al toggle de arriba: limpia el formulario de
+                // "ya tengo cuenta" antes de esconderlo.
+                setSignInEmail('')
+                setSignInPassword('')
+                setSubmitError(null)
+                setDirectoModo('crear')
+              }}
+              className="text-sm text-secondary text-center hover:underline underline-offset-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              ¿Aún no tienes cuenta? Crea una
+            </button>
+          </form>
+        )}
       </Shell>
     )
   }

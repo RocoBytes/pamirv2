@@ -19,6 +19,12 @@ export interface ShellContext {
   canSeeDocumentos: boolean
   onLogout: () => void
   onNavigate: (key: NavKey) => void
+  // undefined = la cuenta tiene una sola membresía (o clubes todavía no se
+  // conoce) — AppHeader no muestra el botón. Navega con una recarga completa
+  // a propósito (window.location.assign), igual que cualquier cambio de club:
+  // reinicia el árbol de React contra el nuevo club en vez de intentar
+  // reconciliar el estado de la sesión anterior en el cliente.
+  onCambiarClub?: () => void
 }
 
 interface AppShellProps {
@@ -70,6 +76,7 @@ export function AppShell({
         onNavigate={shell.onNavigate}
         canSeeDocumentos={shell.canSeeDocumentos}
         onLogout={shell.onLogout}
+        onCambiarClub={shell.onCambiarClub}
         isDesktop={isDesktop}
         showNav={showNav}
         title={title}
