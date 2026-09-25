@@ -4,8 +4,8 @@ import { useAuth } from './hooks/useAuth'
 import { OrganizationProvider } from './contexts/OrganizationContext'
 import { NavPreferencesProvider } from './contexts/NavPreferencesContext'
 import { documentTitle, esSocioDelClub } from './lib/club-brand'
-import { clubSlugFromPath, redirectLegacyClubQueryParam, puedeAbrirClub } from './lib/club-path'
-import { migrateUnkeyedDraftToCurrentClub } from './lib/storage'
+import { clubSlugFromPath, redirectLegacyClubQueryParam, redirectSignedOutClubPath, puedeAbrirClub } from './lib/club-path'
+import { migrateUnkeyedDraftToCurrentClub, loadAuth } from './lib/storage'
 import { AuthPage } from './components/AuthPage'
 import { Dashboard } from './components/Dashboard'
 import { WizardLayout } from './components/wizard/WizardLayout'
@@ -49,6 +49,13 @@ const Spinner = () => (
 // ?club=<slug> a /<slug> (ver Global Constraints del plan de esta PR) antes
 // de que cualquier componente lea window.location.
 redirectLegacyClubQueryParam()
+
+// Decisión del 2026-09-25 (login único): sin sesión guardada, CUALQUIER path
+// que no sea la raíz (y sin token de invitación/QR pendiente en el
+// fragmento) vuelve a / — login único, siempre con marca RIALA. hasSession se
+// resuelve acá (loadAuth(), síncrono, sin red) para que la función se quede
+// pura y testeable — ver lib/club-path.ts.
+redirectSignedOutClubPath({ hasSession: !!loadAuth()?.token })
 
 // Recibe la sesión ya resuelta por App() en vez de llamar useAuth() de nuevo
 // (crearía un segundo estado independiente): así App() puede envolver todo
@@ -101,25 +108,28 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
 
   const pathSlug = useMemo(() => clubSlugFromPath(), [])
   const clubes = user?.clubes ?? null
-  // Ruling 2: con 2+ membresías YA CONOCIDAS y sin slug en el path,
-  // authHeaders() (ver lib/api.ts) no manda X-Club — pedir la ficha de
-  // integrante ahí sería un 400 "Selecciona un club" garantizado (silencioso,
-  // pero real e inútil). clubes desconocido (undefined/null — incluida una
-  // sesión guardada de antes de esta fase) NUNCA cuenta como "2+": mismo
-  // criterio que el propio efecto de montaje de useAuth.ts para su
-  // fetchMe() (`(clubes?.length ?? 0) > 1`), para no dejar de pedir la
-  // ficha en el caso de siempre. Se usa tanto para gatear el fetch como
-  // para no bloquear el Spinner esperando una respuesta que nunca sale
-  // (Mis Clubes no la necesita).
-  const debePedirIntegrante = !!pathSlug || (clubes?.length ?? 0) <= 1
+  // Ruling 2 (ampliada por la Decisión del 2026-09-25: Mis clubes se muestra
+  // SIEMPRE en la raíz sin slug cuando `clubes` es un array CONOCIDO, sea
+  // cual sea su longitud — ya no hay redirect automático de una sola
+  // membresía): sin slug en el path Y con `clubes` conocido, authHeaders()
+  // (ver lib/api.ts) no manda X-Club — pedir la ficha de integrante ahí
+  // nunca hace falta, porque esa pantalla es Mis Clubes, no el dashboard de
+  // ningún club. `!clubes` (undefined/null: Ruling 3, "no se sabe todavía")
+  // sigue pidiendo la ficha en la raíz — compatibilidad con una sesión sin
+  // `clubes` en la respuesta del servidor, donde el backend igual resuelve
+  // sin X-Club por tener una sola membresía. Se usa tanto para gatear el
+  // fetch como para no bloquear el Spinner esperando una respuesta que nunca
+  // sale.
+  const debePedirIntegrante = !!pathSlug || !clubes
 
   // Migración de una sola vez del draft sin club — antes de que cualquier
   // pantalla del wizard pueda leerlo. Migra a la clave que WizardLayout
   // (único lector/escritor del draft) realmente usa: clubSlugFromPath(), NO
-  // user.organization.slug — son distintos hasta que corre el redirect
-  // transparente de más abajo (bare domain con una sola membresía todavía
-  // sin slug en el path), y migrar contra el slug de la SESIÓN ahí borraría
-  // pamir_draft antes de que exista ningún lector con ese mismo path.
+  // user.organization.slug — son distintos en la raíz sin slug (Decisión del
+  // 2026-09-25: ahí SIEMPRE se muestra Mis clubes, sin importar el número de
+  // membresías, nunca un salto automático a /<slug>), y migrar contra el
+  // slug de la SESIÓN ahí borraría pamir_draft antes de que exista ningún
+  // lector con ese mismo path.
   // Gateado por puedeAbrirClub, no solo por pathSlug: un /<slug> con un
   // typo, de un club ajeno, o de un club suspendido NUNCA mueve el draft
   // ahí — lo dejaría escondido en una clave que nadie puede abrir. Y
@@ -174,30 +184,10 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
     }
   }
 
-  // Redirección transparente: una sola membresía y sin slug en el path →
-  // /<slug>, preservando el resto de la URL (query/hash ya se consumieron
-  // arriba en los efectos de inviteToken/qrToken, así que no hace falta
-  // reenviarlos acá). No se dispara mientras clubes todavía no se conoce
-  // (Ruling 3: undefined es "no se sabe todavía", nunca "cero clubes"), ni
-  // mientras haya un token de invitación/QR pendiente en el fragmento: un
-  // signed-in de un solo club que abre un link legacy de OTRO club necesita
-  // ver el interstitial correspondiente antes que nada — un replace() acá
-  // tira la navegación entera (y con ella el estado en memoria del token)
-  // antes de que React llegue a pintarlo.
-  useEffect(() => {
-    if (!isAuthenticated || pathSlug || !clubes || inviteToken || qrToken) return
-    // Solo redirige a un slug que esta misma app reconoce como club en el
-    // path: si no, /<slug> volvería a verse como raíz y la redirección se
-    // repetiría para siempre (pasó con el club casa `riala`).
-    if (clubes.length === 1 && clubSlugFromPath(`/${clubes[0]!.slug}`) === clubes[0]!.slug) {
-      window.location.replace(`/${clubes[0]!.slug}`)
-    }
-  }, [isAuthenticated, pathSlug, clubes, inviteToken, qrToken])
-
   // Marca pública del club del path cuando la sesión NO puede entrar a él
-  // (clubAccessError): la única pantalla que necesita branding de un club
-  // ajeno a la sesión activa, resuelta vía el mismo fetchMarcaClub público
-  // que ya usa AuthPage.
+  // (clubAccessError): la única pantalla que sigue necesitando branding de un
+  // club ajeno a la sesión activa (login único ya no lo hace — Decisión del
+  // 2026-09-25), resuelta vía el fetchMarcaClub público.
   const [pathSlugOrg, setPathSlugOrg] = useState<OrganizationBrand | null>(null)
   useEffect(() => {
     if (!pathSlug || !clubAccessError) return
@@ -217,10 +207,10 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
     onLogout: logout,
     onNavigate: (key) => setRoute(key === 'inicio' ? 'dashboard' : key),
     // Solo ofrece "Cambiar de club" con MÁS de una membresía — spec Design §3
-    // ("solo para gente con más de una membresía"). Navega a la raíz sin
-    // slug: AppContent (bloque de Mis clubes agregado en 4a, arriba) ya
-    // decide ahí mismo mostrar el picker en vez de redirigir, porque
-    // clubes.length > 1.
+    // ("solo para gente con más de una membresía"): con una sola, mostraría
+    // el mismo picker con la misma única opción, así que no aporta nada.
+    // Navega a la raíz sin slug: la raíz SIEMPRE muestra Mis clubes ahora
+    // (Decisión del 2026-09-25), así que este link nunca es un callejón.
     onCambiarClub: (user?.clubes?.length ?? 0) > 1 ? () => window.location.assign('/') : undefined,
   }
 
@@ -355,32 +345,27 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   // path (no es socio, club suspendido, o el club no existe) — Tabla de
   // routing (Design §3). Se resuelve antes que cualquier ruta del dashboard.
   if (isAuthenticated && clubAccessError) {
-    // "Mis clubes" (ir a la raíz) es una salida real salvo en un caso: la
-    // cuenta tiene una única membresía cacheada y es justo esta — la raíz
-    // sin slug la redirige transparentemente de vuelta a /<slug> (el efecto
-    // de arriba), que vuelve a mostrar esta misma pantalla: un callejón sin
-    // salida. NO se condiciona a clubes[0].suspendido: clubAccessError
-    // implica que el /me de montaje para este path ya falló, así que
-    // `clubes` es el caché SIN VERIFICAR (pudo suspenderse o revocarse del
-    // lado del servidor después del login) — el suspendido cacheado podría
-    // seguir en false y el loop sería igual de real (Ruling del round 2 de
-    // review de esta PR). Ahí no se ofrece el botón; Cerrar sesión pasa a
-    // ser la única (y primaria) acción.
-    const misClubesEsUnaSalida = !(clubes && clubes.length === 1 && clubes[0]!.slug === pathSlug)
+    // "Mis clubes" (ir a la raíz) es SIEMPRE una salida real desde la
+    // Decisión del 2026-09-25: la raíz sin slug ya no redirige
+    // transparentemente de vuelta a /<slug> con una sola membresía (ese
+    // efecto se eliminó), así que nunca es un callejón sin salida — se
+    // ofrece siempre, junto a Cerrar sesión.
     return (
       <ClubAccessErrorPage
         status={clubAccessError.status}
         message={clubAccessError.message}
         org={pathSlugOrg}
         onLogout={logout}
-        onMisClubes={misClubesEsUnaSalida ? () => window.location.assign('/') : undefined}
+        onMisClubes={() => window.location.assign('/')}
       />
     )
   }
 
-  // Raíz sin slug y varias membresías: nunca hay "el club actual" todavía
-  // (Ruling 2), así que se muestra el selector en vez de cualquier ruta.
-  if (isAuthenticated && !pathSlug && clubes && clubes.length > 1) {
+  // Raíz sin slug: nunca hay "el club actual" todavía (Ruling 2), así que se
+  // muestra siempre el selector "Mis clubes" en vez de cualquier ruta — sea
+  // cual sea el número de membresías (Decisión del 2026-09-25: ya no hay
+  // salto automático a /<slug> con una sola).
+  if (isAuthenticated && !pathSlug && clubes) {
     return <MisClubesPage clubes={clubes} onLogout={logout} />
   }
 

@@ -1,10 +1,13 @@
 // El primer segmento del path es el club (riala.cl/<slug>) — ver
 // docs/superpowers/specs/2026-09-23-multi-club-membership-design.md §3.
-// Separado de club-preferido.ts (que sigue gobernando SOLO la marca del login
-// en la raíz sin sesión, vía ?club= o el club recordado): este archivo
-// resuelve el club ACTIVO de la sesión, la fuente que api.ts usa para el
-// header X-Club y que App.tsx usa para decidir qué pantalla mostrar.
+// Separado de club-preferido.ts (ya no gobierna ninguna marca del login desde
+// la Decisión del 2026-09-25 — login único, siempre con marca RIALA — pero el
+// archivo se deja intacto: recordarClub() sigue escribiendo desde
+// storage.ts): este archivo resuelve el club ACTIVO de la sesión, la fuente
+// que api.ts usa para el header X-Club y que App.tsx usa para decidir qué
+// pantalla mostrar.
 import { SLUG_PATTERN } from './club-brand'
+import { parseInviteToken, parseQrToken } from './invite-token'
 
 // Rutas de nivel superior reservadas por el frontend multi-club — debe
 // coincidir exactamente con SLUGS_RESERVADOS en
@@ -88,6 +91,43 @@ export function redirectLegacyClubQueryParam(params: RedirectLegacyClubQueryPara
   } catch {
     // Sin window, o storage/URL bloqueados: la redirección de un link legacy
     // es solo una conveniencia, nunca debe romper el arranque de la app.
+  }
+}
+
+interface RedirectSignedOutClubPathParams {
+  pathname?: string
+  hash?: string
+  // Inyectado (en vez de leer localStorage/sessionStorage acá) para que este
+  // archivo siga sin depender de lib/storage.ts y quede testeable puro, igual
+  // que el resto de las funciones de este archivo — App.tsx es quien decide
+  // "hay sesión guardada" vía loadAuth() antes de llamar a esto.
+  hasSession?: boolean
+  replace?: (path: string) => void
+}
+
+// Decisión del 2026-09-25 (login único): SIN sesión guardada, riala.cl/<lo
+// que sea> — un slug válido, uno desconocido, o una ruta reservada, todos por
+// igual — vuelve a riala.cl/ para el login único con marca RIALA. Nunca pinta
+// el logo de un club antes de autenticar, y la pantalla de "Club no
+// encontrado" sin sesión (que antes vivía en AuthPage) queda inalcanzable a
+// propósito. Excepción única: un token de invitación o QR pendiente en el
+// fragmento (#invite=/#qr=) — esas dos pantallas siguen funcionando en
+// cualquier path, con la marca del club que invita. Se corre a nivel de
+// módulo en App.tsx, antes del primer render (mismo momento que
+// redirectLegacyClubQueryParam, después de esa reescritura), para que nunca
+// llegue a pintarse ni un solo frame con la URL vieja.
+export function redirectSignedOutClubPath(params: RedirectSignedOutClubPathParams = {}): void {
+  try {
+    if (params.hasSession) return
+    const pathname = params.pathname ?? window.location.pathname
+    if (pathname === '/') return
+    const hash = params.hash ?? window.location.hash
+    if (parseInviteToken(hash) || parseQrToken(hash)) return
+    const replace = params.replace ?? ((path: string) => window.location.replace(path))
+    replace('/')
+  } catch {
+    // Sin window, o storage/URL bloqueados: nunca debe romper el arranque de
+    // la app — mismo criterio que el resto de este archivo.
   }
 }
 

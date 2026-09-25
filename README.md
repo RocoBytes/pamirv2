@@ -357,6 +357,27 @@ cuenta — el que resuelve un login normal, sin `X-Club`) pero ya no son la
   clubes" y "Cambiar de club" en el frontend. `login` sigue resolviendo el
   club PRIMARIO (`User.organizationId`) sin importar `X-Club` — no confundir
   con el club activo de una request autenticada normal, que sí lo respeta.
+- **Login único, siempre en `riala.cl`** (Decisión del 2026-09-25: un solo
+  login, siempre con marca RIALA, donde quien inicia sesión elige SIEMPRE su
+  club después — incluso con una sola membresía; una vez elegido, la app
+  sigue usando `/<slug>` internamente igual que siempre):
+  - `riala.cl/<slug>` **sin sesión** y sin `#invite=`/`#qr=` en el fragmento
+    vuelve a `riala.cl/` (`window.location.replace('/')`, antes del primer
+    render) — nunca pinta el logo de ningún club en el login, y da igual que
+    el slug sea válido, desconocido, o una ruta reservada. La vieja pantalla
+    "Club no encontrado" sin sesión quedó inalcanzable y se eliminó
+    (`frontend/src/components/AuthPage.tsx`).
+  - `riala.cl/` **con sesión** muestra siempre "Mis clubes"
+    (`MisClubesPage`), sea cual sea el número de membresías: ya no hay un
+    salto automático a `/<slug>` con una sola. Esto también evita cualquier
+    pedido que necesite `X-Club` (p.ej. `fetchMyIntegrante()`) en la raíz.
+  - `riala.cl/<slug>#invite=<token>` y `#qr=<token>` (también en el dominio
+    raíz) siguen funcionando igual que siempre, con la marca del club que
+    invita — son la única excepción al redirect de arriba.
+  - `riala.cl/<slug>` con sesión no cambia: socia → la app de ese club; no
+    socia/suspendida/desconocido → `ClubAccessErrorPage`, que ahora SIEMPRE
+    ofrece "Mis clubes" (ya no puede ser un callejón sin salida, porque la
+    raíz ya no redirige de vuelta sola).
 
 ### Alta y administración de clubes (CLI `tenant`)
 

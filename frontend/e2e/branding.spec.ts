@@ -399,14 +399,17 @@ test.describe('Ownership del borrador — un mismo navegador, más de un usuario
   })
 })
 
-// ─── Club preferido en el login (?club=<slug>) y logo propio subido ─────────
-// Fixture local (no PAMIR_ORG/EL_MONTANISTA_ORG de helpers.ts a propósito):
-// esos dos no traen hasLogo, así que el resto de este archivo sigue probando
-// el comportamiento de hoy sin tocarlos (ver el comentario del backend en
-// este mismo cambio: "los fixtures no tienen hasLogo").
-test.describe('Branding por club — club preferido pre-login y logo propio subido', () => {
-  test('login con ?club=<slug>: pinta el logo propio subido de ESE club, sin sesión', async ({ page }) => {
-    await page.route('**/api/clubes/el-montanista/marca', (route: Route) => {
+// ─── Login único, siempre marca RIALA (Decisión del 2026-09-25) ────────────
+// El login dejó de resolver la marca de ningún club — ni por ?club=, ni por
+// el slug del path, ni por el club recordado (AuthPage ya no llama a
+// fetchMarcaClub para el login). ?club=<slug> termina en / igual que
+// cualquier otro path sin sesión — ver multi-club-routing.spec.ts para el
+// resto de la matriz de "signed out fuera de la raíz".
+test.describe('Branding por club — login único, siempre marca RIALA', () => {
+  test('login con ?club=<slug>: sin sesión, sin llamar a /api/clubes y sin pintar ningún logo de club', async ({ page }) => {
+    let marcaCalled = false
+    await page.route('**/api/clubes/**/marca', (route: Route) => {
+      marcaCalled = true
       void route.fulfill({
         status: 200,
         json: {
@@ -419,12 +422,14 @@ test.describe('Branding por club — club preferido pre-login y logo propio subi
       })
     })
     await page.goto('/?club=el-montanista')
+    await expect(page).toHaveURL(/\/$/)
     await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
     const logo = page.locator('img').first()
-    await expect(logo).toHaveAttribute('src', '/api/clubes/el-montanista/logo?v=v1test')
+    await expect(logo).toHaveAttribute('src', /riala-logo\.webp$/)
+    expect(marcaCalled).toBe(false)
   })
 
-  test('login sin ?club= y sin club recordado: logo neutral (comportamiento de hoy, sin llamar a /api/clubes)', async ({ page }) => {
+  test('login sin ?club= y sin club recordado: logo neutral, sin llamar a /api/clubes', async ({ page }) => {
     let marcaCalled = false
     await page.route('**/api/clubes/**/marca', (route: Route) => {
       marcaCalled = true

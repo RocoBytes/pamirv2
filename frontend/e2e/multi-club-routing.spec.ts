@@ -11,22 +11,42 @@ import {
   EL_MONTANISTA_ORG,
 } from './helpers'
 
-test.describe('Redirección transparente — una sola membresía', () => {
-  test('riala.cl sin slug redirige a /<slug> cuando la cuenta tiene una sola membresía', async ({ page }) => {
+// Decisión del 2026-09-25 (login único): riala.cl sin slug ya NO redirige
+// automáticamente a /<slug> con una sola membresía — siempre muestra "Mis
+// clubes", sin importar cuántos clubes tenga la cuenta. El viejo efecto de
+// redirección transparente se eliminó de App.tsx.
+test.describe('Mis clubes — siempre en la raíz, incluso con una sola membresía', () => {
+  test('riala.cl sin slug muestra Mis clubes con una sola membresía; al elegirlo entra a /<slug>, sin pedir X-Club en la raíz', async ({ page }) => {
     const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    let integranteLlamado = false
+    await page.route('**/api/integrantes/me', (route) => {
+      integranteLlamado = true
+      void route.fulfill({ status: 200, json: MOCK_INTEGRANTE })
+    })
     await setAuth(page, userConUnClub)
     await mockMe(page, userConUnClub)
-    await mockHasIntegrante(page)
     await mockSalidas(page)
 
     await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'Mis clubes' })).toBeVisible()
+    await expect(page.getByRole('link', { name: PAMIR_ORG.name })).toBeVisible()
+    // authHeaders() no manda X-Club sin slug en el path: ninguna pantalla de
+    // la raíz debe pedir la ficha de integrante, sea cual sea el número de
+    // membresías (Ruling 2, ampliado por la Decisión del 2026-09-25).
+    expect(integranteLlamado).toBe(false)
+
+    await page.getByRole('link', { name: PAMIR_ORG.name }).click()
     await expect(page).toHaveURL(/\/pamir$/)
     await expect(page.getByText('Mis Salidas')).toBeVisible()
   })
 
   // Regresión: `riala` (el club casa) está en SLUGS_RESERVADOS del backend y
-  // el frontend lo trataba como ruta reservada → / → /riala → / sin fin.
-  test('una cuenta cuyo único club es riala (el club casa) entra a /riala sin bucle de redirección', async ({ page }) => {
+  // el frontend lo trataba como ruta reservada → / → /riala → / sin fin. El
+  // fix original evitaba el loop con un redirect transparente; ahora que ese
+  // redirect ya no existe, la regresión real a cubrir es que la raíz muestre
+  // el picker (no un intento de auto-navegar) y que elegir riala entre sin
+  // rebotar de vuelta.
+  test('una cuenta cuyo único club es riala (el club casa): picker en la raíz, entra a /riala sin bucle de redirección', async ({ page }) => {
     const rialaOrg = { ...PAMIR_ORG, slug: 'riala', name: 'RIALA', shortName: 'RIALA' }
     const userRiala = {
       ...MOCK_USER,
@@ -41,9 +61,13 @@ test.describe('Redirección transparente — una sola membresía', () => {
     let navegaciones = 0
     page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) navegaciones++ })
     await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'Mis clubes' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'RIALA' })).toBeVisible()
+
+    await page.getByRole('link', { name: 'RIALA' }).click()
     await expect(page).toHaveURL(/\/riala$/)
     await expect(page.getByText('Mis Salidas')).toBeVisible()
-    // / y el único redirect a /riala; un bucle seguiría navegando.
+    // / , el click a /riala, y nada más; un bucle seguiría navegando.
     await page.waitForTimeout(1500)
     expect(navegaciones).toBeLessThanOrEqual(2)
   })
@@ -121,41 +145,81 @@ test.describe('No perteneces a este club / club no encontrado', () => {
   })
 })
 
-test.describe('Club no encontrado antes de iniciar sesión (visitante sin sesión)', () => {
-  test('un slug desconocido con la marca en 404 muestra Club no encontrado, no el login neutral', async ({ page }) => {
+// Decisión del 2026-09-25 (login único): SIN sesión, cualquier path que no
+// sea la raíz — slug válido, desconocido, o ruta reservada, todos por igual —
+// vuelve a riala.cl/ con el login único y marca RIALA (nunca el logo de un
+// club). La vieja pantalla "Club no encontrado" sin sesión queda inalcanzable
+// a propósito: el fetch a /api/clubes/*/marca ni siquiera llega a dispararse.
+test.describe('Signed out fuera de la raíz — vuelve a / con login único (Decisión del 2026-09-25)', () => {
+  test('un slug conocido sin sesión termina en / con el login de RIALA, sin logo de club', async ({ page }) => {
+    let marcaLlamada = false
+    await page.route('**/api/clubes/**/marca', (route) => {
+      marcaLlamada = true
+      void route.fulfill({ status: 200, json: EL_MONTANISTA_ORG })
+    })
+
+    await page.goto('/el-montanista')
+
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
+    const logo = page.locator('img').first()
+    await expect(logo).toHaveAttribute('src', /riala-logo\.webp$/)
+    await expect(logo).toHaveAttribute('alt', 'RIALA')
+    // El redirect corre antes del primer render: la pantalla nunca llega a
+    // pedir la marca pública de ese club.
+    expect(marcaLlamada).toBe(false)
+  })
+
+  test('un slug desconocido sin sesión también vuelve a / (no distingue válido de desconocido)', async ({ page }) => {
     await page.route('**/api/clubes/no-existe/marca', (route) => {
       void route.fulfill({ status: 404, json: { error: 'Club no encontrado' } })
     })
 
     await page.goto('/no-existe')
-    await expect(page.getByText('Club no encontrado')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toHaveCount(0)
-  })
 
-  test('un slug desconocido sin conexión (la marca aborta) sigue mostrando el login neutral', async ({ page }) => {
-    // Distingue 404 confirmado (club-not-found real) de un fallo de
-    // red/servidor: alguien sin conexión en la montaña debe poder seguir
-    // iniciando sesión con lo que tenga cacheado, no quedar atrapado en una
-    // pantalla de error que ni siquiera pudo confirmar.
-    await page.route('**/api/clubes/no-existe/marca', (route) => {
-      void route.abort('internetdisconnected')
-    })
-
-    await page.goto('/no-existe')
+    await expect(page).toHaveURL(/\/$/)
     await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
     await expect(page.getByText('Club no encontrado')).toHaveCount(0)
   })
+
+  test('/<slug>#invite=<token> sin sesión NO redirige: la pantalla de invitación sigue mostrándose', async ({ page }) => {
+    await page.route('**/api/auth/invitaciones/consultar', (route) => {
+      void route.fulfill({
+        status: 200,
+        json: {
+          email: 'nuevo@elmontanista.example.com',
+          rol: 'SOCIO',
+          rolLabel: 'Socio',
+          invitadoPor: 'Admin Montañista',
+          organization: EL_MONTANISTA_ORG,
+        },
+      })
+    })
+
+    await page.goto('/el-montanista#invite=tok-montanista')
+
+    await expect(page).toHaveURL(/\/el-montanista/)
+    await expect(page.getByText('Club Andino El Montañista', { exact: false })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toHaveCount(0)
+  })
 })
 
-test.describe('Legacy ?club= redirige a /<slug>', () => {
-  test('riala.cl/?club=<slug> reescribe la URL a /<slug> antes del primer render, sin sesión', async ({ page }) => {
+test.describe('Legacy ?club= — sin sesión también vuelve a / (Decisión del 2026-09-25)', () => {
+  test('riala.cl/?club=<slug> reescribe la URL a /<slug> y, sin sesión, sigue de largo hasta /', async ({ page }) => {
+    let marcaLlamada = false
+    await page.route('**/api/clubes/**/marca', (route) => {
+      marcaLlamada = true
+      void route.fulfill({ status: 200, json: EL_MONTANISTA_ORG })
+    })
+
     await page.goto('/?club=el-montanista')
-    // redirectLegacyClubQueryParam corre antes de montar React (llamada a
-    // nivel de módulo en App.tsx) — la URL ya quedó reescrita para cuando
-    // Playwright puede observarla, y no perdió el resto de la navegación
-    // (login sigue disponible, sin sesión).
-    await expect(page).toHaveURL(/\/el-montanista$/)
+    // redirectLegacyClubQueryParam reescribe a /el-montanista (history
+    // replaceState) y, en la misma pasada a nivel de módulo,
+    // redirectSignedOutClubPath la manda de vuelta a / — ambas corren antes
+    // de montar React, así que Playwright solo observa el resultado final.
+    await expect(page).toHaveURL(/\/$/)
     await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
+    expect(marcaLlamada).toBe(false)
   })
 })
 
@@ -180,7 +244,7 @@ test.describe('Invitación en el dominio raíz (sin slug) sigue funcionando', ()
     await expect(page.getByText('nuevo@example.com')).toBeVisible()
   })
 
-  test('con sesión ya iniciada (un solo club) el #invite= de OTRO club muestra el interstitial, no el redirect a /<slug>', async ({ page }) => {
+  test('con sesión ya iniciada (un solo club) el #invite= de OTRO club muestra el interstitial, no Mis clubes', async ({ page }) => {
     const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
     await setAuth(page, userConUnClub)
     await mockMe(page, userConUnClub)
@@ -189,19 +253,26 @@ test.describe('Invitación en el dominio raíz (sin slug) sigue funcionando', ()
 
     await page.goto('/#invite=tok-otro-club')
 
-    // El redirect transparente de una sola membresía NUNCA debe ganarle a
-    // este interstitial: si lo hiciera, window.location.replace('/pamir')
-    // sería una navegación completa que se llevaría puesto el estado en
-    // memoria del token, y la persona nunca vería esta pantalla.
+    // El interstitial de invitación se resuelve ANTES que Mis clubes en el
+    // árbol de AppContent (ver App.tsx): un token pendiente en el fragmento
+    // nunca debe perderse detrás del picker.
     await expect(page.getByText(/Ya iniciaste sesión como/)).toBeVisible()
     await expect(page.getByText(userConUnClub.email)).toBeVisible()
     await expect(page.getByText('Mis Salidas')).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Mis clubes' })).toHaveCount(0)
     await expect(page).toHaveURL(/\/$/)
   })
 })
 
-test.describe('Club suspendido — única membresía: sin callejón sin salida', () => {
-  test('cuenta con una sola membresía y está suspendida: sin "Mis clubes" (sería un loop de vuelta acá), "Cerrar sesión" como salida', async ({ page }) => {
+// Decisión del 2026-09-25: sin el redirect automático de una sola membresía,
+// visitar la raíz con un único club (suspendido o no) SIEMPRE muestra Mis
+// clubes (ver el describe de arriba) — nunca llega a /pamir por sí sola. Este
+// describe cubre la otra vía de entrada real: visitar /<slug> directamente
+// (un bookmark viejo, un link compartido). Y como ya no hay redirect
+// automático que pueda hacer un loop de vuelta a esta misma pantalla,
+// "Mis clubes" deja de ser un callejón sin salida y se ofrece siempre.
+test.describe('Club suspendido/rechazado — visitando /<slug> directamente', () => {
+  test('cuenta con una sola membresía y está suspendida: "Mis clubes" y "Cerrar sesión" como salidas', async ({ page }) => {
     const userClubSuspendido = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: true }] }
     await setAuth(page, userClubSuspendido)
     await page.route('**/api/me', (route) => {
@@ -211,17 +282,17 @@ test.describe('Club suspendido — única membresía: sin callejón sin salida',
       })
     })
 
-    await page.goto('/')
-    // El redirect transparente de una sola membresía la manda a /pamir
-    // igual (no distingue suspendida ahí — ver App.tsx), y desde /pamir el
-    // backend rechaza con el mensaje de club suspendido.
-    await expect(page).toHaveURL(/\/pamir$/)
+    await page.goto('/pamir')
     await expect(page.getByText('El club está suspendido')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Mis clubes' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Mis clubes' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Mis clubes' }).click()
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByRole('heading', { name: 'Mis clubes' })).toBeVisible()
   })
 
-  test('caché dice suspendido:false pero el servidor rechazó la única membresía (revocada/suspendida desde el login): tampoco "Mis clubes"', async ({ page }) => {
+  test('caché dice suspendido:false pero el servidor rechazó la única membresía (revocada/suspendida desde el login): también ofrece "Mis clubes"', async ({ page }) => {
     // El caché miente a propósito en este test (suspendido: false): lo que
     // importa es que clubAccessError diga que el /me de montaje para este
     // path YA falló — el caché nunca es la fuente de verdad una vez hay un
@@ -232,13 +303,9 @@ test.describe('Club suspendido — única membresía: sin callejón sin salida',
       void route.fulfill({ status: 403, json: { error: 'No perteneces a este club' } })
     })
 
-    await page.goto('/')
-    // El redirect transparente la manda a /pamir igual (confía en el caché
-    // para decidir A DÓNDE ir, no en si puede quedarse), y ahí el servidor
-    // la rechaza.
-    await expect(page).toHaveURL(/\/pamir$/)
+    await page.goto('/pamir')
     await expect(page.getByText('No perteneces a este club')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Mis clubes' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Mis clubes' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
   })
 })
@@ -428,9 +495,11 @@ test.describe('La migración también corre en un login fresco, no solo en una s
     await mockHasIntegrante(page)
     await mockSalidas(page)
 
-    // Sin pamir_auth: la app arranca sin sesión, así que /pamir muestra el
-    // login (isAuthenticated es false hasta que el form resuelva).
+    // Sin pamir_auth: la app arranca sin sesión, y /pamir sin sesión y sin
+    // token de invitación/QR vuelve a / antes del primer render (Decisión
+    // del 2026-09-25) — el login se muestra ahí, no en /pamir.
     await page.goto('/pamir')
+    await expect(page).toHaveURL(/\/$/)
     await page.getByLabel('Correo electrónico').fill(userConUnClub.email)
     // getByRole en vez de getByLabel: 'Contraseña' por substring también
     // matchea el botón "Mostrar contraseña", y por label exacto no matchea
@@ -439,6 +508,13 @@ test.describe('La migración también corre en un login fresco, no solo en una s
     // input, vía aria-hidden en el asterisco, sí sea "Contraseña" exacto).
     await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('cualquier-clave')
     await page.getByRole('button', { name: 'Iniciar sesión' }).click()
+
+    // Login exitoso en la raíz: Mis clubes SIEMPRE se muestra, incluso con
+    // una sola membresía (Decisión del 2026-09-25) — hay que elegir el club
+    // para llegar a /pamir, donde recién ahí corre la migración del draft.
+    await expect(page.getByRole('heading', { name: 'Mis clubes' })).toBeVisible()
+    await page.getByRole('link', { name: PAMIR_ORG.name }).click()
+    await expect(page).toHaveURL(/\/pamir$/)
 
     await expect(page.getByText('Mis Salidas')).toBeVisible()
     await page.getByRole('button', { name: /Formulario de Salida/i }).click()
@@ -478,37 +554,6 @@ test.describe('La migración también corre en un login fresco, no solo en una s
     await page.getByRole('button', { name: /Formulario de Salida/i }).click()
     await page.getByRole('button', { name: 'Continuar borrador' }).click()
     await expect(page.getByText('Alpinista Migrado').first()).toBeVisible()
-  })
-})
-
-test.describe('Branding pre-login por slug del path', () => {
-  test('riala.cl/el-montanista sin sesión pinta el logo de El Montañista', async ({ page }) => {
-    await page.route('**/api/clubes/el-montanista/marca', (route) => {
-      void route.fulfill({ status: 200, json: EL_MONTANISTA_ORG })
-    })
-    // EL_MONTANISTA_ORG no trae hasLogo/logoVersion (fixture compartido con
-    // el resto del archivo), así que el candidato que ClubLogo pinta es la
-    // convención estática /logos/<slug>.png — nunca el emblema neutral de
-    // RIALA que se ve sin ningún club resuelto. Se mockea la ruta del logo
-    // estático para que la respuesta 200 sea inmediata y determinística: sin
-    // este mock, vite responde 404 a esa ruta antes que el navegador termine
-    // de pintar, y ClubLogo (onError) baja un escalón al emblema neutral
-    // antes de que la aserción alcance a leer el `src` original — un falso
-    // negativo, no un fallo real de la marca del path.
-    const onePixelPng = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-      'base64',
-    )
-    await page.route('**/logos/el-montanista.png', (route) => {
-      void route.fulfill({ status: 200, contentType: 'image/png', body: onePixelPng })
-    })
-    await page.goto('/el-montanista')
-    await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
-    // Mismo criterio de assertion que branding.spec.ts:408 (logo propio
-    // subido vía ?club=), adaptado al slug del PATH en vez del query param
-    // legacy.
-    const logo = page.locator('img').first()
-    await expect(logo).toHaveAttribute('src', '/logos/el-montanista.png')
   })
 })
 
