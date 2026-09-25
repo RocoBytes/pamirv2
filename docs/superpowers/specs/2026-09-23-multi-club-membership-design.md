@@ -165,11 +165,20 @@ path, so it needs no change. Asset URLs are absolute (`/assets/...`), so they ar
 
 **What the person sees:**
 
+> Decision (2026-09-25): single login, always at `riala.cl`, with RIALA branding; after signing
+> in the person always picks their club — even with a single membership; after picking, the app
+> keeps using `/<slug>` internally exactly as before.
+
 | Address | Signed out | Signed in |
 |---------|------------|-----------|
-| `riala.cl` | Login with RIALA branding | One club: goes straight to `/<slug>`. Several: **"Mis clubes"** picker |
-| `riala.cl/<slug>` | Login with that club's logo and name | Member: the app for that club. Not a member: "No perteneces a este club" + link to "Mis clubes" |
-| unknown slug | "Club no encontrado" | "Club no encontrado" |
+| `riala.cl` | Login with RIALA branding | **"Mis clubes"** picker, always — one membership or several (suspended ones listed and disabled) |
+| `riala.cl/<slug>` (no `#invite=`/`#qr=`) | Redirects to `riala.cl` (RIALA branding; no club logo, no "Club no encontrado" screen) | Member: the app for that club. Not a member: "No perteneces a este club" + link to "Mis clubes" |
+| `riala.cl/<slug>#invite=<token>` / `#qr=<token>` (also bare-domain `#invite=`/`#qr=`) | Invitation/QR screen, with the inviting club's branding | Same interstitial/QR screen |
+| unknown slug (no `#invite=`/`#qr=`) | Redirects to `riala.cl` (same as any other slug) | "Club no encontrado" |
+
+Redirecting every signed-out non-root path back to `riala.cl` applies equally to a valid slug, an
+unknown one, and a reserved path: the frontend never distinguishes them before authenticating, so
+the old signed-out "Club no encontrado" screen is unreachable and was removed as dead code.
 
 An account with zero memberships cannot exist in this release (every account is created together
 with its first membership and memberships are never removed), so `riala.cl` never needs a
