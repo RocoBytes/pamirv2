@@ -8,6 +8,7 @@ import {
   MOCK_ADMIN,
   MOCK_LIDER,
   PAMIR_ORG,
+  EL_MONTANISTA_ORG,
 } from './helpers'
 
 const MENSAJE_GENERICO =
@@ -339,20 +340,6 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
     await expect(page.getByText('Completa tu registro').first()).toBeVisible()
   })
 
-  test('409 (correo ya registrado) ofrece iniciar sesión', async ({ page }) => {
-    await page.route('**/api/qr/consultar', mockConsultarDirecto())
-    await page.route('**/api/qr/registrar', (route: Route) => {
-      void route.fulfill({ status: 409, json: { error: 'Ya existe una cuenta con ese correo. Inicia sesión.' } })
-    })
-
-    await page.goto('/#qr=tokConflicto')
-    await llenarFormulario(page)
-    await page.getByRole('button', { name: 'Unirme ahora' }).click()
-
-    await expect(page.getByText('Ya existe una cuenta con ese correo')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
-  })
-
   test('las contraseñas que no coinciden se detectan sin llamar al backend', async ({ page }) => {
     await page.route('**/api/qr/consultar', mockConsultarDirecto())
     let registrarLlamado = false
@@ -370,5 +357,80 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
 
     await expect(page.getByText('Las contraseñas no coinciden')).toBeVisible()
     expect(registrarLlamado).toBe(false)
+  })
+
+  test('modo DIRECTO: alterna a "ya tengo cuenta", pide solo email y contraseña, y aterriza en /<slug> del club del QR', async ({ page }) => {
+    await page.route('**/api/qr/consultar', (route) => {
+      void route.fulfill({ status: 200, json: { organization: EL_MONTANISTA_ORG, expiresAt: new Date(Date.now() + 3600_000).toISOString(), modo: 'DIRECTO' } })
+    })
+    let registrarBody: unknown = null
+    await page.route('**/api/qr/registrar', (route) => {
+      registrarBody = route.request().postDataJSON()
+      void route.fulfill({ status: 201, json: { ok: true } })
+    })
+    await page.route('**/api/auth/login', (route) => {
+      void route.fulfill({
+        status: 200,
+        json: {
+          // Mismo fixture que en invitaciones.spec.ts: login devuelve el club
+          // PRIMARIO (Pamir), nunca el del QR — prueba que la pantalla no
+          // confía en este valor (Ruling 1 del plan de esta PR).
+          user: { id: 'user-existente-002', email: 'socio@elmontanista.example.com', name: 'Existente', rol: 'SOCIO', gestorCategorias: [], organization: PAMIR_ORG, clubes: [] },
+          token: 'mock-jwt-existente-2',
+        },
+      })
+    })
+
+    await page.goto('/#qr=tokDirecto')
+    await page.getByRole('button', { name: /Ya tienes cuenta RIALA/ }).click()
+
+    await expect(page.getByLabel('Nombre completo')).toHaveCount(0)
+    await expect(page.getByRole('textbox', { name: 'Confirmar contraseña', exact: true })).toHaveCount(0)
+
+    await page.getByRole('textbox', { name: 'Correo electrónico' }).fill('socio@elmontanista.example.com')
+    await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('miClaveDeSiempre')
+    await page.getByRole('button', { name: 'Iniciar sesión y unirme' }).click()
+
+    await expect(page).toHaveURL(/\/el-montanista$/)
+    expect(registrarBody).toMatchObject({ email: 'socio@elmontanista.example.com', password: 'miClaveDeSiempre' })
+  })
+
+  test('modo DIRECTO, "ya tengo cuenta": contraseña incorrecta muestra el error del backend', async ({ page }) => {
+    await page.route('**/api/qr/consultar', (route) => {
+      void route.fulfill({ status: 200, json: { organization: EL_MONTANISTA_ORG, expiresAt: new Date(Date.now() + 3600_000).toISOString(), modo: 'DIRECTO' } })
+    })
+    await page.route('**/api/qr/registrar', (route) => {
+      void route.fulfill({ status: 401, json: { error: 'Ya existe una cuenta con ese correo. Inicia sesión.' } })
+    })
+
+    await page.goto('/#qr=tokDirecto')
+    await page.getByRole('button', { name: /Ya tienes cuenta RIALA/ }).click()
+    await page.getByRole('textbox', { name: 'Correo electrónico' }).fill('socio@elmontanista.example.com')
+    await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('claveIncorrecta')
+    await page.getByRole('button', { name: 'Iniciar sesión y unirme' }).click()
+
+    await expect(page.getByText('Ya existe una cuenta con ese correo. Inicia sesión.')).toBeVisible()
+  })
+
+  test('modo DIRECTO: "ya tengo cuenta" nunca consulta al backend si el email escrito tiene cuenta', async ({ page }) => {
+    await page.route('**/api/qr/consultar', (route) => {
+      void route.fulfill({ status: 200, json: { organization: EL_MONTANISTA_ORG, expiresAt: new Date(Date.now() + 3600_000).toISOString(), modo: 'DIRECTO' } })
+    })
+    let solicitudesDeConsulta = 0
+    // route.fallback() (no route.continue()): las rutas de Playwright se
+    // prueban en orden LIFO, así que este handler amplio se evalúa ANTES que
+    // el de '**/api/qr/consultar' de arriba — fallback() le cede el paso a
+    // ese handler más específico en vez de mandar la petición directo a la
+    // red (que no tiene backend real detrás en este spec).
+    await page.route('**/api/**', (route) => {
+      if (route.request().url().includes('/marca') || route.request().url().includes('existe')) solicitudesDeConsulta += 1
+      void route.fallback()
+    })
+
+    await page.goto('/#qr=tokDirecto')
+    await page.getByRole('button', { name: /Ya tienes cuenta RIALA/ }).click()
+    await page.getByRole('textbox', { name: 'Correo electrónico' }).fill('cualquiera@example.com')
+
+    expect(solicitudesDeConsulta).toBe(0)
   })
 })
