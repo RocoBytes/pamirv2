@@ -251,3 +251,99 @@ test.describe('Migración del draft sin club — solo si la cuenta puede abrir E
     expect(await page.evaluate(() => localStorage.getItem('pamir_draft:pamir'))).toBeNull()
   })
 })
+
+// Draft válido para llegar directo al paso 3 (participantes) vía el banner
+// "Continuar borrador", igual que e2e/salida-wizard.spec.ts. Restaurar en el
+// paso 1 (el default) nunca remonta Step1General (su key={currentStep} no
+// cambia) — su useForm(defaultValues) es una foto de una sola vez, así que
+// el campo no reflejaría el valor restaurado aunque formData sí lo tuviera:
+// el paso 3 fuerza el remount que sí lo hace, exactamente como los tests
+// existentes que restauran participantes.
+const DRAFT_PARA_PASO_3 = {
+  tipoSalida: 'NO_OFICIAL',
+  disciplina: 'TREKKING',
+  temporada: 'estival',
+  nombreActividad: 'Salida con borrador migrado',
+  ubicacionGeografica: 'Cajón del Maipo',
+  fechaInicio: '2026-07-01',
+  fechaRetornoEstimada: '2026-07-02',
+  horaRetornoEstimada: '18:00',
+  horaAlerta: '20:00',
+  avisosExternos: [],
+  retenCarabineros: '',
+  nombreFamiliar: '',
+  telefonoFamiliar: '',
+  liderCordada: 'Alpinista Migrado',
+  participantes: [
+    { rut: '12.345.678-9', nombre: 'Alpinista Migrado', membresiaClub: 'SOCIO_ANDINO_PAMIR' },
+  ],
+  coordinacionGrupal: true,
+  matrizRiesgos: true,
+  mediosComunicacion: ['CELULAR'],
+  idDispositivoFrecuencia: '',
+  equipoColectivo: ['GPS'],
+  equipoColectivoOtro: '',
+  pronosticoMeteorologico: '',
+  riesgosIdentificados: ['CRUCE_RIOS'],
+  riesgosOtro: '',
+  planEvacuacion: '',
+  status: 'EN_CURSO',
+  incidentReport: '',
+}
+
+test.describe('El wizard nunca monta antes de que la migración del draft haya corrido', () => {
+  test('con /api/integrantes/me rápido y /api/me demorado, el wizard igual muestra el borrador migrado', async ({ page }) => {
+    // /api/integrantes/me contesta casi de inmediato (mockHasIntegrante) —
+    // sin el gate de draftMigrationDone, integranteChecked se asentaría
+    // solo y el dashboard (y desde ahí el wizard) quedarían accesibles
+    // antes de que /me (y con él, la migración) hubiera corrido.
+    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    await setAuth(page, userConUnClub)
+    await page.addInitScript((draft) => {
+      localStorage.setItem('pamir_draft', JSON.stringify(draft))
+      localStorage.setItem('pamir_draft_step', '3')
+    }, DRAFT_PARA_PASO_3)
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+    await page.route('**/api/me', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+      void route.fulfill({ status: 200, json: { user: userConUnClub } })
+    })
+
+    await page.goto('/pamir')
+    // Playwright espera a que cada botón sea clickeable: si el gate fallara
+    // (dashboard/wizard accesibles antes de la migración), este click al
+    // wizard entraría ANTES de que la clave con club tuviera el borrador, y
+    // el banner de "Continuar borrador" nunca aparecería (WizardLayout lee
+    // hasDraft() una sola vez, en su useState inicial).
+    await page.getByRole('button', { name: /Formulario de Salida/i }).click()
+    await page.getByRole('button', { name: 'Continuar borrador' }).click()
+
+    await expect(page.getByText('Alpinista Migrado').first()).toBeVisible()
+  })
+
+  test('sin conexión (/api/me aborta): la sesión cacheada sigue siendo usable, wizard y borrador incluidos', async ({ page }) => {
+    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    await setAuth(page, userConUnClub)
+    await page.addInitScript((draft) => {
+      localStorage.setItem('pamir_draft', JSON.stringify(draft))
+      localStorage.setItem('pamir_draft_step', '3')
+    }, DRAFT_PARA_PASO_3)
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+    // Sin conectividad: fetch() rechaza con un error de red (no un
+    // ApiError) — deriveClubAccessError lo ignora (nunca pone
+    // clubAccessError), y sessionChecked igual se asienta en true vía el
+    // .finally() del efecto de montaje de useAuth.ts.
+    await page.route('**/api/me', (route) => {
+      void route.abort('internetdisconnected')
+    })
+
+    await page.goto('/pamir')
+    await expect(page.getByText('Mis Salidas')).toBeVisible()
+
+    await page.getByRole('button', { name: /Formulario de Salida/i }).click()
+    await page.getByRole('button', { name: 'Continuar borrador' }).click()
+    await expect(page.getByText('Alpinista Migrado').first()).toBeVisible()
+  })
+})

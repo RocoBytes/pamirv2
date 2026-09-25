@@ -130,11 +130,26 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   // montaje (para ESTE path) resuelva. Recién una vez sessionChecked es
   // true Y no llegó clubAccessError, `clubes` refleja lo que el servidor
   // confirmó para este path — ver Ruling del round 2 de review de esta PR.
-  useEffect(() => {
-    if (sessionChecked && !clubAccessError && puedeAbrirClub(pathSlug, clubes)) {
+  //
+  // draftMigrationDone: avisa cuándo la migración YA TUVO SU OPORTUNIDAD de
+  // correr (haya migrado o no) — true recién después, nunca antes. Se
+  // ajusta DURANTE EL RENDER (no en un useEffect, mismo patrón que
+  // prevAuthenticated más abajo), a propósito: un efecto corre DESPUÉS de
+  // confirmado el render/commit, así que en el mismo render donde
+  // sessionChecked pasa a true, un efecto todavía no habría corrido — la
+  // decisión de qué pintar en ESE MISMO render (dashboard, y sobre todo
+  // WizardLayout) necesita la migración YA resuelta, no una promesa de que
+  // correrá en el próximo ciclo. draftMigrationDone es un latch: sólo
+  // corre la primera vez que sessionChecked es true (que a su vez solo
+  // ocurre una vez por sesión — ver useAuth.ts), nunca de nuevo — Ruling
+  // del round 3 de review de esta PR.
+  const [draftMigrationDone, setDraftMigrationDone] = useState(false)
+  if (sessionChecked && !draftMigrationDone) {
+    setDraftMigrationDone(true)
+    if (!clubAccessError && puedeAbrirClub(pathSlug, clubes)) {
       migrateUnkeyedDraftToCurrentClub(undefined, pathSlug!)
     }
-  }, [sessionChecked, clubAccessError, pathSlug, clubes])
+  }
 
   // Redirección transparente: una sola membresía y sin slug en el path →
   // /<slug>, preservando el resto de la URL (query/hash ya se consumieron
@@ -243,7 +258,29 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   // debePedirIntegrante: si no se va a pedir (Ruling 2, Mis Clubes), no hay
   // nada por lo que esperar — el Spinner no debe bloquear por una respuesta
   // que el efecto de arriba decidió no pedir.
-  if (isLoading || (isAuthenticated && debePedirIntegrante && !integranteChecked)) {
+  //
+  // pathSlug && !draftMigrationDone: en una sesión autenticada CON slug en
+  // el path, ninguna pantalla de club (el dashboard, y sobre todo
+  // WizardLayout) puede montar antes de que la migración del draft haya
+  // corrido de verdad — fetchMyIntegrante() y el /me de montaje son dos
+  // pedidos independientes en carrera; si /api/integrantes/me contesta
+  // primero, integranteChecked se pone true solo, y sin este gate el
+  // dashboard (y desde ahí el wizard) quedarían accesibles ANTES de la
+  // migración: WizardLayout lee `hasDraft()` una sola vez al montar (su
+  // useState inicial), contra la clave con club todavía vacía — el banner
+  // de "continuar borrador" nunca aparecería, la persona empezaría a
+  // escribir en esa clave, y cuando la migración por fin corriera
+  // encontraría el destino ocupado y haría no-op: el borrador viejo
+  // quedaría huérfano, invisible para siempre en la UI. No se aplica sin
+  // slug en el path (Mis Clubes, Ruling 2): ahí sessionChecked ya se
+  // asienta en true de inmediato (sin red) y la migración no aplica de
+  // todos modos (puedeAbrirClub exige un slug) — Ruling del round 3 de
+  // review de esta PR.
+  if (
+    isLoading ||
+    (isAuthenticated && debePedirIntegrante && !integranteChecked) ||
+    (isAuthenticated && !!pathSlug && !draftMigrationDone)
+  ) {
     return <Spinner />
   }
 
