@@ -188,6 +188,15 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
     e.preventDefault()
     setInviteError(null)
 
+    // Fix round 1 (Ruling 1): sin el slug de ESTA invitación no hay adónde
+    // redirigir tras el login (que siempre resuelve el club PRIMARIO de la
+    // cuenta, nunca el recién unido) — la vista ya deja el formulario
+    // deshabilitado y muestra el error de forma permanente más abajo cuando
+    // esto pasa; este guard es la última línea de defensa para que JAMÁS se
+    // llegue a aceptar la invitación sin saber a qué club aterrizar.
+    const targetSlug = inviteInfo?.organization?.slug
+    if (!targetSlug) return
+
     if (!existingPassword) {
       setInviteError('La contraseña es requerida')
       return
@@ -196,13 +205,10 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
     setInviteSubmitting(true)
     try {
       const { message, email: aceptadoEmail } = await aceptarInvitacion(inviteToken!, '', existingPassword)
-      const targetSlug = inviteInfo?.organization?.slug
       try {
         await onLogin(aceptadoEmail, existingPassword, true)
-        if (targetSlug) {
-          window.location.assign(`/${targetSlug}`)
-          return
-        }
+        window.location.assign(`/${targetSlug}`)
+        return
       } catch {
         setLoginNote(message)
         setView('login')
@@ -402,6 +408,16 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                         </p>
                       </div>
 
+                      {/* Fix round 1 (Ruling 1): sin el slug del club de ESTA
+                          invitación no hay adónde redirigir tras el login —
+                          el formulario queda deshabilitado de forma
+                          permanente, no solo tras un intento de envío. */}
+                      {!inviteInfo.organization?.slug && (
+                        <p className="text-xs text-error" role="alert">
+                          No pudimos identificar el club de esta invitación. Pide una nueva invitación.
+                        </p>
+                      )}
+
                       <PasswordInput
                         label="Contraseña"
                         value={existingPassword}
@@ -409,11 +425,12 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                         required
                         autoComplete="current-password"
                         leftIcon={<Lock size={16} />}
+                        disabled={!inviteInfo.organization?.slug}
                       />
 
                       {inviteError && <p className="text-xs text-error" role="alert">{inviteError}</p>}
 
-                      <Button type="submit" fullWidth disabled={inviteSubmitting}>
+                      <Button type="submit" fullWidth disabled={inviteSubmitting || !inviteInfo.organization?.slug}>
                         {inviteSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Iniciar sesión y unirme'}
                       </Button>
                     </form>

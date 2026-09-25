@@ -183,6 +183,38 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
 
     await expect(page.getByText('Ya tienes una cuenta con este correo. Verifica tu contraseña e inténtalo de nuevo.')).toBeVisible()
   })
+
+  test('cuenta existente: sin club resuelto en la invitación, no permite aceptar y muestra error neutral', async ({ page }) => {
+    await page.route(
+      '**/api/auth/invitaciones/consultar',
+      mockConsultarInvitacion(200, {
+        email: 'existente@example.com',
+        rol: 'SOCIO',
+        rolLabel: 'Socio',
+        invitadoPor: 'Admin Montañista',
+        organization: null,
+        cuentaExistente: true,
+      }),
+    )
+    let aceptarLlamado = false
+    await page.route('**/api/auth/invitaciones/aceptar', (route) => {
+      aceptarLlamado = true
+      void route.fulfill({ status: 201, json: { message: 'ok', email: 'existente@example.com' } })
+    })
+
+    await page.goto('/el-montanista#invite=tokSinClub')
+
+    await expect(page.getByText('No pudimos identificar el club de esta invitación. Pide una nueva invitación.')).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Contraseña', exact: true })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Iniciar sesión y unirme' })).toBeDisabled()
+
+    // Defensa en profundidad: aunque algo dispare un submit del form sin
+    // pasar por los controles deshabilitados, el handler jamás debe llamar a
+    // aceptarInvitacion sin saber a qué club aterrizar (Ruling 1).
+    await page.evaluate(() => document.querySelector('form')?.requestSubmit())
+
+    expect(aceptarLlamado).toBe(false)
+  })
 })
 
 test.describe('Sesión activa + enlace de invitación', () => {
