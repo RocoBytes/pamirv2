@@ -15,18 +15,11 @@ interface ClubAccessErrorPageProps {
   // pantalla queda con el logo neutral.
   org: OrganizationBrand | null
   onLogout: () => void
-  // undefined cuando "Mis clubes" no sería una salida real: la cuenta tiene
-  // (según el caché de la sesión) una única membresía y es justo la que
-  // acaba de rechazarla — la raíz sin slug la redirigiría transparentemente
-  // de vuelta a esta misma pantalla (App.tsx decide esto, ver el comentario
-  // junto a donde arma este componente). NO depende de si esa membresía
-  // cacheada figura suspendida o no: clubAccessError ya implica que el /me
-  // de montaje para este path falló, así que el caché está sin verificar
-  // (pudo revocarse o suspenderse del lado del servidor después del login)
-  // — el callejón sin salida es igual de real aunque el campo cacheado
-  // todavía diga false (Ruling del round 2 de review de esta PR). En ese
-  // caso el botón no se pinta y "Cerrar sesión" pasa a ser la acción
-  // primaria, para que la pantalla nunca sea un callejón sin salida.
+  // Siempre provisto desde la Decisión del 2026-09-25: la raíz sin slug ya
+  // no redirige transparentemente de vuelta a /<slug> con una sola
+  // membresía (ese efecto se eliminó de App.tsx), así que "Mis clubes" nunca
+  // es un callejón sin salida. Se deja opcional solo para no forzar un valor
+  // en cada caller.
   onMisClubes?: () => void
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { clubSlugFromPath, redirectLegacyClubQueryParam, puedeAbrirClub } from './club-path'
+import { clubSlugFromPath, redirectLegacyClubQueryParam, redirectSignedOutClubPath, puedeAbrirClub } from './club-path'
 
 describe('clubSlugFromPath', () => {
   it('extrae el primer segmento de un path de club', () => {
@@ -126,6 +126,50 @@ describe('redirectLegacyClubQueryParam', () => {
       replaceState,
     })
     expect(replaceState).toHaveBeenCalledWith('/el-montanista?foo=bar#invite=un-token-secreto')
+  })
+})
+
+describe('redirectSignedOutClubPath', () => {
+  it('sin sesión y con slug en el path: vuelve a la raíz', () => {
+    const replace = vi.fn()
+    redirectSignedOutClubPath({ pathname: '/el-montanista', hash: '', hasSession: false, replace })
+    expect(replace).toHaveBeenCalledWith('/')
+  })
+
+  it('sin sesión y con un slug desconocido: vuelve a la raíz igual (no distingue válido de desconocido)', () => {
+    const replace = vi.fn()
+    redirectSignedOutClubPath({ pathname: '/no-existe', hash: '', hasSession: false, replace })
+    expect(replace).toHaveBeenCalledWith('/')
+  })
+
+  it('sin sesión y con una ruta reservada: vuelve a la raíz igual', () => {
+    const replace = vi.fn()
+    redirectSignedOutClubPath({ pathname: '/admin', hash: '', hasSession: false, replace })
+    expect(replace).toHaveBeenCalledWith('/')
+  })
+
+  it('sin sesión y ya en la raíz: no hace nada', () => {
+    const replace = vi.fn()
+    redirectSignedOutClubPath({ pathname: '/', hash: '', hasSession: false, replace })
+    expect(replace).not.toHaveBeenCalled()
+  })
+
+  it('sin sesión pero con un token de invitación en el fragmento: no redirige (la pantalla de invitación sigue funcionando)', () => {
+    const replace = vi.fn()
+    redirectSignedOutClubPath({ pathname: '/el-montanista', hash: '#invite=un-token', hasSession: false, replace })
+    expect(replace).not.toHaveBeenCalled()
+  })
+
+  it('sin sesión pero con un token de QR en el fragmento: no redirige', () => {
+    const replace = vi.fn()
+    redirectSignedOutClubPath({ pathname: '/el-montanista', hash: '#qr=un-token', hasSession: false, replace })
+    expect(replace).not.toHaveBeenCalled()
+  })
+
+  it('con sesión guardada: nunca redirige, sea cual sea el path', () => {
+    const replace = vi.fn()
+    redirectSignedOutClubPath({ pathname: '/el-montanista', hash: '', hasSession: true, replace })
+    expect(replace).not.toHaveBeenCalled()
   })
 })
 
