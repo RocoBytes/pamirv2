@@ -1,4 +1,4 @@
-import { LogOut, ChevronLeft, Wifi, WifiOff } from 'lucide-react'
+import { LogOut, RefreshCw, ChevronLeft, Wifi, WifiOff } from 'lucide-react'
 import { ClubLogo } from '../ClubLogo'
 import { Button } from '../ui/Button'
 import { useOrganization } from '../../hooks/useOrganization'
@@ -13,6 +13,7 @@ interface AppHeaderProps {
   onNavigate: (key: NavKey) => void
   canSeeDocumentos: boolean
   onLogout: () => void
+  onCambiarClub?: () => void
   isDesktop: boolean
   /** false en flujos enfocados (formularios largos): sin links de navegación. */
   showNav: boolean
@@ -48,6 +49,7 @@ export function AppHeader({
   onNavigate,
   canSeeDocumentos,
   onLogout,
+  onCambiarClub,
   isDesktop,
   showNav,
   title,
@@ -149,6 +151,12 @@ export function AppHeader({
           >
             {initials}
           </span>
+          {onCambiarClub && (
+            <Button variant="ghost" size="sm" onClick={onCambiarClub} aria-label="Cambiar de club">
+              <RefreshCw size={16} />
+              <span className="hidden sm:inline">Cambiar de club</span>
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={onLogout} aria-label="Cerrar sesion">
             <LogOut size={16} />
             <span className="hidden sm:inline">Salir</span>
