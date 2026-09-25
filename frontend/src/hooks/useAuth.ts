@@ -99,12 +99,46 @@ export function useAuth(): UseAuthReturn {
       return
     }
 
-    fetchMe()
+    // Acota este /me de montaje a ~8s: una conexión de montaña puede colgar
+    // el pedido sin nunca resolver (ni éxito ni error). Antes de esta fase
+    // eso era inofensivo (nada esperaba esta llamada); desde el round 3, el
+    // Spinner de App.tsx SÍ espera a sessionChecked para una sesión
+    // autenticada en un path de club — sin cota, un pedido colgado dejaría
+    // el Spinner girando para siempre. Un timeout se trata EXACTAMENTE
+    // igual que un error de red: sessionChecked se asienta igual (mismo
+    // .finally() de abajo), clubAccessError nunca se llena por esto
+    // (deriveClubAccessError solo reacciona a un ApiError real, nunca a un
+    // AbortError), y la sesión cacheada sigue siendo la que se usa — Ruling
+    // del round 4 de review de esta PR (finding B). Acotado a ESTA llamada
+    // nada más: fetchMe() sigue sin timeout para refreshSession() y
+    // cualquier otro caller (el parámetro signal es opcional).
+    //
+    // cancelled protege contra el doble-invoke de StrictMode en dev (monta,
+    // limpia, vuelve a montar): sin él, este efecto tenía un bug latente
+    // real (pre-existente, expuesto recién ahora) — abortar el controller
+    // de la PRIMERA instancia en su cleanup hace que SU fetch se resuelva
+    // (con AbortError) antes que el de la segunda instancia (la que de
+    // verdad queda montada), y su propio .finally() igual llamaba
+    // setSessionChecked(true) para el mismo componente — asentando
+    // sessionChecked en true de forma prematura, con clubAccessError
+    // todavía sin llenar y `clubes` todavía sin refrescar, justo la ventana
+    // que gatea la migración del draft (ver App.tsx): la migración podía
+    // disparar con datos viejos antes de que la respuesta real (la que sí
+    // debía bloquearla) llegara. cancelled (una closure por instancia del
+    // efecto, no un estado de React) hace que la instancia descartada nunca
+    // toque ningún setState, sin importar cómo resuelva su promesa.
+    let cancelled = false
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
+
+    fetchMe(controller.signal)
       .then(({ user }) => {
+        if (cancelled) return
         setClubAccessError(null)
         applyUser(user, savedToken)
       })
       .catch((err: unknown) => {
+        if (cancelled) return
         // La decisión completa (Ruling 1 incluido) vive en deriveClubAccessError,
         // pura y testeada aparte (lib/club-access.test.ts) sin depender de React.
         const clubError = deriveClubAccessError(slug, err)
@@ -112,9 +146,18 @@ export function useAuth(): UseAuthReturn {
           setClubAccessError(clubError)
           return
         }
-        // Token inválido/expirado o red caída: no se toca el estado
+        // Token inválido/expirado, red caída, o timeout: no se toca el estado
       })
-      .finally(() => setSessionChecked(true))
+      .finally(() => {
+        clearTimeout(timeoutId)
+        if (!cancelled) setSessionChecked(true)
+      })
+
+    return () => {
+      cancelled = true
+      clearTimeout(timeoutId)
+      controller.abort()
+    }
   }, [applyUser])
 
   const refreshSession = useCallback(async (): Promise<void> => {

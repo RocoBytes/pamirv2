@@ -131,21 +131,44 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   // true Y no llegó clubAccessError, `clubes` refleja lo que el servidor
   // confirmó para este path — ver Ruling del round 2 de review de esta PR.
   //
-  // draftMigrationDone: avisa cuándo la migración YA TUVO SU OPORTUNIDAD de
-  // correr (haya migrado o no) — true recién después, nunca antes. Se
-  // ajusta DURANTE EL RENDER (no en un useEffect, mismo patrón que
-  // prevAuthenticated más abajo), a propósito: un efecto corre DESPUÉS de
-  // confirmado el render/commit, así que en el mismo render donde
-  // sessionChecked pasa a true, un efecto todavía no habría corrido — la
-  // decisión de qué pintar en ESE MISMO render (dashboard, y sobre todo
-  // WizardLayout) necesita la migración YA resuelta, no una promesa de que
-  // correrá en el próximo ciclo. draftMigrationDone es un latch: sólo
-  // corre la primera vez que sessionChecked es true (que a su vez solo
-  // ocurre una vez por sesión — ver useAuth.ts), nunca de nuevo — Ruling
-  // del round 3 de review de esta PR.
-  const [draftMigrationDone, setDraftMigrationDone] = useState(false)
-  if (sessionChecked && !draftMigrationDone) {
-    setDraftMigrationDone(true)
+  // draftMigrationSessionKey: guarda el TOKEN de la sesión para la que la
+  // decisión de migración YA TUVO SU OPORTUNIDAD de correr (haya migrado o
+  // no) — nunca un simple booleano. Se ajusta DURANTE EL RENDER (no en un
+  // useEffect, mismo patrón que prevAuthenticated más abajo), a propósito:
+  // un efecto corre DESPUÉS de confirmado el render/commit, así que en el
+  // mismo render donde la sesión queda lista para decidir, un efecto
+  // todavía no habría corrido — la decisión de qué pintar en ESE MISMO
+  // render (dashboard, y sobre todo WizardLayout) necesita la migración YA
+  // resuelta, no una promesa de que correrá en el próximo ciclo.
+  //
+  // Por qué el token y no un booleano con reset manual (como
+  // integranteChecked/prevAuthenticated más abajo): en el mismo render
+  // donde isAuthenticated pasa a true (un login fresco), el ORDEN entre
+  // "resetear el booleano" y "decidir la migración" importaría — si el
+  // reset corriera después en el código fuente, su setState(false) pisaría
+  // el setState(true) de esta misma decisión (mismo setter, misma pasada de
+  // render: gana la última llamada), y la migración recién correría en un
+  // render extra. Comparar contra el token evita el problema de raíz: cada
+  // login (o el estado inicial, sin sesión) trae un token DISTINTO, así que
+  // "¿ya decidí para ESTE token?" se resetea solo, sin ningún bloque de
+  // reset aparte que pueda desordenarse con este.
+  //
+  // Y por qué también exige isAuthenticated && user, no solo
+  // sessionChecked: sessionChecked arranca en true en CUALQUIER pestaña sin
+  // sesión guardada (nada que verificar — ver useAuth.ts), incluida la
+  // primera visita de alguien sin sesión que recién va a iniciarla. Con el
+  // gate viejo (solo sessionChecked), ese primer render sin sesión ya
+  // consumía el latch — clubes era null, así que puedeAbrirClub daba false
+  // y no migraba nada, pero el latch quedaba en true para siempre. Un login
+  // fresco después nunca volvía a evaluar la migración: el draft legacy
+  // quedaba huérfano — finding A del round 4 de review de esta PR. Exigir
+  // isAuthenticated && user hace que ese primer render sin sesión NUNCA
+  // toque el latch, dejándolo listo para la decisión real en el render del
+  // login.
+  const [draftMigrationSessionKey, setDraftMigrationSessionKey] = useState<string | null>(null)
+  const draftMigrationDone = draftMigrationSessionKey === token
+  if (isAuthenticated && user && sessionChecked && !draftMigrationDone) {
+    setDraftMigrationSessionKey(token)
     if (!clubAccessError && puedeAbrirClub(pathSlug, clubes)) {
       migrateUnkeyedDraftToCurrentClub(undefined, pathSlug!)
     }

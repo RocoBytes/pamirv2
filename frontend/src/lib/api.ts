@@ -116,9 +116,14 @@ export async function resetPassword(
   return handleResponse<{ message: string }>(res)
 }
 
-export async function fetchMe(): Promise<{ user: User }> {
+// signal es opcional y solo lo usa el /me de montaje de useAuth.ts, para
+// acotarlo a unos segundos en una conexión de montaña que cuelga el pedido
+// sin nunca resolver — ver el efecto de montaje. Cualquier otro llamador
+// (refreshSession, etc.) sigue sin timeout, exactamente como antes.
+export async function fetchMe(signal?: AbortSignal): Promise<{ user: User }> {
   const res = await fetch(`${API_BASE}/me`, {
     headers: authHeaders(),
+    signal,
   })
   return handleResponse<{ user: User }>(res)
 }

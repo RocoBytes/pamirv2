@@ -347,3 +347,83 @@ test.describe('El wizard nunca monta antes de que la migración del draft haya c
     await expect(page.getByText('Alpinista Migrado').first()).toBeVisible()
   })
 })
+
+test.describe('La migración también corre en un login fresco, no solo en una sesión ya guardada', () => {
+  test('sin pamir_auth guardado, con un pamir_draft sin club: iniciar sesión por el formulario migra el borrador y lo muestra en el wizard', async ({ page }) => {
+    // Reproduce el finding A del round 4 de review: draftMigrationSessionKey
+    // (antes, un booleano llamado draftMigrationDone) se decidía apenas
+    // sessionChecked fuera true — y sessionChecked arranca en true en
+    // CUALQUIER pestaña sin sesión guardada (nada que verificar). Sin el
+    // fix, ese primer render (sin sesión, antes de loguearse) ya consumía
+    // el latch para siempre, y el login que sigue nunca volvía a evaluar la
+    // migración.
+    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    // addInitScript corre en el navegador: no puede cerrar sobre
+    // userConUnClub (una variable del lado de Node) — se pasa serializado
+    // como segundo argumento, igual que draft.
+    await page.addInitScript(({ draft, ownerId }) => {
+      localStorage.setItem('pamir_draft', JSON.stringify(draft))
+      localStorage.setItem('pamir_draft_step', '3')
+      // pamir_owner ya apunta a esta cuenta (p.ej. una sesión anterior cuyo
+      // pamir_auth expiró/se limpió, pero el navegador es el mismo): así
+      // establishSession() decide 'keep', no 'purge', al loguearse — la
+      // política de dueño del borrador es de Task 7/storage.ts, no de este
+      // finding, así que el test la deja en el escenario que NO purga para
+      // aislar exactamente lo que este fix corrige.
+      localStorage.setItem('pamir_owner', ownerId)
+    }, { draft: DRAFT_PARA_PASO_3, ownerId: userConUnClub.id })
+    await page.route('**/api/auth/login', (route) => {
+      void route.fulfill({ status: 200, json: { user: userConUnClub, token: 'mock-jwt-fresh-login' } })
+    })
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+
+    // Sin pamir_auth: la app arranca sin sesión, así que /pamir muestra el
+    // login (isAuthenticated es false hasta que el form resuelva).
+    await page.goto('/pamir')
+    await page.getByLabel('Correo electrónico').fill(userConUnClub.email)
+    // getByRole en vez de getByLabel: 'Contraseña' por substring también
+    // matchea el botón "Mostrar contraseña", y por label exacto no matchea
+    // NADA (el <label> del campo incluye el asterisco visual de requerido
+    // en su texto crudo — "Contraseña*" —, aunque el nombre accesible del
+    // input, vía aria-hidden en el asterisco, sí sea "Contraseña" exacto).
+    await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('cualquier-clave')
+    await page.getByRole('button', { name: 'Iniciar sesión' }).click()
+
+    await expect(page.getByText('Mis Salidas')).toBeVisible()
+    await page.getByRole('button', { name: /Formulario de Salida/i }).click()
+    await page.getByRole('button', { name: 'Continuar borrador' }).click()
+    await expect(page.getByText('Alpinista Migrado').first()).toBeVisible()
+
+    expect(await page.evaluate(() => localStorage.getItem('pamir_draft'))).toBeNull()
+    expect(await page.evaluate(() => localStorage.getItem('pamir_draft:pamir'))).not.toBeNull()
+  })
+
+  test('/api/me de montaje colgado (nunca responde): la sesión cacheada igual queda usable en ~8s, wizard y borrador incluidos', async ({ page }) => {
+    // Reproduce el finding B del round 4 de review: fetchMe() (el /me de
+    // montaje de useAuth.ts) no tenía timeout — un pedido que ni resuelve
+    // ni falla (una conexión de montaña que cuelga en silencio, no un error
+    // rápido) dejaba sessionChecked sin asentar nunca, y con él el Spinner
+    // de App.tsx (que desde el round 3 espera sessionChecked para decidir
+    // si mostrar el dashboard) girando para siempre.
+    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    await setAuth(page, userConUnClub)
+    await page.addInitScript((draft) => {
+      localStorage.setItem('pamir_draft', JSON.stringify(draft))
+      localStorage.setItem('pamir_draft_step', '3')
+    }, DRAFT_PARA_PASO_3)
+    await mockHasIntegrante(page)
+    await mockSalidas(page)
+    // Nunca llama a fulfill/continue/abort: el pedido queda colgado de
+    // verdad, sin resolver jamás por sí solo — solo el timeout del lado del
+    // cliente (AbortController en useAuth.ts) puede destrabarlo.
+    await page.route('**/api/me', () => {})
+
+    await page.goto('/pamir')
+    await expect(page.getByText('Mis Salidas')).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: /Formulario de Salida/i }).click()
+    await page.getByRole('button', { name: 'Continuar borrador' }).click()
+    await expect(page.getByText('Alpinista Migrado').first()).toBeVisible()
+  })
+})
