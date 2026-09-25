@@ -161,8 +161,10 @@ La app nació para un solo club (Andino Club Pamir) y sirve varios. Cada tabla
 de negocio lleva una columna `organization_id` (modelo `Organization` en
 `backend/prisma/schema.prisma`, tabla `organizations`), y una prueba estática
 (`backend/src/lib/schema-organization.test.ts`) falla si se agrega un modelo
-nuevo sin ella. Una cuenta (`User.email`) pertenece a exactamente un club — no
-hay cuentas compartidas entre clubes. `numeroSalida` es un correlativo por
+nuevo sin ella. Una cuenta (`User.email`, único en toda la plataforma) puede
+pertenecer a varios clubes a la vez, una `Membresia` por club con su propio
+rol (`backend/prisma/schema.prisma`, modelo `Membresia`) — ver "Membresías
+multi-club" más abajo. `numeroSalida` es un correlativo por
 club (no una secuencia global de Postgres): se asigna dentro de una
 transacción que incrementa `organizations.ultimo_numero_salida`. El CLI
 `db:create-user` acepta `--org <slug>` (por defecto `pamir`) para elegir el
@@ -327,6 +329,34 @@ que además expone valores ya listos para pintar (`displayName`, `shortName`,
   CLUB dice pertenecer un PARTICIPANTE de una salida (un socio de un club
   puede participar en la salida de otro) — eso no es branding del tenant y no
   se toca.
+
+### Membresías multi-club
+
+Una cuenta (`User`) es una identidad de plataforma: un email, una contraseña,
+un nombre. A qué club pertenece y con qué rol es la tabla `Membresia`
+(`organizationId`, `usuarioId`, `rol`), una fila por club del que es socia.
+`User.organizationId`/`User.rol` siguen existiendo (el club "primario" de la
+cuenta — el que resuelve un login normal, sin `X-Club`) pero ya no son la
+única pertenencia posible.
+
+- **Resolución del club activo por request**: el frontend manda el slug del
+  club actual en el header `X-Club` (derivado del path — ver "Frontend:
+  branding y sesión por club" arriba); `authMiddleware` busca la `Membresia`
+  de esa cuenta en ese club y arma `req.user` con ella. Sin `X-Club` y una
+  sola membresía, usa esa (compatibilidad); sin `X-Club` y varias, `400`
+  "Selecciona un club".
+- **Unirse a un segundo club** requiere consentimiento: una invitación o un
+  QR de ese club, y quien ya tiene cuenta la confirma con su contraseña de
+  siempre (o una sesión ya verificada) — nunca una segunda cuenta con el
+  mismo email. Solo se crea la `Membresia`; el perfil compartido (nombre,
+  contraseña) nunca se toca. Ver
+  `docs/superpowers/specs/2026-09-23-multi-club-membership-design.md`.
+- **`login`/`GET /api/me`** devuelven `clubes[]`: todas las membresías de la
+  cuenta (`slug`, `name`, `shortName`, `hasLogo`, `logoVersion`, `rol`,
+  `suspendido`), ordenadas de la más antigua a la más nueva — alimenta "Mis
+  clubes" y "Cambiar de club" en el frontend. `login` sigue resolviendo el
+  club PRIMARIO (`User.organizationId`) sin importar `X-Club` — no confundir
+  con el club activo de una request autenticada normal, que sí lo respeta.
 
 ### Alta y administración de clubes (CLI `tenant`)
 
