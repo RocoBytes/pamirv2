@@ -8,6 +8,7 @@ import { ClubLogo } from './ClubLogo'
 import { AuthVisualPanel } from './auth/AuthVisualPanel'
 import { clubDisplayName, PLATFORM_LOGO_FULL, PLATFORM_NAME } from '../lib/club-brand'
 import { clubPreferido } from '../lib/club-preferido'
+import { clubSlugFromPath } from '../lib/club-path'
 import { useIsDesktop } from '../hooks/useMediaQuery'
 import { forgotPassword, resetPassword, consultarInvitacion, aceptarInvitacion, fetchMarcaClub } from '../lib/api'
 import type { ConsultarInvitacionResponse } from '../types/invitacion'
@@ -89,16 +90,19 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
     }
   }, [inviteToken])
 
-  // Club preferido (ver club-preferido.ts): ?club=<slug> en la URL, o si no
-  // viene, el último club con el que se inició sesión en este navegador.
-  // Gobierna SOLO la marca del login — nunca antes de resolver una invitación
-  // en curso, que ya trae su propio club (inviteOrg más abajo tiene
-  // prioridad). Si no hay slug o la consulta falla, queda el neutral de hoy.
+  // Marca del login (nunca antes de resolver una invitación en curso, que ya
+  // trae su propio club — inviteOrg más abajo tiene prioridad):
+  // 1. El slug del PATH (riala.cl/<slug>) — es el club exacto que la persona
+  //    está visitando, más confiable que cualquier preferencia recordada.
+  // 2. Si no hay slug en el path, el club preferido de siempre (ver
+  //    club-preferido.ts): ?club=<slug> o el último club con el que se
+  //    inició sesión en este navegador.
+  // Si ninguno resuelve (o la consulta falla), queda el neutral de hoy.
   const [preferredOrg, setPreferredOrg] = useState<OrganizationBrand | null>(null)
 
   useEffect(() => {
     if (inviteToken) return
-    const slug = clubPreferido()
+    const slug = clubSlugFromPath() ?? clubPreferido()
     if (!slug) return
     let cancelled = false
     fetchMarcaClub(slug)

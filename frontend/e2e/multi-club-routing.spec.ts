@@ -427,3 +427,34 @@ test.describe('La migración también corre en un login fresco, no solo en una s
     await expect(page.getByText('Alpinista Migrado').first()).toBeVisible()
   })
 })
+
+test.describe('Branding pre-login por slug del path', () => {
+  test('riala.cl/el-montanista sin sesión pinta el logo de El Montañista', async ({ page }) => {
+    await page.route('**/api/clubes/el-montanista/marca', (route) => {
+      void route.fulfill({ status: 200, json: EL_MONTANISTA_ORG })
+    })
+    // EL_MONTANISTA_ORG no trae hasLogo/logoVersion (fixture compartido con
+    // el resto del archivo), así que el candidato que ClubLogo pinta es la
+    // convención estática /logos/<slug>.png — nunca el emblema neutral de
+    // RIALA que se ve sin ningún club resuelto. Se mockea la ruta del logo
+    // estático para que la respuesta 200 sea inmediata y determinística: sin
+    // este mock, vite responde 404 a esa ruta antes que el navegador termine
+    // de pintar, y ClubLogo (onError) baja un escalón al emblema neutral
+    // antes de que la aserción alcance a leer el `src` original — un falso
+    // negativo, no un fallo real de la marca del path.
+    const onePixelPng = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    )
+    await page.route('**/logos/el-montanista.png', (route) => {
+      void route.fulfill({ status: 200, contentType: 'image/png', body: onePixelPng })
+    })
+    await page.goto('/el-montanista')
+    await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
+    // Mismo criterio de assertion que branding.spec.ts:408 (logo propio
+    // subido vía ?club=), adaptado al slug del PATH en vez del query param
+    // legacy.
+    const logo = page.locator('img').first()
+    await expect(logo).toHaveAttribute('src', '/logos/el-montanista.png')
+  })
+})
