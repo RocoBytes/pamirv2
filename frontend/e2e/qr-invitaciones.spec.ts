@@ -395,6 +395,25 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
     expect(registrarBody).toMatchObject({ email: 'socio@elmontanista.example.com', password: 'miClaveDeSiempre' })
   })
 
+  test('modo DIRECTO: alternar entre "crear cuenta" y "ya tengo cuenta" limpia los campos que se dejan atrás', async ({ page }) => {
+    await page.route('**/api/qr/consultar', (route) => {
+      void route.fulfill({ status: 200, json: { organization: EL_MONTANISTA_ORG, expiresAt: new Date(Date.now() + 3600_000).toISOString(), modo: 'DIRECTO' } })
+    })
+
+    await page.goto('/#qr=tokDirecto')
+    await expect(page.getByRole('heading', { name: /Únete a/ })).toBeVisible()
+
+    // Una contraseña tipeada en "crear cuenta" no debe reaparecer si la
+    // persona alterna a "ya tengo cuenta" y vuelve (Fix round 1 de esta PR:
+    // ambos toggles limpian el formulario que dejan atrás).
+    await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('unaClaveQueNoDebeSobrevivir')
+
+    await page.getByRole('button', { name: /Ya tienes cuenta RIALA/ }).click()
+    await page.getByRole('button', { name: /Aún no tienes cuenta/ }).click()
+
+    await expect(page.getByRole('textbox', { name: 'Contraseña', exact: true })).toHaveValue('')
+  })
+
   test('modo DIRECTO, "ya tengo cuenta": contraseña incorrecta muestra el error del backend', async ({ page }) => {
     await page.route('**/api/qr/consultar', (route) => {
       void route.fulfill({ status: 200, json: { organization: EL_MONTANISTA_ORG, expiresAt: new Date(Date.now() + 3600_000).toISOString(), modo: 'DIRECTO' } })
@@ -412,25 +431,61 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
     await expect(page.getByText('Ya existe una cuenta con ese correo. Inicia sesión.')).toBeVisible()
   })
 
-  test('modo DIRECTO: "ya tengo cuenta" nunca consulta al backend si el email escrito tiene cuenta', async ({ page }) => {
+  test('modo DIRECTO, "ya tengo cuenta": si el login automático falla tras unirse, el aviso NO dice que se creó una cuenta', async ({ page }) => {
     await page.route('**/api/qr/consultar', (route) => {
       void route.fulfill({ status: 200, json: { organization: EL_MONTANISTA_ORG, expiresAt: new Date(Date.now() + 3600_000).toISOString(), modo: 'DIRECTO' } })
     })
-    let solicitudesDeConsulta = 0
+    await page.route('**/api/qr/registrar', (route) => {
+      void route.fulfill({ status: 201, json: { ok: true } })
+    })
+    // Unión ya ocurrió en el backend (201), pero el login automático que le
+    // sigue falla — a diferencia de la rama "crear cuenta", acá no se creó
+    // ninguna cuenta ni cambió ninguna contraseña, así que el fallback debe
+    // decirlo distinto ("¡Cuenta creada!" sería falso).
+    await page.route('**/api/auth/login', (route) => {
+      void route.fulfill({ status: 401, json: { error: 'Credenciales inválidas' } })
+    })
+
+    await page.goto('/#qr=tokDirecto')
+    await page.getByRole('button', { name: /Ya tienes cuenta RIALA/ }).click()
+    await page.getByRole('textbox', { name: 'Correo electrónico' }).fill('socio@elmontanista.example.com')
+    await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('miClaveDeSiempre')
+    await page.getByRole('button', { name: 'Iniciar sesión y unirme' }).click()
+
+    await expect(
+      page.getByText('Ya eres parte de Club Andino El Montañista. Inicia sesión con tu contraseña de RIALA para entrar.'),
+    ).toBeVisible()
+    await expect(page.getByText('¡Cuenta creada!')).toHaveCount(0)
+  })
+
+  test('modo DIRECTO: "ya tengo cuenta" no dispara ninguna petición nueva a /api mientras se escribe el email o se alterna de modo', async ({ page }) => {
+    await page.route('**/api/qr/consultar', (route) => {
+      void route.fulfill({ status: 200, json: { organization: EL_MONTANISTA_ORG, expiresAt: new Date(Date.now() + 3600_000).toISOString(), modo: 'DIRECTO' } })
+    })
+    const peticiones: string[] = []
     // route.fallback() (no route.continue()): las rutas de Playwright se
     // prueban en orden LIFO, así que este handler amplio se evalúa ANTES que
     // el de '**/api/qr/consultar' de arriba — fallback() le cede el paso a
     // ese handler más específico en vez de mandar la petición directo a la
     // red (que no tiene backend real detrás en este spec).
     await page.route('**/api/**', (route) => {
-      if (route.request().url().includes('/marca') || route.request().url().includes('existe')) solicitudesDeConsulta += 1
+      peticiones.push(route.request().url())
       void route.fallback()
     })
 
     await page.goto('/#qr=tokDirecto')
+    await expect(page.getByRole('heading', { name: /Únete a/ })).toBeVisible()
+    // Instantánea de lo que la página YA cargó al montar (consultarCodigoQr,
+    // y lo que sea que otras piezas de la app pidan al arrancar) — el delta
+    // contra esto, no un conteo de rutas "sospechosas", es lo que prueba que
+    // escribir el email y alternar de modo no dispara nada nuevo.
+    const peticionesAlCargar = [...peticiones]
+
     await page.getByRole('button', { name: /Ya tienes cuenta RIALA/ }).click()
     await page.getByRole('textbox', { name: 'Correo electrónico' }).fill('cualquiera@example.com')
+    await page.getByRole('button', { name: /Aún no tienes cuenta/ }).click()
+    await page.getByRole('button', { name: /Ya tienes cuenta RIALA/ }).click()
 
-    expect(solicitudesDeConsulta).toBe(0)
+    expect(peticiones.slice(peticionesAlCargar.length)).toEqual([])
   })
 })

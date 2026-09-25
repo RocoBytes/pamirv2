@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Loader2, AlertCircle, CheckCircle2, QrCode as QrCodeIcon, Clock, UserPlus, AtSign, Lock } from 'lucide-react'
 import { consultarCodigoQr, solicitarInvitacionQr, registrarConQrDirecto, ApiError } from '../lib/api'
 import type { OrganizationBrand } from '../types/salida'
@@ -19,6 +19,11 @@ type ViewState =
   // Modo DIRECTO: registro en el acto, sin correo — ver registrarConQrDirecto.
   | { kind: 'form-directo'; organization: OrganizationBrand }
   | { kind: 'creado-sin-sesion'; organization: OrganizationBrand }
+  // Rama "ya tengo cuenta" con auto-login fallido: a diferencia de
+  // creado-sin-sesion, acá NO se creó ninguna cuenta ni cambió la
+  // contraseña — solo se sumó la membresía al club. Copy distinto a
+  // propósito (ver Fix round 1 de esta PR).
+  | { kind: 'unido-sin-sesion'; organization: OrganizationBrand }
   | { kind: 'rate-limited'; organization: OrganizationBrand | null }
 
 interface QrInvitacionPageProps {
@@ -96,6 +101,30 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
   const [directoModo, setDirectoModo] = useState<'crear' | 'iniciar-sesion'>('crear')
   const [signInEmail, setSignInEmail] = useState('')
   const [signInPassword, setSignInPassword] = useState('')
+
+  // Primer campo de cada formulario del modo DIRECTO, para devolverle el
+  // foco al alternar entre "crear cuenta" e "iniciar sesión" (ver el efecto
+  // más abajo).
+  const crearNombreInputRef = useRef<HTMLInputElement>(null)
+  const signInEmailInputRef = useRef<HTMLInputElement>(null)
+  const isFirstDirectoModoRenderRef = useRef(true)
+
+  // Al alternar de modo: mueve el foco al primer campo del formulario que
+  // aparece — sin esto queda en el botón que se acaba de ocultar/reemplazar.
+  // Se omite en el montaje inicial (mismo patrón que RegistroIntegrante.tsx
+  // con isFirstRenderRef): la página ya abre en modo "crear" sin que nadie
+  // haya alternado nada, y no hace falta robarle el foco a esa carga inicial.
+  useEffect(() => {
+    if (isFirstDirectoModoRenderRef.current) {
+      isFirstDirectoModoRenderRef.current = false
+      return
+    }
+    if (directoModo === 'crear') {
+      crearNombreInputRef.current?.focus()
+    } else {
+      signInEmailInputRef.current?.focus()
+    }
+  }, [directoModo])
 
   useEffect(() => {
     let cancelled = false
@@ -241,7 +270,10 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
       window.location.assign(`/${organization.slug}`)
     } catch {
       setSubmitting(false)
-      setState({ kind: 'creado-sin-sesion', organization })
+      // Distinto de la rama "crear cuenta": acá no se creó ninguna cuenta ni
+      // cambió la contraseña, solo se sumó la membresía — creado-sin-sesion
+      // diría "Cuenta creada", que sería falso.
+      setState({ kind: 'unido-sin-sesion', organization })
     }
   }
 
@@ -327,6 +359,21 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
     )
   }
 
+  if (state.kind === 'unido-sin-sesion') {
+    return (
+      <Shell org={state.organization}>
+        <CenteredMessage
+          icon={<CheckCircle2 size={36} className="text-emerald-600" />}
+          title="¡Listo!"
+          text={`Ya eres parte de ${clubDisplayName(state.organization)}. Inicia sesión con tu contraseña de RIALA para entrar.`}
+        />
+        <div className="flex justify-center">
+          <Button onClick={onIrALaApp}>Iniciar sesión</Button>
+        </div>
+      </Shell>
+    )
+  }
+
   if (state.kind === 'form-directo') {
     return (
       <Shell org={state.organization}>
@@ -353,6 +400,7 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
             className="flex flex-col gap-4 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 sm:p-6"
           >
             <Input
+              ref={crearNombreInputRef}
               type="text"
               label="Nombre completo"
               value={directoName}
@@ -403,7 +451,17 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
 
             <button
               type="button"
-              onClick={() => { setDirectoModo('iniciar-sesion'); setSubmitError(null) }}
+              onClick={() => {
+                // Deja el formulario de "crear cuenta" limpio antes de
+                // esconderlo: una contraseña tipeada acá no debe reaparecer
+                // si la persona alterna de vuelta (ver Fix round 1 de esta PR).
+                setDirectoName('')
+                setDirectoEmail('')
+                setDirectoPassword('')
+                setDirectoConfirmPassword('')
+                setSubmitError(null)
+                setDirectoModo('iniciar-sesion')
+              }}
               className="text-sm text-secondary text-center hover:underline underline-offset-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               ¿Ya tienes cuenta RIALA? Inicia sesión para unirte a {clubDisplayName(state.organization)}
@@ -415,6 +473,7 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
             className="flex flex-col gap-4 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 sm:p-6"
           >
             <Input
+              ref={signInEmailInputRef}
               type="email"
               label="Correo electrónico"
               value={signInEmail}
@@ -444,7 +503,14 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
 
             <button
               type="button"
-              onClick={() => { setDirectoModo('crear'); setSubmitError(null) }}
+              onClick={() => {
+                // Simétrico al toggle de arriba: limpia el formulario de
+                // "ya tengo cuenta" antes de esconderlo.
+                setSignInEmail('')
+                setSignInPassword('')
+                setSubmitError(null)
+                setDirectoModo('crear')
+              }}
               className="text-sm text-secondary text-center hover:underline underline-offset-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               ¿Aún no tienes cuenta? Crea una
