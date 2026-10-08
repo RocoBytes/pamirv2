@@ -71,13 +71,7 @@ export function FilePicker({
         >
           <Paperclip size={15} className="text-secondary/60" />
           <span className="text-sm text-on-surface-variant">{placeholder}</span>
-          <input
-            type="file"
-            accept={accept}
-            className="sr-only"
-            disabled={disabled}
-            onChange={handleFileChange}
-          />
+          <input type="file" accept={accept} className="sr-only" disabled={disabled} onChange={handleFileChange} />
         </label>
       )}
 

@@ -38,9 +38,7 @@ async function mockNav(page: Page, initial: NavPreferences | null) {
 }
 
 test.describe('Personalizar navegación', () => {
-  test('el diálogo lista los destinos y marca como fijos los que no se pueden quitar', async ({
-    page,
-  }) => {
+  test('el diálogo lista los destinos y marca como fijos los que no se pueden quitar', async ({ page }) => {
     await mockNav(page, null)
     await page.goto('/')
     await page.getByRole('button', { name: 'Personalizar' }).click()
@@ -91,23 +89,24 @@ test.describe('Personalizar navegación', () => {
     await expect(page.getByLabel('Invitar al club')).toBeVisible()
   })
 
-  test('una preferencia no puede mostrar un destino que el socio no puede abrir', async ({
-    page,
-  }) => {
+  test('una preferencia no puede mostrar un destino que el socio no puede abrir', async ({ page }) => {
     // Documentación es exclusiva de socios del club (o de un admin, que la ve
     // siempre): este usuario es SOCIO sin ficha, así que no la puede abrir.
     await setAuth(page, MOCK_USER)
     await mockMe(page, MOCK_USER)
     await mockSalidas(page, [])
     await page.route('**/api/eventos*', (r: Route) => void r.fulfill({ status: 200, json: [] }))
-    await page.route('**/api/integrantes/me', (r: Route) =>
-      void r.fulfill({ status: 404, json: { error: 'no existe' } }),
+    await page.route(
+      '**/api/integrantes/me',
+      (r: Route) => void r.fulfill({ status: 404, json: { error: 'no existe' } }),
     )
-    await page.route('**/api/me/nav-preferences', (r: Route) =>
-      void r.fulfill({
-        status: 200,
-        json: { preferences: { tabs: ['documentos', 'inicio', 'contactos'], quick: ['documentos'] } },
-      }),
+    await page.route(
+      '**/api/me/nav-preferences',
+      (r: Route) =>
+        void r.fulfill({
+          status: 200,
+          json: { preferences: { tabs: ['documentos', 'inicio', 'contactos'], quick: ['documentos'] } },
+        }),
     )
     await page.goto('/')
 

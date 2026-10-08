@@ -1,5 +1,19 @@
 import { useEffect, useState } from 'react'
-import { Mountain, X, Loader2, MapPin, Calendar, Clock, AlertCircle, FileImage, Route, Pencil, ClipboardCheck, UserCog, Lock } from 'lucide-react'
+import {
+  Mountain,
+  X,
+  Loader2,
+  MapPin,
+  Calendar,
+  Clock,
+  AlertCircle,
+  FileImage,
+  Route,
+  Pencil,
+  ClipboardCheck,
+  UserCog,
+  Lock,
+} from 'lucide-react'
 import type { SalidaRecord } from '../types/salida'
 import { getSalida, fetchSalidaArchivoUrl } from '../lib/api'
 import { isIntegrantesEditable } from '../lib/date'
@@ -45,7 +59,14 @@ function formatDateFull(iso: string): string {
   }
 }
 
-export function SalidaDetailModal({ salidaId, onClose, isAdmin = false, currentUserId, onEdit, onCerrar }: SalidaDetailModalProps) {
+export function SalidaDetailModal({
+  salidaId,
+  onClose,
+  isAdmin = false,
+  currentUserId,
+  onEdit,
+  onCerrar,
+}: SalidaDetailModalProps) {
   const [salida, setSalida] = useState<SalidaRecord | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -103,9 +124,7 @@ export function SalidaDetailModal({ salidaId, onClose, isAdmin = false, currentU
         <header className="bg-white border-b border-secondary/15 px-4 sm:px-6 h-14 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <Mountain size={20} className="text-primary" />
-            <span className="font-semibold text-slate-900 truncate pr-4">
-              Detalle de Salida
-            </span>
+            <span className="font-semibold text-slate-900 truncate pr-4">Detalle de Salida</span>
             {typeof salida.numeroSalida === 'number' && (
               <span className="shrink-0 text-[10px] font-bold text-secondary bg-primary-fixed px-2 py-0.5 rounded-md">
                 N° {salida.numeroSalida}
@@ -124,9 +143,7 @@ export function SalidaDetailModal({ salidaId, onClose, isAdmin = false, currentU
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="bg-white rounded-2xl border border-secondary/15 p-5 sm:p-6 mb-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <span
-                className={`text-xs font-semibold px-3 py-1 rounded-full ${STATUS_COLORS[salida.status]}`}
-              >
+              <span className={`text-xs font-semibold px-3 py-1 rounded-full ${STATUS_COLORS[salida.status]}`}>
                 {STATUS_LABELS[salida.status]}
               </span>
               <span className="text-xs font-medium text-on-surface-variant bg-slate-100 px-3 py-1 rounded-full">
@@ -142,7 +159,7 @@ export function SalidaDetailModal({ salidaId, onClose, isAdmin = false, currentU
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 leading-tight">
               {salida.nombreActividad}
             </h1>
-            
+
             <p className="flex items-center gap-1.5 text-secondary font-medium mb-6">
               <MapPin size={16} />
               {salida.ubicacionGeografica}
@@ -162,9 +179,7 @@ export function SalidaDetailModal({ salidaId, onClose, isAdmin = false, currentU
                 <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">
                   Líder de Cordada
                 </p>
-                <p className="text-sm text-slate-900 font-medium">
-                  {salida.liderCordada}
-                </p>
+                <p className="text-sm text-slate-900 font-medium">{salida.liderCordada}</p>
               </div>
             </div>
           </div>
@@ -182,10 +197,14 @@ export function SalidaDetailModal({ salidaId, onClose, isAdmin = false, currentU
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-50">
                   <span className="text-on-surface-variant">Retorno Estimado</span>
-                  <span className="font-medium text-slate-900 capitalize">{formatDateFull(salida.fechaRetornoEstimada)}</span>
+                  <span className="font-medium text-slate-900 capitalize">
+                    {formatDateFull(salida.fechaRetornoEstimada)}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center py-2">
-                  <span className="text-on-surface-variant flex items-center gap-1"><Clock size={14} /> Hora Alerta</span>
+                  <span className="text-on-surface-variant flex items-center gap-1">
+                    <Clock size={14} /> Hora Alerta
+                  </span>
                   <span className="font-semibold text-error">{salida.horaAlerta}</span>
                 </div>
               </div>
@@ -236,8 +255,8 @@ export function SalidaDetailModal({ salidaId, onClose, isAdmin = false, currentU
               {canManageIntegrantes && salida.status === 'EN_CURSO' && !integrantesEditable && (
                 <p className="mt-3 flex items-start gap-1.5 text-xs text-on-error-container bg-error-container border border-error/20 rounded-lg px-3 py-2">
                   <Lock size={13} className="shrink-0 mt-0.5" />
-                  La edición de integrantes ya no está disponible porque la salida ya comenzó o la
-                  hora programada de salida ya fue alcanzada.
+                  La edición de integrantes ya no está disponible porque la salida ya comenzó o la hora programada de
+                  salida ya fue alcanzada.
                 </p>
               )}
             </section>
@@ -248,14 +267,18 @@ export function SalidaDetailModal({ salidaId, onClose, isAdmin = false, currentU
                 <h3 className="text-sm font-bold text-primary mb-2">Comunicaciones</h3>
                 <div className="flex flex-wrap gap-2">
                   {salida.mediosComunicacion.map((m) => (
-                    <span key={m} className="bg-primary-fixed text-primary-hover text-xs font-medium px-2.5 py-1 rounded-lg">
+                    <span
+                      key={m}
+                      className="bg-primary-fixed text-primary-hover text-xs font-medium px-2.5 py-1 rounded-lg"
+                    >
                       {MEDIO_COMUNICACION_LABELS[m]}
                     </span>
                   ))}
                 </div>
                 {salida.idDispositivoFrecuencia && (
                   <p className="text-xs text-on-surface-variant mt-2">
-                    ID / Frecuencia: <span className="font-medium text-slate-900">{salida.idDispositivoFrecuencia}</span>
+                    ID / Frecuencia:{' '}
+                    <span className="font-medium text-slate-900">{salida.idDispositivoFrecuencia}</span>
                   </p>
                 )}
               </div>
@@ -265,7 +288,10 @@ export function SalidaDetailModal({ salidaId, onClose, isAdmin = false, currentU
                 <div className="flex flex-wrap gap-2">
                   {salida.equipoColectivo.length > 0 ? (
                     salida.equipoColectivo.map((e) => (
-                      <span key={e} className="bg-primary-fixed text-primary-hover text-xs font-medium px-2.5 py-1 rounded-lg">
+                      <span
+                        key={e}
+                        className="bg-primary-fixed text-primary-hover text-xs font-medium px-2.5 py-1 rounded-lg"
+                      >
                         {EQUIPO_COLECTIVO_LABELS[e]}
                       </span>
                     ))
@@ -285,7 +311,10 @@ export function SalidaDetailModal({ salidaId, onClose, isAdmin = false, currentU
                 <div className="flex flex-wrap gap-2">
                   {salida.avisosExternos.length > 0 ? (
                     salida.avisosExternos.map((a) => (
-                      <span key={a} className="bg-amber-50 text-amber-700 text-xs font-medium px-2.5 py-1 rounded-lg border border-amber-200/50">
+                      <span
+                        key={a}
+                        className="bg-amber-50 text-amber-700 text-xs font-medium px-2.5 py-1 rounded-lg border border-amber-200/50"
+                      >
                         {AVISO_EXTERNO_LABELS[a]}
                       </span>
                     ))
@@ -299,13 +328,18 @@ export function SalidaDetailModal({ salidaId, onClose, isAdmin = false, currentU
             {/* Planificación Técnica */}
             <section className="bg-white rounded-2xl border border-secondary/15 p-5 shadow-sm space-y-4">
               <h3 className="text-sm font-bold text-primary mb-4">Planificación Técnica</h3>
-              
+
               <div>
-                <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Riesgos Identificados</h4>
+                <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">
+                  Riesgos Identificados
+                </h4>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {(salida.riesgosIdentificados || []).length > 0 ? (
                     salida.riesgosIdentificados!.map((r) => (
-                      <span key={r} className="bg-error-container text-error text-xs font-medium px-2.5 py-1 rounded-lg border border-error/20">
+                      <span
+                        key={r}
+                        className="bg-error-container text-error text-xs font-medium px-2.5 py-1 rounded-lg border border-error/20"
+                      >
                         {RIESGO_IDENTIFICADO_LABELS[r]}
                       </span>
                     ))
@@ -321,18 +355,24 @@ export function SalidaDetailModal({ salidaId, onClose, isAdmin = false, currentU
               </div>
 
               <div className="pt-2 border-t border-slate-100">
-                <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Plan de Evacuación</h4>
+                <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">
+                  Plan de Evacuación
+                </h4>
                 <p className="text-sm text-slate-900 bg-slate-50 p-3 rounded-xl border border-slate-100 whitespace-pre-wrap">
                   {salida.planEvacuacion || <span className="text-on-surface-variant italic">No especificado</span>}
                 </p>
               </div>
 
               <div className="pt-2 border-t border-slate-100">
-                <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Pronóstico Meteorológico</h4>
+                <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">
+                  Pronóstico Meteorológico
+                </h4>
                 {/* Registros viejos pueden tener solo archivo, solo texto, o nada */}
                 {(salida.pronosticoMeteorologico || !salida.pronosticoFileId) && (
                   <p className="text-sm text-slate-900 bg-slate-50 p-3 rounded-xl border border-slate-100 whitespace-pre-wrap">
-                    {salida.pronosticoMeteorologico || <span className="text-on-surface-variant italic">No especificado</span>}
+                    {salida.pronosticoMeteorologico || (
+                      <span className="text-on-surface-variant italic">No especificado</span>
+                    )}
                   </p>
                 )}
                 {(salida.pronosticoFileId || salida.gpxFileId) && (

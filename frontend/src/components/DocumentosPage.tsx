@@ -56,109 +56,109 @@ export function DocumentosPage({ onBack, shell, isAdmin = false }: DocumentosPag
 
   return (
     <AppShell shell={shell} active="documentos" onBack={onBack} width="narrow">
-        <div className="mb-6">
-          <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
-            <BookOpen size={14} />
-            Exclusivo socios {memberBadge}
-          </div>
-          <h1 className="text-xl font-bold text-slate-900">Documentación del Club</h1>
-          <p className="text-sm text-on-surface-variant mt-0.5">
-            Formularios, check-lists y material de apoyo para tus salidas de montaña.
-          </p>
+      <div className="mb-6">
+        <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
+          <BookOpen size={14} />
+          Exclusivo socios {memberBadge}
         </div>
+        <h1 className="text-xl font-bold text-slate-900">Documentación del Club</h1>
+        <p className="text-sm text-on-surface-variant mt-0.5">
+          Formularios, check-lists y material de apoyo para tus salidas de montaña.
+        </p>
+      </div>
 
-        {!documentos && !error && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
-            <Loader2 className="animate-spin text-primary" size={28} />
-            <p className="text-sm">Cargando documentos...</p>
+      {!documentos && !error && (
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
+          <Loader2 className="animate-spin text-primary" size={28} />
+          <p className="text-sm">Cargando documentos...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container">
+          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          <p>{error}</p>
+        </div>
+      )}
+
+      {documentos && documentos.length === 0 && (
+        <div className="flex flex-col items-center py-12 gap-3 text-center">
+          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-fixed">
+            <FolderOpen size={24} className="text-primary" />
           </div>
-        )}
-
-        {error && (
-          <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container">
-            <AlertCircle size={18} className="shrink-0 mt-0.5" />
-            <p>{error}</p>
+          <div>
+            <p className="font-semibold text-slate-700">Documentos en preparación</p>
+            <p className="text-sm text-on-surface-variant mt-0.5 max-w-sm">
+              Pronto encontrarás aquí los formularios de aviso de expedición de los retenes de Carabineros, la matriz de
+              riesgo 3x3, check-lists de salidas, glosario, libros y más.
+            </p>
           </div>
-        )}
+        </div>
+      )}
 
-        {documentos && documentos.length === 0 && (
-          <div className="flex flex-col items-center py-12 gap-3 text-center">
-            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-fixed">
-              <FolderOpen size={24} className="text-primary" />
-            </div>
-            <div>
-              <p className="font-semibold text-slate-700">Documentos en preparación</p>
-              <p className="text-sm text-on-surface-variant mt-0.5 max-w-sm">
-                Pronto encontrarás aquí los formularios de aviso de expedición de los retenes de
-                Carabineros, la matriz de riesgo 3x3, check-lists de salidas, glosario, libros y más.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {documentos && documentos.length > 0 && (
-          <div className="flex flex-col gap-6">
-            {grupos.map(([categoria, docs]) => (
-              <section key={categoria}>
-                <h2 className="text-sm font-bold text-primary uppercase tracking-wide mb-2">
-                  {CATEGORIA_LABELS[categoria] ?? categoria}
-                </h2>
-                <ul className="flex flex-col gap-2">
-                  {docs.map((doc) => {
-                    const contenido = (
-                      <>
-                        <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-primary-fixed flex items-center justify-center">
-                          <FileText size={18} className="text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-slate-900 text-sm truncate">{doc.nombre}</p>
-                          {doc.descripcion && (
-                            <p className="text-xs text-on-surface-variant truncate">{doc.descripcion}</p>
-                          )}
-                        </div>
-                        <Download size={16} className="shrink-0 text-secondary" />
-                      </>
-                    )
-                    return (
-                      <li key={doc.id}>
-                        {doc.driveFileId ? (
-                          <FileDownloadButton
-                            fetchUrl={() => fetchDocumentoUrl(doc.id)}
-                            className={[
-                              'flex items-center gap-3 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 w-full text-left',
-                              'transition-shadow duration-200 hover:shadow-md',
-                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                              'disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-sm',
-                            ].join(' ')}
-                          >
-                            {contenido}
-                          </FileDownloadButton>
-                        ) : (
-                          // Documento sin archivo aún: visible pero deshabilitado
-                          <button
-                            type="button"
-                            disabled
-                            className="flex items-center gap-3 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 w-full text-left opacity-60 cursor-not-allowed"
-                          >
-                            {contenido}
-                          </button>
+      {documentos && documentos.length > 0 && (
+        <div className="flex flex-col gap-6">
+          {grupos.map(([categoria, docs]) => (
+            <section key={categoria}>
+              <h2 className="text-sm font-bold text-primary uppercase tracking-wide mb-2">
+                {CATEGORIA_LABELS[categoria] ?? categoria}
+              </h2>
+              <ul className="flex flex-col gap-2">
+                {docs.map((doc) => {
+                  const contenido = (
+                    <>
+                      <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-primary-fixed flex items-center justify-center">
+                        <FileText size={18} className="text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-900 text-sm truncate">{doc.nombre}</p>
+                        {doc.descripcion && (
+                          <p className="text-xs text-on-surface-variant truncate">{doc.descripcion}</p>
                         )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              </section>
-            ))}
-          </div>
-        )}
+                      </div>
+                      <Download size={16} className="shrink-0 text-secondary" />
+                    </>
+                  )
+                  return (
+                    <li key={doc.id}>
+                      {doc.driveFileId ? (
+                        <FileDownloadButton
+                          fetchUrl={() => fetchDocumentoUrl(doc.id)}
+                          className={[
+                            'flex items-center gap-3 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 w-full text-left',
+                            'transition-shadow duration-200 hover:shadow-md',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                            'disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-sm',
+                          ].join(' ')}
+                        >
+                          {contenido}
+                        </FileDownloadButton>
+                      ) : (
+                        // Documento sin archivo aún: visible pero deshabilitado
+                        <button
+                          type="button"
+                          disabled
+                          className="flex items-center gap-3 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 w-full text-left opacity-60 cursor-not-allowed"
+                        >
+                          {contenido}
+                        </button>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
 
-        {/* Al final y no arriba: un admin entra a esta pantalla a consultar,
+      {/* Al final y no arriba: un admin entra a esta pantalla a consultar,
             igual que cualquier socio; subir es la acción ocasional. */}
-        {isAdmin && (
-          <div className="mt-8 pt-6 border-t border-outline-variant/40">
-            <DocumentosAdminSection variant="inline" onChanged={cargar} />
-          </div>
-        )}
+      {isAdmin && (
+        <div className="mt-8 pt-6 border-t border-outline-variant/40">
+          <DocumentosAdminSection variant="inline" onChanged={cargar} />
+        </div>
+      )}
     </AppShell>
   )
 }

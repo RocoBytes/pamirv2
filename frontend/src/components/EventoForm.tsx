@@ -44,9 +44,7 @@ const eventoFormSchema = z
       .refine((v) => v === '' || (/^\d+$/.test(v) && Number(v) <= 9000), 'Entre 0 y 9000 msnm'),
     dificultad: z.string(),
     avisoDestacado: texto300,
-    cupos: z
-      .string()
-      .refine((v) => v === '' || (/^\d+$/.test(v) && Number(v) >= 1), 'Debe ser al menos 1'),
+    cupos: z.string().refine((v) => v === '' || (/^\d+$/.test(v) && Number(v) >= 1), 'Debe ser al menos 1'),
     fechaCorteFecha: z.string(),
     fechaCorteHora: z.string(),
     objetivo: texto5000,
@@ -164,9 +162,7 @@ const CampoTextarea = forwardRef<HTMLTextAreaElement, CampoTextareaProps>(functi
           'w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900',
           'placeholder:text-on-surface-variant/50 transition-colors duration-150',
           'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
-          error
-            ? 'border-error focus:ring-error focus:border-error'
-            : 'border-secondary/40',
+          error ? 'border-error focus:ring-error focus:border-error' : 'border-secondary/40',
         ].join(' ')}
         {...props}
       />
@@ -252,9 +248,7 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
     setSubmitError(null)
     let guardado: EventoConCategoria
     try {
-      guardado = evento
-        ? await updateEvento(evento.id, toPayload(values))
-        : await createEvento(toPayload(values))
+      guardado = evento ? await updateEvento(evento.id, toPayload(values)) : await createEvento(toPayload(values))
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'No se pudo guardar el evento')
       setSaving(false)
@@ -287,9 +281,7 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
   }
 
   // El gestor solo elige entre sus categorías; el admin ve todas
-  const categoriasElegibles = esAdminEventos
-    ? categorias
-    : categorias.filter((c) => gestorCategoriaIds.includes(c.id))
+  const categoriasElegibles = esAdminEventos ? categorias : categorias.filter((c) => gestorCategoriaIds.includes(c.id))
   const categoriaOptions = [
     { value: '', label: categoriaObligatoria ? '— Selecciona —' : '— Sin categoría —' },
     ...categoriasElegibles.map((c) => ({ value: String(c.id), label: c.nombre })),
@@ -322,12 +314,7 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
         />
 
         <div className="grid sm:grid-cols-2 gap-4">
-          <Input
-            label="Fecha de inicio"
-            type="date"
-            error={errors.fechaInicio?.message}
-            {...register('fechaInicio')}
-          />
+          <Input label="Fecha de inicio" type="date" error={errors.fechaInicio?.message} {...register('fechaInicio')} />
           <Controller
             control={control}
             name="horaInicio"
@@ -344,12 +331,7 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4">
-          <Input
-            label="Fecha de término"
-            type="date"
-            error={errors.fechaFin?.message}
-            {...register('fechaFin')}
-          />
+          <Input label="Fecha de término" type="date" error={errors.fechaFin?.message} {...register('fechaFin')} />
           <Input
             label="Duración"
             placeholder="Ej: 2 días"
@@ -447,12 +429,7 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
       <section className="bg-white rounded-2xl border border-secondary/15 p-5 shadow-sm flex flex-col gap-4">
         <h2 className="text-sm font-bold text-primary">Contenido</h2>
 
-        <CampoTextarea
-          label="Objetivo"
-          maxLength={5000}
-          error={errors.objetivo?.message}
-          {...register('objetivo')}
-        />
+        <CampoTextarea label="Objetivo" maxLength={5000} error={errors.objetivo?.message} {...register('objetivo')} />
         <CampoTextarea
           label="Itinerario"
           maxLength={5000}
@@ -485,8 +462,7 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
           <FilePicker
             label={
               <>
-                Adjunto del itinerario{' '}
-                <span className="text-on-surface-variant font-normal">(opcional)</span>
+                Adjunto del itinerario <span className="text-on-surface-variant font-normal">(opcional)</span>
               </>
             }
             hint="PDF, JPG o PNG, máximo 15 MB. Se sube al guardar."
@@ -543,7 +519,10 @@ export function EventoForm({ evento, esAdminEventos = false, gestorCategoriaIds 
       )}
 
       {submitError && (
-        <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-4 py-3 text-sm text-on-error-container" role="alert">
+        <div
+          className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-4 py-3 text-sm text-on-error-container"
+          role="alert"
+        >
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
           <p>{submitError}</p>
         </div>

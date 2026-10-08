@@ -28,18 +28,22 @@ const DISCIPLINA_OPTIONS: { value: Disciplina; label: string }[] = [
 ]
 
 const step1Schema = z.object({
-  tipoSalida: z.enum(
-    ['OFICIAL_CLUB', 'NO_OFICIAL', 'EXPEDICION_PARTICULAR'],
-    { error: 'Selecciona el tipo de salida' },
-  ),
+  tipoSalida: z.enum(['OFICIAL_CLUB', 'NO_OFICIAL', 'EXPEDICION_PARTICULAR'], {
+    error: 'Selecciona el tipo de salida',
+  }),
   disciplina: z.enum(
-    ['TREKKING', 'MEDIA_MONTANA', 'ALTA_MONTANA', 'ESCALADA_ROCA', 'ESCALADA_HIELO', 'ESQUI_MONTANA', 'TRAIL_SKY_RUNNING'],
+    [
+      'TREKKING',
+      'MEDIA_MONTANA',
+      'ALTA_MONTANA',
+      'ESCALADA_ROCA',
+      'ESCALADA_HIELO',
+      'ESQUI_MONTANA',
+      'TRAIL_SKY_RUNNING',
+    ],
     { error: 'Selecciona la disciplina' },
   ),
-  temporada: z.enum(
-    ['estival', 'invernal'],
-    { error: 'Selecciona la temporada' },
-  ),
+  temporada: z.enum(['estival', 'invernal'], { error: 'Selecciona la temporada' }),
   nombreActividad: z.string().min(2, 'Ingresa el nombre de la actividad o ruta (min. 2 caracteres)'),
   ubicacionGeografica: z.string().min(2, 'Ingresa la ubicación geográfica (min. 2 caracteres)'),
 })
@@ -59,18 +63,14 @@ interface RadioGroupProps<T extends string> {
   error?: string
 }
 
-function RadioChipGroup<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-  error,
-}: RadioGroupProps<T>) {
+function RadioChipGroup<T extends string>({ label, options, value, onChange, error }: RadioGroupProps<T>) {
   return (
     <fieldset className="flex flex-col gap-2">
       <legend className="text-sm font-semibold text-primary">
         {label}
-        <span className="text-error ml-1" aria-hidden="true">*</span>
+        <span className="text-error ml-1" aria-hidden="true">
+          *
+        </span>
       </legend>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {

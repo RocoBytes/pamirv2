@@ -17,20 +17,17 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   return (
     <div className="flex flex-col gap-1">
       {label && (
-        <label
-          htmlFor={inputId}
-          className="text-sm font-semibold text-primary"
-        >
+        <label htmlFor={inputId} className="text-sm font-semibold text-primary">
           {label}
-          {props.required && <span className="text-error ml-1" aria-hidden="true">*</span>}
+          {props.required && (
+            <span className="text-error ml-1" aria-hidden="true">
+              *
+            </span>
+          )}
         </label>
       )}
       <div className="relative flex items-center">
-        {leftIcon && (
-          <span className="absolute left-3 text-secondary/60 pointer-events-none">
-            {leftIcon}
-          </span>
-        )}
+        {leftIcon && <span className="absolute left-3 text-secondary/60 pointer-events-none">{leftIcon}</span>}
         <input
           ref={ref}
           id={inputId}
@@ -40,9 +37,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             'transition-colors duration-150',
             'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
             'disabled:bg-surface-container-low disabled:text-on-surface-variant/60 disabled:cursor-not-allowed',
-            error
-              ? 'border-error focus:ring-error focus:border-error'
-              : 'border-secondary/40',
+            error ? 'border-error focus:ring-error focus:border-error' : 'border-secondary/40',
             leftIcon ? 'pl-9' : '',
             rightIcon ? 'pr-9' : '',
             className,
@@ -50,16 +45,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             .filter(Boolean)
             .join(' ')}
           aria-invalid={error ? 'true' : undefined}
-          aria-describedby={
-            error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined
-          }
+          aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
           {...props}
         />
-        {rightIcon && (
-          <span className="absolute right-3 text-secondary/60 pointer-events-none">
-            {rightIcon}
-          </span>
-        )}
+        {rightIcon && <span className="absolute right-3 text-secondary/60 pointer-events-none">{rightIcon}</span>}
       </div>
       {hint && !error && (
         <p id={`${inputId}-hint`} className="text-xs text-on-surface-variant">

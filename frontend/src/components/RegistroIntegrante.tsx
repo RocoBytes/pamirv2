@@ -51,7 +51,7 @@ const REGIONES = [
   'Atacama',
   'Coquimbo',
   'Valparaíso',
-  'Libertador Gral Bernardo O\'Higgins',
+  "Libertador Gral Bernardo O'Higgins",
   'Maule',
   'Ñuble',
   'Biobío',
@@ -123,7 +123,6 @@ function FieldError({ message }: { message?: string }) {
   )
 }
 
-
 interface SingleSelectChipProps {
   label: string
   options: { value: string; label: string }[]
@@ -138,7 +137,11 @@ function SingleSelectChip({ label, options, value, onChange, error, required }: 
     <fieldset className="flex flex-col gap-2">
       <legend className="text-sm font-semibold text-primary">
         {label}
-        {required && <span className="text-error ml-1" aria-hidden="true">*</span>}
+        {required && (
+          <span className="text-error ml-1" aria-hidden="true">
+            *
+          </span>
+        )}
       </legend>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
@@ -179,7 +182,9 @@ function YesNoField({ label, value, onChange, error }: YesNoFieldProps) {
     <fieldset className="flex flex-col gap-2">
       <legend className="text-sm font-semibold text-primary">
         {label}
-        <span className="text-error ml-1" aria-hidden="true">*</span>
+        <span className="text-error ml-1" aria-hidden="true">
+          *
+        </span>
       </legend>
       <div className="flex gap-2">
         {([true, false] as const).map((opt) => {
@@ -235,7 +240,9 @@ function YesNoWithDetail({
       <fieldset className="flex flex-col gap-2">
         <legend className="text-sm font-semibold text-primary">
           {label}
-          <span className="text-error ml-1" aria-hidden="true">*</span>
+          <span className="text-error ml-1" aria-hidden="true">
+            *
+          </span>
         </legend>
         <div className="flex gap-2">
           {([true, false] as const).map((opt) => {
@@ -548,9 +555,7 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
           <div className="flex items-center gap-2 ml-2 min-w-0">
             <ClubLogo alt="" className="w-9 h-9 object-contain shrink-0" />
             <User size={18} className="text-primary shrink-0" aria-hidden="true" />
-            <span className="font-semibold text-on-surface text-body-medium truncate">
-              Registro de Integrante
-            </span>
+            <span className="font-semibold text-on-surface text-body-medium truncate">Registro de Integrante</span>
           </div>
         </div>
       </header>
@@ -626,478 +631,462 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
               exit="exit"
               className="flex flex-col gap-6"
             >
-            {currentStep === 1 && (
-              <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
-                <SectionHeader number="I" title={stepMeta.title} headingRef={stepHeadingRef} />
+              {currentStep === 1 && (
+                <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
+                  <SectionHeader number="I" title={stepMeta.title} headingRef={stepHeadingRef} />
 
-                <Input
-                  label="Nombre Completo"
-                  placeholder="Ej: Juan Andrés Pérez González"
-                  required
-                  autoComplete="name"
-                  maxLength={100}
-                  error={errors.nombreCompleto?.message}
-                  {...register('nombreCompleto')}
-                />
-
-                <Controller
-                  control={control}
-                  name="rut"
-                  render={({ field }) => (
-                    <Input
-                      label="RUT"
-                      placeholder="12.345.678-K"
-                      required
-                      error={errors.rut?.message}
-                      value={field.value}
-                      onChange={(e) => field.onChange(formatRut(e.target.value))}
-                    />
-                  )}
-                />
-
-                <Input
-                  label="Nacionalidad"
-                  placeholder="Ej: Chilena"
-                  required
-                  error={errors.nacionalidad?.message}
-                  {...register('nacionalidad')}
-                />
-
-                <Controller
-                  control={control}
-                  name="genero"
-                  render={({ field }) => (
-                    <SingleSelectChip
-                      label="Género"
-                      options={GENEROS}
-                      value={field.value ?? ''}
-                      onChange={field.onChange}
-                      error={errors.genero?.message}
-                      required
-                    />
-                  )}
-                />
-
-                <Input
-                  label="Fecha de Nacimiento"
-                  type="date"
-                  required
-                  error={errors.fechaNacimiento?.message}
-                  {...register('fechaNacimiento')}
-                />
-
-                <Input
-                  label="Dirección"
-                  placeholder="Calle, número, depto..."
-                  required
-                  maxLength={100}
-                  error={errors.direccion?.message}
-                  {...register('direccion')}
-                />
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
-                    label="Comuna"
-                    placeholder="Ej: Las Condes"
+                    label="Nombre Completo"
+                    placeholder="Ej: Juan Andrés Pérez González"
+                    required
+                    autoComplete="name"
+                    maxLength={100}
+                    error={errors.nombreCompleto?.message}
+                    {...register('nombreCompleto')}
+                  />
+
+                  <Controller
+                    control={control}
+                    name="rut"
+                    render={({ field }) => (
+                      <Input
+                        label="RUT"
+                        placeholder="12.345.678-K"
+                        required
+                        error={errors.rut?.message}
+                        value={field.value}
+                        onChange={(e) => field.onChange(formatRut(e.target.value))}
+                      />
+                    )}
+                  />
+
+                  <Input
+                    label="Nacionalidad"
+                    placeholder="Ej: Chilena"
+                    required
+                    error={errors.nacionalidad?.message}
+                    {...register('nacionalidad')}
+                  />
+
+                  <Controller
+                    control={control}
+                    name="genero"
+                    render={({ field }) => (
+                      <SingleSelectChip
+                        label="Género"
+                        options={GENEROS}
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                        error={errors.genero?.message}
+                        required
+                      />
+                    )}
+                  />
+
+                  <Input
+                    label="Fecha de Nacimiento"
+                    type="date"
+                    required
+                    error={errors.fechaNacimiento?.message}
+                    {...register('fechaNacimiento')}
+                  />
+
+                  <Input
+                    label="Dirección"
+                    placeholder="Calle, número, depto..."
                     required
                     maxLength={100}
-                    error={errors.comuna?.message}
-                    {...register('comuna')}
+                    error={errors.direccion?.message}
+                    {...register('direccion')}
+                  />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input
+                      label="Comuna"
+                      placeholder="Ej: Las Condes"
+                      required
+                      maxLength={100}
+                      error={errors.comuna?.message}
+                      {...register('comuna')}
+                    />
+
+                    <Select
+                      label="Región"
+                      required
+                      placeholder="Selecciona tu región"
+                      options={REGIONES.map((r) => ({ value: r, label: r }))}
+                      error={errors.region?.message}
+                      {...register('region')}
+                    />
+                  </div>
+
+                  <Input
+                    label="Teléfono Celular"
+                    type="tel"
+                    placeholder="+56 9 1234 5678"
+                    required
+                    autoComplete="tel"
+                    inputMode="numeric"
+                    error={errors.telefonoCelular?.message}
+                    {...register('telefonoCelular')}
+                  />
+
+                  <Input
+                    label="Email"
+                    type="email"
+                    placeholder="correo@ejemplo.com"
+                    required
+                    autoComplete="email"
+                    maxLength={100}
+                    error={errors.email?.message}
+                    readOnly={!!defaultEmail}
+                    title={defaultEmail ? 'Este email corresponde a tu cuenta de usuario' : undefined}
+                    className={defaultEmail ? 'bg-slate-50 cursor-not-allowed' : undefined}
+                    {...register('email')}
                   />
 
                   <Select
-                    label="Región"
+                    label="Previsión de Salud"
                     required
-                    placeholder="Selecciona tu región"
-                    options={REGIONES.map((r) => ({ value: r, label: r }))}
-                    error={errors.region?.message}
-                    {...register('region')}
+                    placeholder="Selecciona tu previsión"
+                    options={PREVISIONES.map((p) => ({ value: p, label: p }))}
+                    error={errors.previsionSalud?.message}
+                    {...register('previsionSalud')}
                   />
                 </div>
+              )}
 
-                <Input
-                  label="Teléfono Celular"
-                  type="tel"
-                  placeholder="+56 9 1234 5678"
-                  required
-                  autoComplete="tel"
-                  inputMode="numeric"
-                  error={errors.telefonoCelular?.message}
-                  {...register('telefonoCelular')}
-                />
+              {currentStep === 2 && (
+                <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
+                  <SectionHeader number="II" title={stepMeta.title} headingRef={stepHeadingRef} />
 
-                <Input
-                  label="Email"
-                  type="email"
-                  placeholder="correo@ejemplo.com"
-                  required
-                  autoComplete="email"
-                  maxLength={100}
-                  error={errors.email?.message}
-                  readOnly={!!defaultEmail}
-                  title={defaultEmail ? 'Este email corresponde a tu cuenta de usuario' : undefined}
-                  className={defaultEmail ? 'bg-slate-50 cursor-not-allowed' : undefined}
-                  {...register('email')}
-                />
+                  <Input
+                    label="Nombre del Contacto"
+                    placeholder="Nombre completo"
+                    required
+                    maxLength={100}
+                    error={errors.nombreContacto?.message}
+                    {...register('nombreContacto')}
+                  />
 
-                <Select
-                  label="Previsión de Salud"
-                  required
-                  placeholder="Selecciona tu previsión"
-                  options={PREVISIONES.map((p) => ({ value: p, label: p }))}
-                  error={errors.previsionSalud?.message}
-                  {...register('previsionSalud')}
-                />
-              </div>
-            )}
+                  <Input
+                    label="Parentesco"
+                    placeholder="Ej: Madre, Cónyuge, Hermano..."
+                    required
+                    maxLength={100}
+                    error={errors.parentesco?.message}
+                    {...register('parentesco')}
+                  />
 
-            {currentStep === 2 && (
-              <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
-                <SectionHeader number="II" title={stepMeta.title} headingRef={stepHeadingRef} />
+                  <Input
+                    label="Teléfono de Contacto"
+                    type="tel"
+                    placeholder="+56 9 1234 5678"
+                    required
+                    inputMode="numeric"
+                    error={errors.telefonoContacto?.message}
+                    {...register('telefonoContacto')}
+                  />
+                </div>
+              )}
 
-                <Input
-                  label="Nombre del Contacto"
-                  placeholder="Nombre completo"
-                  required
-                  maxLength={100}
-                  error={errors.nombreContacto?.message}
-                  {...register('nombreContacto')}
-                />
+              {currentStep === 3 && (
+                <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
+                  <SectionHeader number="III" title={stepMeta.title} headingRef={stepHeadingRef} />
 
-                <Input
-                  label="Parentesco"
-                  placeholder="Ej: Madre, Cónyuge, Hermano..."
-                  required
-                  maxLength={100}
-                  error={errors.parentesco?.message}
-                  {...register('parentesco')}
-                />
-
-                <Input
-                  label="Teléfono de Contacto"
-                  type="tel"
-                  placeholder="+56 9 1234 5678"
-                  required
-                  inputMode="numeric"
-                  error={errors.telefonoContacto?.message}
-                  {...register('telefonoContacto')}
-                />
-              </div>
-            )}
-
-            {currentStep === 3 && (
-              <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
-                <SectionHeader number="III" title={stepMeta.title} headingRef={stepHeadingRef} />
-
-                <Controller
-                  control={control}
-                  name="grupoSanguineo"
-                  render={({ field }) => (
-                    <SingleSelectChip
-                      label="Grupo Sanguíneo y Factor RH"
-                      options={GRUPOS_SANGUINEOS.map((g) => ({ value: g, label: g }))}
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.grupoSanguineo?.message}
-                      required
-                    />
-                  )}
-                />
-
-                <Controller
-                  control={control}
-                  name="alergiasTiene"
-                  render={({ field }) => (
-                    <YesNoWithDetail
-                      label="Alergias Conocidas"
-                      tiene={values.alergiasTiene}
-                      detalle={values.alergiasDetalle ?? ''}
-                      onChangeTiene={field.onChange}
-                      onChangeDetalle={(v) => setValue('alergiasDetalle', v)}
-                      errorTiene={errors.alergiasTiene?.message}
-                      errorDetalle={errors.alergiasDetalle?.message}
-                      placeholder="Ej: Penicilina, mariscos, picaduras de abejas..."
-                    />
-                  )}
-                />
-
-                <Controller
-                  control={control}
-                  name="enfermedadesCronicasTiene"
-                  render={({ field }) => (
-                    <YesNoWithDetail
-                      label="Enfermedades Crónicas"
-                      tiene={values.enfermedadesCronicasTiene}
-                      detalle={values.enfermedadesCronicasDetalle ?? ''}
-                      onChangeTiene={field.onChange}
-                      onChangeDetalle={(v) => setValue('enfermedadesCronicasDetalle', v)}
-                      errorTiene={errors.enfermedadesCronicasTiene?.message}
-                      errorDetalle={errors.enfermedadesCronicasDetalle?.message}
-                      placeholder="Ej: Diabetes tipo 2, hipertensión, asma..."
-                    />
-                  )}
-                />
-
-                <Controller
-                  control={control}
-                  name="medicamentosTiene"
-                  render={({ field }) => (
-                    <YesNoWithDetail
-                      label="¿Toma medicamentos de forma regular?"
-                      tiene={values.medicamentosTiene}
-                      detalle={values.medicamentosDetalle ?? ''}
-                      onChangeTiene={field.onChange}
-                      onChangeDetalle={(v) => setValue('medicamentosDetalle', v)}
-                      errorTiene={errors.medicamentosTiene?.message}
-                      errorDetalle={errors.medicamentosDetalle?.message}
-                      placeholder="Ej: Metformina 500mg, Losartán 50mg..."
-                    />
-                  )}
-                />
-
-                <Controller
-                  control={control}
-                  name="cirugiasLesionesTiene"
-                  render={({ field }) => (
-                    <YesNoWithDetail
-                      label="Cirugías o Lesiones"
-                      tiene={values.cirugiasLesionesTiene}
-                      detalle={values.cirugiasLesionesDetalle ?? ''}
-                      onChangeTiene={field.onChange}
-                      onChangeDetalle={(v) => setValue('cirugiasLesionesDetalle', v)}
-                      errorTiene={errors.cirugiasLesionesTiene?.message}
-                      errorDetalle={errors.cirugiasLesionesDetalle?.message}
-                      placeholder="Ej: Meniscectomía rodilla derecha (03/2022), fractura tobillo (2019)..."
-                    />
-                  )}
-                />
-
-                <Controller
-                  control={control}
-                  name="fuma"
-                  render={({ field }) => (
-                    <YesNoField
-                      label="¿Fuma?"
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.fuma?.message}
-                    />
-                  )}
-                />
-
-                <Controller
-                  control={control}
-                  name="usaLentes"
-                  render={({ field }) => (
-                    <YesNoField
-                      label="¿Usa lentes ópticos?"
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.usaLentes?.message}
-                    />
-                  )}
-                />
-              </div>
-            )}
-
-            {currentStep === 4 && (
-              <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
-                <SectionHeader number="IV" title={stepMeta.title} headingRef={stepHeadingRef} />
-
-                {/* Cláusula 1 */}
-                <div className="flex flex-col gap-3">
-                  <div className="rounded-xl border border-secondary/20 bg-surface-container-low/60 p-4">
-                    <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
-                      1. Declaración de Salud y Aptitud Física
-                    </p>
-                    <p className="text-sm text-slate-700 leading-relaxed">
-                      El firmante declara que se encuentra en condiciones físicas y psíquicas aptas para la
-                      práctica de deportes de montaña (senderismo, escalada, montañismo y otras actividades
-                      relacionadas). Declara que la información proporcionada en este formulario es veraz y
-                      completa, asumiendo que la ocultación de antecedentes médicos puede comprometer su
-                      seguridad y la del grupo.
-                    </p>
-                  </div>
                   <Controller
                     control={control}
-                    name="declaracionSalud"
+                    name="grupoSanguineo"
                     render={({ field }) => (
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={field.value === true}
-                          onChange={(e) =>
-                            field.onChange(e.target.checked ? true : (undefined as unknown as true))
-                          }
-                          className="mt-0.5 w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
-                        />
-                        <span className="text-sm font-medium text-slate-700">
-                          He leído y estoy de acuerdo
-                          <span className="text-error ml-1">*</span>
-                        </span>
-                      </label>
+                      <SingleSelectChip
+                        label="Grupo Sanguíneo y Factor RH"
+                        options={GRUPOS_SANGUINEOS.map((g) => ({ value: g, label: g }))}
+                        value={field.value}
+                        onChange={field.onChange}
+                        error={errors.grupoSanguineo?.message}
+                        required
+                      />
                     )}
                   />
-                  <FieldError message={errors.declaracionSalud?.message} />
-                </div>
 
-                {/* Cláusula 2 */}
-                <div className="flex flex-col gap-3">
-                  <div className="rounded-xl border border-secondary/20 bg-surface-container-low/60 p-4">
-                    <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
-                      2. Aceptación de Riesgo y Exención de Responsabilidad
-                    </p>
-                    <p className="text-sm text-slate-700 leading-relaxed mb-3">
-                      Reconozco que las actividades de montaña son intrínsecamente riesgosas y pueden
-                      implicar peligros derivados del terreno, clima extremo, caída de rocas, fallas de equipo y
-                      otros factores objetivos y subjetivos que pueden resultar en lesiones graves o la muerte.
-                    </p>
-                    <ul className="flex flex-col gap-2">
-                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
-                        <span className="font-medium">Exención:</span> Libero de toda responsabilidad civil y
-                        criminal al Club, a sus directivos, guías, instructores y miembros, por cualquier
-                        accidente o incidente derivado de los riesgos propios de la actividad o de mi propia
-                        negligencia, siempre que el club haya actuado bajo los protocolos de seguridad estándar.
-                      </li>
-                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
-                        El Club no se hace responsable por accidentes derivados de la omisión de información o
-                        negligencia de los participantes.
-                      </li>
-                    </ul>
-                  </div>
                   <Controller
                     control={control}
-                    name="aceptacionRiesgo"
+                    name="alergiasTiene"
                     render={({ field }) => (
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={field.value === true}
-                          onChange={(e) =>
-                            field.onChange(e.target.checked ? true : (undefined as unknown as true))
-                          }
-                          className="mt-0.5 w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
-                        />
-                        <span className="text-sm font-medium text-slate-700">
-                          He leído y estoy de acuerdo
-                          <span className="text-error ml-1">*</span>
-                        </span>
-                      </label>
+                      <YesNoWithDetail
+                        label="Alergias Conocidas"
+                        tiene={values.alergiasTiene}
+                        detalle={values.alergiasDetalle ?? ''}
+                        onChangeTiene={field.onChange}
+                        onChangeDetalle={(v) => setValue('alergiasDetalle', v)}
+                        errorTiene={errors.alergiasTiene?.message}
+                        errorDetalle={errors.alergiasDetalle?.message}
+                        placeholder="Ej: Penicilina, mariscos, picaduras de abejas..."
+                      />
                     )}
                   />
-                  <FieldError message={errors.aceptacionRiesgo?.message} />
-                </div>
 
-                {/* Cláusula 3 */}
-                <div className="flex flex-col gap-3">
-                  <div className="rounded-xl border border-secondary/20 bg-surface-container-low/60 p-4">
-                    <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
-                      3. Consentimiento de Uso de Datos Personales (Ley 19.628)
-                    </p>
-                    <p className="text-sm text-slate-700 leading-relaxed mb-3">
-                      En cumplimiento con la Ley N° 19.628 sobre Protección de la Vida Privada, autorizo
-                      expresamente al Club para:
-                    </p>
-                    <ul className="flex flex-col gap-2 mb-3">
-                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
-                        Tratar mis datos personales y sensibles (salud) con el fin exclusivo de gestionar mi
-                        participación en actividades y responder ante emergencias médicas.
-                      </li>
-                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
-                        Almacenar de forma segura esta información, la cual solo será accesible por el cuerpo
-                        técnico o servicios de emergencia en caso de ser necesario.
-                      </li>
-                      <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
-                        Comunicar estos datos a centros de salud o cuerpos de socorro en caso de rescate o
-                        atención urgente.
-                      </li>
-                    </ul>
-                    <p className="text-sm text-slate-700 leading-relaxed mb-2">
-                      Los datos serán utilizados exclusivamente para la gestión de seguridad en montaña,
-                      coordinación de rescates, registro estadístico de incidentes y cumplimiento de protocolos
-                      internos del club.
-                    </p>
-                    <p className="text-sm text-slate-700 leading-relaxed mb-2">
-                      El titular de los datos podrá ejercer en cualquier momento sus derechos de Acceso,
-                      Rectificación, Cancelación y Oposición mediante comunicación escrita a la directiva del Club.
-                    </p>
-                    <p className="text-sm text-slate-700 leading-relaxed">
-                      Los datos se conservarán durante el periodo necesario para la gestión de la actividad y el
-                      posterior análisis estadístico anónimo, tras lo cual serán eliminados o debidamente
-                      anonimizados.
-                    </p>
-                  </div>
                   <Controller
                     control={control}
-                    name="consentimientoDatos"
+                    name="enfermedadesCronicasTiene"
                     render={({ field }) => (
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={field.value === true}
-                          onChange={(e) =>
-                            field.onChange(e.target.checked ? true : (undefined as unknown as true))
-                          }
-                          className="mt-0.5 w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
-                        />
-                        <span className="text-sm font-medium text-slate-700">
-                          He leído y estoy de acuerdo
-                          <span className="text-error ml-1">*</span>
-                        </span>
-                      </label>
+                      <YesNoWithDetail
+                        label="Enfermedades Crónicas"
+                        tiene={values.enfermedadesCronicasTiene}
+                        detalle={values.enfermedadesCronicasDetalle ?? ''}
+                        onChangeTiene={field.onChange}
+                        onChangeDetalle={(v) => setValue('enfermedadesCronicasDetalle', v)}
+                        errorTiene={errors.enfermedadesCronicasTiene?.message}
+                        errorDetalle={errors.enfermedadesCronicasDetalle?.message}
+                        placeholder="Ej: Diabetes tipo 2, hipertensión, asma..."
+                      />
                     )}
                   />
-                  <FieldError message={errors.consentimientoDatos?.message} />
-                </div>
 
-                {/* Cláusula 4 */}
-                <div className="flex flex-col gap-3">
-                  <div className="rounded-xl border border-secondary/20 bg-surface-container-low/60 p-4">
-                    <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
-                      4. Derecho de Imagen
-                    </p>
-                    <p className="text-sm text-slate-700 leading-relaxed">
-                      Autorizo el uso de fotografías o videos capturados durante las salidas para fines
-                      promocionales o educativos del club, sin derecho a compensación económica.
-                    </p>
-                  </div>
                   <Controller
                     control={control}
-                    name="derechoImagen"
+                    name="medicamentosTiene"
                     render={({ field }) => (
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={field.value === true}
-                          onChange={(e) =>
-                            field.onChange(e.target.checked ? true : (undefined as unknown as true))
-                          }
-                          className="mt-0.5 w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
-                        />
-                        <span className="text-sm font-medium text-slate-700">
-                          He leído y estoy de acuerdo
-                          <span className="text-error ml-1">*</span>
-                        </span>
-                      </label>
+                      <YesNoWithDetail
+                        label="¿Toma medicamentos de forma regular?"
+                        tiene={values.medicamentosTiene}
+                        detalle={values.medicamentosDetalle ?? ''}
+                        onChangeTiene={field.onChange}
+                        onChangeDetalle={(v) => setValue('medicamentosDetalle', v)}
+                        errorTiene={errors.medicamentosTiene?.message}
+                        errorDetalle={errors.medicamentosDetalle?.message}
+                        placeholder="Ej: Metformina 500mg, Losartán 50mg..."
+                      />
                     )}
                   />
-                  <FieldError message={errors.derechoImagen?.message} />
+
+                  <Controller
+                    control={control}
+                    name="cirugiasLesionesTiene"
+                    render={({ field }) => (
+                      <YesNoWithDetail
+                        label="Cirugías o Lesiones"
+                        tiene={values.cirugiasLesionesTiene}
+                        detalle={values.cirugiasLesionesDetalle ?? ''}
+                        onChangeTiene={field.onChange}
+                        onChangeDetalle={(v) => setValue('cirugiasLesionesDetalle', v)}
+                        errorTiene={errors.cirugiasLesionesTiene?.message}
+                        errorDetalle={errors.cirugiasLesionesDetalle?.message}
+                        placeholder="Ej: Meniscectomía rodilla derecha (03/2022), fractura tobillo (2019)..."
+                      />
+                    )}
+                  />
+
+                  <Controller
+                    control={control}
+                    name="fuma"
+                    render={({ field }) => (
+                      <YesNoField
+                        label="¿Fuma?"
+                        value={field.value}
+                        onChange={field.onChange}
+                        error={errors.fuma?.message}
+                      />
+                    )}
+                  />
+
+                  <Controller
+                    control={control}
+                    name="usaLentes"
+                    render={({ field }) => (
+                      <YesNoField
+                        label="¿Usa lentes ópticos?"
+                        value={field.value}
+                        onChange={field.onChange}
+                        error={errors.usaLentes?.message}
+                      />
+                    )}
+                  />
                 </div>
-              </div>
-            )}
+              )}
+
+              {currentStep === 4 && (
+                <div className="rounded-2xl border border-secondary/15 bg-white p-5 flex flex-col gap-5">
+                  <SectionHeader number="IV" title={stepMeta.title} headingRef={stepHeadingRef} />
+
+                  {/* Cláusula 1 */}
+                  <div className="flex flex-col gap-3">
+                    <div className="rounded-xl border border-secondary/20 bg-surface-container-low/60 p-4">
+                      <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
+                        1. Declaración de Salud y Aptitud Física
+                      </p>
+                      <p className="text-sm text-slate-700 leading-relaxed">
+                        El firmante declara que se encuentra en condiciones físicas y psíquicas aptas para la práctica
+                        de deportes de montaña (senderismo, escalada, montañismo y otras actividades relacionadas).
+                        Declara que la información proporcionada en este formulario es veraz y completa, asumiendo que
+                        la ocultación de antecedentes médicos puede comprometer su seguridad y la del grupo.
+                      </p>
+                    </div>
+                    <Controller
+                      control={control}
+                      name="declaracionSalud"
+                      render={({ field }) => (
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={field.value === true}
+                            onChange={(e) => field.onChange(e.target.checked ? true : (undefined as unknown as true))}
+                            className="mt-0.5 w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
+                          />
+                          <span className="text-sm font-medium text-slate-700">
+                            He leído y estoy de acuerdo
+                            <span className="text-error ml-1">*</span>
+                          </span>
+                        </label>
+                      )}
+                    />
+                    <FieldError message={errors.declaracionSalud?.message} />
+                  </div>
+
+                  {/* Cláusula 2 */}
+                  <div className="flex flex-col gap-3">
+                    <div className="rounded-xl border border-secondary/20 bg-surface-container-low/60 p-4">
+                      <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
+                        2. Aceptación de Riesgo y Exención de Responsabilidad
+                      </p>
+                      <p className="text-sm text-slate-700 leading-relaxed mb-3">
+                        Reconozco que las actividades de montaña son intrínsecamente riesgosas y pueden implicar
+                        peligros derivados del terreno, clima extremo, caída de rocas, fallas de equipo y otros factores
+                        objetivos y subjetivos que pueden resultar en lesiones graves o la muerte.
+                      </p>
+                      <ul className="flex flex-col gap-2">
+                        <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
+                          <span className="font-medium">Exención:</span> Libero de toda responsabilidad civil y criminal
+                          al Club, a sus directivos, guías, instructores y miembros, por cualquier accidente o incidente
+                          derivado de los riesgos propios de la actividad o de mi propia negligencia, siempre que el
+                          club haya actuado bajo los protocolos de seguridad estándar.
+                        </li>
+                        <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
+                          El Club no se hace responsable por accidentes derivados de la omisión de información o
+                          negligencia de los participantes.
+                        </li>
+                      </ul>
+                    </div>
+                    <Controller
+                      control={control}
+                      name="aceptacionRiesgo"
+                      render={({ field }) => (
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={field.value === true}
+                            onChange={(e) => field.onChange(e.target.checked ? true : (undefined as unknown as true))}
+                            className="mt-0.5 w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
+                          />
+                          <span className="text-sm font-medium text-slate-700">
+                            He leído y estoy de acuerdo
+                            <span className="text-error ml-1">*</span>
+                          </span>
+                        </label>
+                      )}
+                    />
+                    <FieldError message={errors.aceptacionRiesgo?.message} />
+                  </div>
+
+                  {/* Cláusula 3 */}
+                  <div className="flex flex-col gap-3">
+                    <div className="rounded-xl border border-secondary/20 bg-surface-container-low/60 p-4">
+                      <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
+                        3. Consentimiento de Uso de Datos Personales (Ley 19.628)
+                      </p>
+                      <p className="text-sm text-slate-700 leading-relaxed mb-3">
+                        En cumplimiento con la Ley N° 19.628 sobre Protección de la Vida Privada, autorizo expresamente
+                        al Club para:
+                      </p>
+                      <ul className="flex flex-col gap-2 mb-3">
+                        <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
+                          Tratar mis datos personales y sensibles (salud) con el fin exclusivo de gestionar mi
+                          participación en actividades y responder ante emergencias médicas.
+                        </li>
+                        <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
+                          Almacenar de forma segura esta información, la cual solo será accesible por el cuerpo técnico
+                          o servicios de emergencia en caso de ser necesario.
+                        </li>
+                        <li className="text-sm text-slate-700 leading-relaxed pl-3 border-l-2 border-secondary/30">
+                          Comunicar estos datos a centros de salud o cuerpos de socorro en caso de rescate o atención
+                          urgente.
+                        </li>
+                      </ul>
+                      <p className="text-sm text-slate-700 leading-relaxed mb-2">
+                        Los datos serán utilizados exclusivamente para la gestión de seguridad en montaña, coordinación
+                        de rescates, registro estadístico de incidentes y cumplimiento de protocolos internos del club.
+                      </p>
+                      <p className="text-sm text-slate-700 leading-relaxed mb-2">
+                        El titular de los datos podrá ejercer en cualquier momento sus derechos de Acceso,
+                        Rectificación, Cancelación y Oposición mediante comunicación escrita a la directiva del Club.
+                      </p>
+                      <p className="text-sm text-slate-700 leading-relaxed">
+                        Los datos se conservarán durante el periodo necesario para la gestión de la actividad y el
+                        posterior análisis estadístico anónimo, tras lo cual serán eliminados o debidamente
+                        anonimizados.
+                      </p>
+                    </div>
+                    <Controller
+                      control={control}
+                      name="consentimientoDatos"
+                      render={({ field }) => (
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={field.value === true}
+                            onChange={(e) => field.onChange(e.target.checked ? true : (undefined as unknown as true))}
+                            className="mt-0.5 w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
+                          />
+                          <span className="text-sm font-medium text-slate-700">
+                            He leído y estoy de acuerdo
+                            <span className="text-error ml-1">*</span>
+                          </span>
+                        </label>
+                      )}
+                    />
+                    <FieldError message={errors.consentimientoDatos?.message} />
+                  </div>
+
+                  {/* Cláusula 4 */}
+                  <div className="flex flex-col gap-3">
+                    <div className="rounded-xl border border-secondary/20 bg-surface-container-low/60 p-4">
+                      <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-2">
+                        4. Derecho de Imagen
+                      </p>
+                      <p className="text-sm text-slate-700 leading-relaxed">
+                        Autorizo el uso de fotografías o videos capturados durante las salidas para fines promocionales
+                        o educativos del club, sin derecho a compensación económica.
+                      </p>
+                    </div>
+                    <Controller
+                      control={control}
+                      name="derechoImagen"
+                      render={({ field }) => (
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={field.value === true}
+                            onChange={(e) => field.onChange(e.target.checked ? true : (undefined as unknown as true))}
+                            className="mt-0.5 w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
+                          />
+                          <span className="text-sm font-medium text-slate-700">
+                            He leído y estoy de acuerdo
+                            <span className="text-error ml-1">*</span>
+                          </span>
+                        </label>
+                      )}
+                    />
+                    <FieldError message={errors.derechoImagen?.message} />
+                  </div>
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
 
           {/* Navegación del wizard */}
           <div className="flex items-center gap-3 pb-8">
             {currentStep > FIRST_STEP && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="lg"
-                onClick={goBack}
-                disabled={isSubmitting}
-              >
+              <Button type="button" variant="secondary" size="lg" onClick={goBack} disabled={isSubmitting}>
                 Atrás
               </Button>
             )}

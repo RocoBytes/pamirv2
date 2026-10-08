@@ -18,7 +18,13 @@ const MENSAJE_GENERICO =
 // Forma real de PublicOrganizationBrand (ver serializers/organization.ts en
 // el backend) — distinta de PAMIR_ORG de helpers.ts, que trae id/membresiaPropia
 // (para una sesión autenticada) en vez de hasLogo/logoVersion.
-const QR_BRAND = { slug: 'pamir', name: PAMIR_ORG.name, shortName: PAMIR_ORG.shortName, hasLogo: false, logoVersion: null }
+const QR_BRAND = {
+  slug: 'pamir',
+  name: PAMIR_ORG.name,
+  shortName: PAMIR_ORG.shortName,
+  hasLogo: false,
+  logoVersion: null,
+}
 
 function mockCodigo(overrides: Record<string, unknown> = {}) {
   return {
@@ -119,7 +125,9 @@ test.describe('QR del club — ADMIN', () => {
     await expect(page.getByText('Revocado')).toBeVisible()
   })
 
-  test('QR directo: panel con QR y cuenta regresiva, cambia solo a AGOTADO con quien se registró, y "Generar otro" crea uno nuevo', async ({ page }) => {
+  test('QR directo: panel con QR y cuenta regresiva, cambia solo a AGOTADO con quien se registró, y "Generar otro" crea uno nuevo', async ({
+    page,
+  }) => {
     let crearCount = 0
     let estadoCount = 0
 
@@ -284,7 +292,11 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
     return (route: Route) => {
       void route.fulfill({
         status: 200,
-        json: { organization: QR_BRAND, expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), modo: 'DIRECTO' },
+        json: {
+          organization: QR_BRAND,
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          modo: 'DIRECTO',
+        },
       })
     }
   }
@@ -328,12 +340,14 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
     await llenarFormulario(page)
     await page.getByRole('button', { name: 'Unirme ahora' }).click()
 
-    await expect.poll(() => registrarBody).toEqual({
-      token: 'tokDirecto',
-      name: 'Persona Directa',
-      email: 'nueva-directo@example.com',
-      password: 'password123',
-    })
+    await expect
+      .poll(() => registrarBody)
+      .toEqual({
+        token: 'tokDirecto',
+        name: 'Persona Directa',
+        email: 'nueva-directo@example.com',
+        password: 'password123',
+      })
 
     // Login automático con las mismas credenciales, sin token de sesión en la
     // respuesta de /registrar — aterriza directo en la app (dashboard).
@@ -359,9 +373,18 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
     expect(registrarLlamado).toBe(false)
   })
 
-  test('modo DIRECTO: alterna a "ya tengo cuenta", pide solo email y contraseña, y aterriza en /<slug> del club del QR', async ({ page }) => {
+  test('modo DIRECTO: alterna a "ya tengo cuenta", pide solo email y contraseña, y aterriza en /<slug> del club del QR', async ({
+    page,
+  }) => {
     await page.route('**/api/qr/consultar', (route) => {
-      void route.fulfill({ status: 200, json: { organization: EL_MONTANISTA_ORG, expiresAt: new Date(Date.now() + 3600_000).toISOString(), modo: 'DIRECTO' } })
+      void route.fulfill({
+        status: 200,
+        json: {
+          organization: EL_MONTANISTA_ORG,
+          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          modo: 'DIRECTO',
+        },
+      })
     })
     let registrarBody: unknown = null
     await page.route('**/api/qr/registrar', (route) => {
@@ -375,7 +398,15 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
           // Mismo fixture que en invitaciones.spec.ts: login devuelve el club
           // PRIMARIO (Pamir), nunca el del QR — prueba que la pantalla no
           // confía en este valor (Ruling 1 del plan de esta PR).
-          user: { id: 'user-existente-002', email: 'socio@elmontanista.example.com', name: 'Existente', rol: 'SOCIO', gestorCategorias: [], organization: PAMIR_ORG, clubes: [] },
+          user: {
+            id: 'user-existente-002',
+            email: 'socio@elmontanista.example.com',
+            name: 'Existente',
+            rol: 'SOCIO',
+            gestorCategorias: [],
+            organization: PAMIR_ORG,
+            clubes: [],
+          },
           token: 'mock-jwt-existente-2',
         },
       })
@@ -395,9 +426,18 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
     expect(registrarBody).toMatchObject({ email: 'socio@elmontanista.example.com', password: 'miClaveDeSiempre' })
   })
 
-  test('modo DIRECTO: alternar entre "crear cuenta" y "ya tengo cuenta" limpia los campos que se dejan atrás', async ({ page }) => {
+  test('modo DIRECTO: alternar entre "crear cuenta" y "ya tengo cuenta" limpia los campos que se dejan atrás', async ({
+    page,
+  }) => {
     await page.route('**/api/qr/consultar', (route) => {
-      void route.fulfill({ status: 200, json: { organization: EL_MONTANISTA_ORG, expiresAt: new Date(Date.now() + 3600_000).toISOString(), modo: 'DIRECTO' } })
+      void route.fulfill({
+        status: 200,
+        json: {
+          organization: EL_MONTANISTA_ORG,
+          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          modo: 'DIRECTO',
+        },
+      })
     })
 
     await page.goto('/#qr=tokDirecto')
@@ -416,7 +456,14 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
 
   test('modo DIRECTO, "ya tengo cuenta": contraseña incorrecta muestra el error del backend', async ({ page }) => {
     await page.route('**/api/qr/consultar', (route) => {
-      void route.fulfill({ status: 200, json: { organization: EL_MONTANISTA_ORG, expiresAt: new Date(Date.now() + 3600_000).toISOString(), modo: 'DIRECTO' } })
+      void route.fulfill({
+        status: 200,
+        json: {
+          organization: EL_MONTANISTA_ORG,
+          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          modo: 'DIRECTO',
+        },
+      })
     })
     await page.route('**/api/qr/registrar', (route) => {
       void route.fulfill({ status: 401, json: { error: 'Ya existe una cuenta con ese correo. Inicia sesión.' } })
@@ -431,9 +478,18 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
     await expect(page.getByText('Ya existe una cuenta con ese correo. Inicia sesión.')).toBeVisible()
   })
 
-  test('modo DIRECTO, "ya tengo cuenta": si el login automático falla tras unirse, el aviso NO dice que se creó una cuenta', async ({ page }) => {
+  test('modo DIRECTO, "ya tengo cuenta": si el login automático falla tras unirse, el aviso NO dice que se creó una cuenta', async ({
+    page,
+  }) => {
     await page.route('**/api/qr/consultar', (route) => {
-      void route.fulfill({ status: 200, json: { organization: EL_MONTANISTA_ORG, expiresAt: new Date(Date.now() + 3600_000).toISOString(), modo: 'DIRECTO' } })
+      void route.fulfill({
+        status: 200,
+        json: {
+          organization: EL_MONTANISTA_ORG,
+          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          modo: 'DIRECTO',
+        },
+      })
     })
     await page.route('**/api/qr/registrar', (route) => {
       void route.fulfill({ status: 201, json: { ok: true } })
@@ -453,14 +509,25 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
     await page.getByRole('button', { name: 'Iniciar sesión y unirme' }).click()
 
     await expect(
-      page.getByText('Ya eres parte de Club Andino El Montañista. Inicia sesión con tu contraseña de RIALA para entrar.'),
+      page.getByText(
+        'Ya eres parte de Club Andino El Montañista. Inicia sesión con tu contraseña de RIALA para entrar.',
+      ),
     ).toBeVisible()
     await expect(page.getByText('¡Cuenta creada!')).toHaveCount(0)
   })
 
-  test('modo DIRECTO: "ya tengo cuenta" no dispara ninguna petición nueva a /api mientras se escribe el email o se alterna de modo', async ({ page }) => {
+  test('modo DIRECTO: "ya tengo cuenta" no dispara ninguna petición nueva a /api mientras se escribe el email o se alterna de modo', async ({
+    page,
+  }) => {
     await page.route('**/api/qr/consultar', (route) => {
-      void route.fulfill({ status: 200, json: { organization: EL_MONTANISTA_ORG, expiresAt: new Date(Date.now() + 3600_000).toISOString(), modo: 'DIRECTO' } })
+      void route.fulfill({
+        status: 200,
+        json: {
+          organization: EL_MONTANISTA_ORG,
+          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          modo: 'DIRECTO',
+        },
+      })
     })
     const peticiones: string[] = []
     // route.fallback() (no route.continue()): las rutas de Playwright se

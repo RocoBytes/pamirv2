@@ -34,7 +34,10 @@ type MockUser = {
   organization: typeof PAMIR_ORG | typeof EL_MONTANISTA_ORG
 }
 
-function mockUser(org: MockUser['organization'], overrides: Omit<MockUser, 'organization' | 'gestorCategorias'> & { gestorCategorias?: MockUser['gestorCategorias'] }): MockUser {
+function mockUser(
+  org: MockUser['organization'],
+  overrides: Omit<MockUser, 'organization' | 'gestorCategorias'> & { gestorCategorias?: MockUser['gestorCategorias'] },
+): MockUser {
   return { gestorCategorias: [], ...overrides, organization: org }
 }
 
@@ -90,9 +93,7 @@ export const MOCK_SALIDA = {
   fechaInicio: new Date().toISOString(),
   horaRetornoEstimada: '18:00',
   status: 'EN_CURSO',
-  participantes: [
-    { rut: '12.345.678-9', nombre: 'Test Alpinista', membresiaClub: 'SOCIO_ANDINO_PAMIR' },
-  ],
+  participantes: [{ rut: '12.345.678-9', nombre: 'Test Alpinista', membresiaClub: 'SOCIO_ANDINO_PAMIR' }],
 }
 
 // ─── Usuarios de El Montañista (segundo club) ────────────────────────────────

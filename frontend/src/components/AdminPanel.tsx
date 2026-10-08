@@ -16,17 +16,8 @@ import {
 } from 'lucide-react'
 import { useOrganization } from '../hooks/useOrganization'
 import { AppShell, type ShellContext } from './shell/AppShell'
-import {
-  fetchSalidas,
-  fetchAdminStats,
-  fetchSaludSalida,
-  enviarSaludSalida,
-} from '../lib/api'
-import type {
-  AdminStats,
-  SaludSalidaResponse,
-  ParticipanteSalud,
-} from '../lib/api'
+import { fetchSalidas, fetchAdminStats, fetchSaludSalida, enviarSaludSalida } from '../lib/api'
+import type { AdminStats, SaludSalidaResponse, ParticipanteSalud } from '../lib/api'
 import type { SalidaRecord } from '../types/salida'
 import { STATUS_LABELS, STATUS_COLORS, DISCIPLINA_LABELS } from '../types/salida'
 import { InvitacionesManager } from './invitaciones/InvitacionesManager'
@@ -119,10 +110,7 @@ function MetricCard({
   ariaLabel?: string
 }) {
   return (
-    <div
-      className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4"
-      aria-label={ariaLabel}
-    >
+    <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4" aria-label={ariaLabel}>
       <p className="text-2xl font-bold text-primary leading-tight">{value}</p>
       <p className="text-xs text-on-surface-variant mt-1">{label}</p>
       {subtitle && <p className="text-[10px] text-on-surface-variant/70 mt-0.5">{subtitle}</p>}
@@ -136,14 +124,9 @@ function BarRow({ label, value, max }: { label: string; value: number; max: numb
     <div className="flex items-center gap-3">
       <span className="w-24 shrink-0 text-xs text-on-surface-variant truncate">{label}</span>
       <div className="flex-1 bg-primary-fixed rounded-full h-2">
-        <div
-          className="bg-primary rounded-full h-2"
-          style={{ width: `${pct}%` }}
-        />
+        <div className="bg-primary rounded-full h-2" style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-8 shrink-0 text-xs font-semibold text-slate-700 text-right">
-        {value}
-      </span>
+      <span className="w-8 shrink-0 text-xs font-semibold text-slate-700 text-right">{value}</span>
     </div>
   )
 }
@@ -164,9 +147,12 @@ function SinFichaBadge() {
 function SaludFlags({ salud }: { salud: NonNullable<ParticipanteSalud['salud']> }) {
   const flags: string[] = []
   if (salud.alergiasTiene) flags.push(`Alergias${salud.alergiasDetalle ? `: ${salud.alergiasDetalle}` : ''}`)
-  if (salud.enfermedadesCronicasTiene) flags.push(`Enf. crónicas${salud.enfermedadesCronicasDetalle ? `: ${salud.enfermedadesCronicasDetalle}` : ''}`)
-  if (salud.medicamentosTiene) flags.push(`Medicamentos${salud.medicamentosDetalle ? `: ${salud.medicamentosDetalle}` : ''}`)
-  if (salud.cirugiasLesionesTiene) flags.push(`Cirugías/lesiones${salud.cirugiasLesionesDetalle ? `: ${salud.cirugiasLesionesDetalle}` : ''}`)
+  if (salud.enfermedadesCronicasTiene)
+    flags.push(`Enf. crónicas${salud.enfermedadesCronicasDetalle ? `: ${salud.enfermedadesCronicasDetalle}` : ''}`)
+  if (salud.medicamentosTiene)
+    flags.push(`Medicamentos${salud.medicamentosDetalle ? `: ${salud.medicamentosDetalle}` : ''}`)
+  if (salud.cirugiasLesionesTiene)
+    flags.push(`Cirugías/lesiones${salud.cirugiasLesionesDetalle ? `: ${salud.cirugiasLesionesDetalle}` : ''}`)
   if (salud.fuma) flags.push('Fuma')
   if (salud.usaLentes) flags.push('Usa lentes')
 
@@ -180,9 +166,7 @@ function SaludFlags({ salud }: { salud: NonNullable<ParticipanteSalud['salud']> 
           {f}
         </span>
       ))}
-      {flags.length === 0 && (
-        <span className="text-[10px] text-on-surface-variant">Sin alertas médicas</span>
-      )}
+      {flags.length === 0 && <span className="text-[10px] text-on-surface-variant">Sin alertas médicas</span>}
     </div>
   )
 }
@@ -237,32 +221,35 @@ export function AdminPanel({ shell, onBack, onDashboard, currentUserId, refreshS
     }
   }, [])
 
-  const handleToggleSalud = useCallback(async (salidaId: string) => {
-    if (expandedSaludId === salidaId) {
-      setExpandedSaludId(null)
+  const handleToggleSalud = useCallback(
+    async (salidaId: string) => {
+      if (expandedSaludId === salidaId) {
+        setExpandedSaludId(null)
+        setConfirmEnvioId(null)
+        return
+      }
+      setExpandedSaludId(salidaId)
       setConfirmEnvioId(null)
-      return
-    }
-    setExpandedSaludId(salidaId)
-    setConfirmEnvioId(null)
 
-    // Lazy-fetch: only load once per salida
-    if (saludData[salidaId]) return
+      // Lazy-fetch: only load once per salida
+      if (saludData[salidaId]) return
 
-    setSaludLoading((prev) => ({ ...prev, [salidaId]: true }))
-    setSaludError((prev) => ({ ...prev, [salidaId]: null }))
-    try {
-      const data = await fetchSaludSalida(salidaId)
-      setSaludData((prev) => ({ ...prev, [salidaId]: data }))
-    } catch (err) {
-      setSaludError((prev) => ({
-        ...prev,
-        [salidaId]: err instanceof Error ? err.message : 'No se pudieron cargar las fichas',
-      }))
-    } finally {
-      setSaludLoading((prev) => ({ ...prev, [salidaId]: false }))
-    }
-  }, [expandedSaludId, saludData])
+      setSaludLoading((prev) => ({ ...prev, [salidaId]: true }))
+      setSaludError((prev) => ({ ...prev, [salidaId]: null }))
+      try {
+        const data = await fetchSaludSalida(salidaId)
+        setSaludData((prev) => ({ ...prev, [salidaId]: data }))
+      } catch (err) {
+        setSaludError((prev) => ({
+          ...prev,
+          [salidaId]: err instanceof Error ? err.message : 'No se pudieron cargar las fichas',
+        }))
+      } finally {
+        setSaludLoading((prev) => ({ ...prev, [salidaId]: false }))
+      }
+    },
+    [expandedSaludId, saludData],
+  )
 
   const handleEnviarSalud = useCallback(async (salidaId: string) => {
     setEnviandoId(salidaId)
@@ -318,520 +305,488 @@ export function AdminPanel({ shell, onBack, onDashboard, currentUserId, refreshS
 
   return (
     <AppShell shell={shell} active="none" onBack={onBack} width="narrow">
-        {/* Page title */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
-            <LayoutDashboard size={14} />
-            Administración
-          </div>
-          <h1 className="text-xl font-bold text-slate-900">Panel de Administración</h1>
-          <p className="text-sm text-on-surface-variant mt-0.5">
-            Salidas abiertas, alarmas pendientes e historial completo de registros.
-          </p>
-          <button
-            onClick={onDashboard}
-            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-hover"
-          >
-            <BarChart3 size={16} />
-            Ver Dashboard analítico
-          </button>
+      {/* Page title */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
+          <LayoutDashboard size={14} />
+          Administración
         </div>
+        <h1 className="text-xl font-bold text-slate-900">Panel de Administración</h1>
+        <p className="text-sm text-on-surface-variant mt-0.5">
+          Salidas abiertas, alarmas pendientes e historial completo de registros.
+        </p>
+        <button
+          onClick={onDashboard}
+          className="mt-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-hover"
+        >
+          <BarChart3 size={16} />
+          Ver Dashboard analítico
+        </button>
+      </div>
 
-        {/* Loading state */}
-        {isLoading && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
-            <Loader2 className="animate-spin text-primary" size={28} />
-            <p className="text-sm">Cargando datos...</p>
+      {/* Loading state */}
+      {isLoading && (
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
+          <Loader2 className="animate-spin text-primary" size={28} />
+          <p className="text-sm">Cargando datos...</p>
+        </div>
+      )}
+
+      {/* Error state */}
+      {error && (
+        <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container mb-6">
+          <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p>{error}</p>
+            <button
+              onClick={() => void loadSalidas()}
+              className="mt-2 text-on-error-container font-semibold underline text-xs"
+            >
+              Reintentar
+            </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Error state */}
-        {error && (
-          <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container mb-6">
-            <AlertCircle size={18} className="shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p>{error}</p>
-              <button
-                onClick={() => void loadSalidas()}
-                className="mt-2 text-on-error-container font-semibold underline text-xs"
-              >
-                Reintentar
-              </button>
+      {/* ── Section: Métricas ────────────────────────────────────────────── */}
+      {!isLoading && (
+        <section className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <BarChart3 size={16} className="text-primary" />
+            <h2 className="text-base font-bold text-slate-900">Métricas</h2>
+          </div>
+
+          {statsLoading && (
+            <div className="flex items-center gap-2 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 text-on-surface-variant">
+              <Loader2 className="animate-spin text-primary" size={16} />
+              <p className="text-xs">Cargando métricas...</p>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ── Section: Métricas ────────────────────────────────────────────── */}
-        {!isLoading && (
+          {!statsLoading && statsError && (
+            <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container">
+              <AlertCircle size={18} className="shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p>{statsError}</p>
+                <button
+                  onClick={() => void loadStats()}
+                  className="mt-2 text-on-error-container font-semibold underline text-xs"
+                >
+                  Reintentar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!statsLoading && stats && (
+            <>
+              {/* Metric cards */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <MetricCard label="Total de salidas" value={stats.totalSalidas} />
+                <MetricCard label="En curso" value={stats.salidasAbiertas} />
+                <MetricCard label="Completadas" value={stats.salidasCompletadas} />
+                <MetricCard
+                  label="% con cierre"
+                  value={`${stats.pctConCierre}%`}
+                  subtitle={`${stats.totalCierres} de ${stats.totalSalidas} salidas`}
+                  ariaLabel="Salidas con ficha de cierre registrada"
+                />
+                <MetricCard label="Incidentes (sin lesión)" value={stats.incidentes} />
+                <MetricCard label="Accidentes (con lesión)" value={stats.accidentes} />
+              </div>
+
+              {/* Salidas por mes (last 6 months, chronological order) */}
+              <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 mb-3">
+                <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-3">Salidas por mes</h3>
+                {meses.length === 0 ? (
+                  <p className="text-xs text-on-surface-variant">Sin datos de salidas en los últimos meses</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {meses.map((m) => (
+                      <BarRow key={m.mes} label={formatMes(m.mes)} value={m.total} max={maxMes} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Top disciplinas */}
+              <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4">
+                <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-3">
+                  Disciplinas más frecuentes
+                </h3>
+                {stats.topDisciplinas.length === 0 ? (
+                  <p className="text-xs text-on-surface-variant">Sin salidas registradas</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {stats.topDisciplinas.map((d) => (
+                      <BarRow
+                        key={d.disciplina}
+                        label={(DISCIPLINA_LABELS as Record<string, string>)[d.disciplina] ?? d.disciplina}
+                        value={d.total}
+                        max={maxDisciplina}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* ── Section: Logo propio del club ───────────────────────────────── */}
+      {!isLoading && <ClubBrandingAdminSection refreshSession={refreshSession} />}
+
+      {/* ── Section: Documentación del Club ─────────────────────────────── */}
+      {!isLoading && <DocumentosAdminSection />}
+
+      {/* ── Section: Usuarios e invitaciones (sistema cerrado) ──────────── */}
+      {!isLoading && (
+        <section className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <UserCog size={16} className="text-primary" />
+            <h2 className="text-base font-bold text-slate-900">Usuarios e invitaciones</h2>
+          </div>
+          <p className="text-xs text-on-surface-variant mb-3">
+            {displayName} es un sistema cerrado: las cuentas nuevas solo se crean por invitación. Gestiona quién puede
+            unirse y qué rol tiene cada integrante.
+          </p>
+
+          <div className="flex flex-col gap-6">
+            <InvitacionesManager rolActual="ADMIN" />
+            <UsuariosManager currentUserId={currentUserId} />
+          </div>
+        </section>
+      )}
+
+      {!isLoading && salidas && (
+        <>
+          {/* ── Section 1: Salidas abiertas ─────────────────────────────── */}
           <section className="mb-8">
             <div className="flex items-center gap-2 mb-3">
-              <BarChart3 size={16} className="text-primary" />
-              <h2 className="text-base font-bold text-slate-900">Métricas</h2>
+              <h2 className="text-base font-bold text-slate-900">Salidas abiertas</h2>
+              <span className="text-xs font-bold bg-primary-fixed text-primary px-2 py-0.5 rounded-full">
+                {openSalidas.length}
+              </span>
             </div>
 
-            {statsLoading && (
-              <div className="flex items-center gap-2 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 text-on-surface-variant">
-                <Loader2 className="animate-spin text-primary" size={16} />
-                <p className="text-xs">Cargando métricas...</p>
+            {openSalidas.length === 0 ? (
+              <div className="flex flex-col items-center py-10 gap-3 text-center">
+                <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-primary-fixed">
+                  <CheckCircle2 size={22} className="text-primary" />
+                </div>
+                <p className="text-sm text-on-surface-variant">No hay salidas abiertas sin cierre</p>
               </div>
-            )}
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {openSalidas.map((s) => {
+                  const vencida = isVencida(s)
+                  const alertada = Boolean(s.alertaEnviadaAt)
+                  const participantCount = Array.isArray(s.participantes) ? s.participantes.length : 0
 
-            {!statsLoading && statsError && (
-              <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container">
-                <AlertCircle size={18} className="shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p>{statsError}</p>
-                  <button
-                    onClick={() => void loadStats()}
-                    className="mt-2 text-on-error-container font-semibold underline text-xs"
-                  >
-                    Reintentar
-                  </button>
-                </div>
-              </div>
-            )}
+                  return (
+                    <li key={s.id} className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex-1 min-w-0">
+                          {typeof s.numeroSalida === 'number' && (
+                            <span className="inline-block text-[10px] font-bold text-secondary bg-primary-fixed px-2 py-0.5 rounded-md mb-1">
+                              N° {s.numeroSalida}
+                            </span>
+                          )}
+                          <p className="font-semibold text-slate-900 text-sm leading-tight">{s.nombreActividad}</p>
+                          <p className="text-xs text-on-surface-variant mt-0.5">{s.ubicacionGeografica}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          {vencida && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-white bg-red-600 px-2 py-0.5 rounded-md">
+                              <Clock size={10} />
+                              VENCIDA
+                            </span>
+                          )}
+                          {alertada && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md">
+                              <BellOff size={10} />
+                              Alerta enviada
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-            {!statsLoading && stats && (
-              <>
-                {/* Metric cards */}
-                <div className="grid grid-cols-2 gap-3 mb-5">
-                  <MetricCard label="Total de salidas" value={stats.totalSalidas} />
-                  <MetricCard label="En curso" value={stats.salidasAbiertas} />
-                  <MetricCard label="Completadas" value={stats.salidasCompletadas} />
-                  <MetricCard
-                    label="% con cierre"
-                    value={`${stats.pctConCierre}%`}
-                    subtitle={`${stats.totalCierres} de ${stats.totalSalidas} salidas`}
-                    ariaLabel="Salidas con ficha de cierre registrada"
-                  />
-                  <MetricCard label="Incidentes (sin lesión)" value={stats.incidentes} />
-                  <MetricCard label="Accidentes (con lesión)" value={stats.accidentes} />
-                </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-on-surface-variant mt-2">
+                        <span>
+                          <span className="font-medium text-slate-600">Inicio:</span> {formatDate(s.fechaInicio)}
+                        </span>
+                        <span>
+                          <span className="font-medium text-slate-600">Retorno est.:</span>{' '}
+                          {formatDate(s.fechaRetornoEstimada)} {s.horaRetornoEstimada}
+                        </span>
+                        <span>
+                          <span className="font-medium text-slate-600">Hora alerta:</span> {s.horaAlerta}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Users size={11} />
+                          {participantCount} {participantCount === 1 ? 'participante' : 'participantes'}
+                        </span>
+                      </div>
 
-                {/* Salidas por mes (last 6 months, chronological order) */}
-                <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 mb-3">
-                  <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-3">
-                    Salidas por mes
-                  </h3>
-                  {meses.length === 0 ? (
-                    <p className="text-xs text-on-surface-variant">Sin datos de salidas en los últimos meses</p>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {meses.map((m) => (
-                        <BarRow
-                          key={m.mes}
-                          label={formatMes(m.mes)}
-                          value={m.total}
-                          max={maxMes}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Top disciplinas */}
-                <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4">
-                  <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-3">
-                    Disciplinas más frecuentes
-                  </h3>
-                  {stats.topDisciplinas.length === 0 ? (
-                    <p className="text-xs text-on-surface-variant">Sin salidas registradas</p>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {stats.topDisciplinas.map((d) => (
-                        <BarRow
-                          key={d.disciplina}
-                          label={
-                            (DISCIPLINA_LABELS as Record<string, string>)[d.disciplina] ??
-                            d.disciplina
-                          }
-                          value={d.total}
-                          max={maxDisciplina}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
+                      <p className="text-xs text-slate-500 mt-2">
+                        <span className="font-medium text-slate-700">Líder:</span> {s.liderCordada}
+                      </p>
+                    </li>
+                  )
+                })}
+              </ul>
             )}
           </section>
-        )}
 
-        {/* ── Section: Logo propio del club ───────────────────────────────── */}
-        {!isLoading && <ClubBrandingAdminSection refreshSession={refreshSession} />}
-
-        {/* ── Section: Documentación del Club ─────────────────────────────── */}
-        {!isLoading && <DocumentosAdminSection />}
-
-        {/* ── Section: Usuarios e invitaciones (sistema cerrado) ──────────── */}
-        {!isLoading && (
+          {/* ── Section: Fichas de salud ────────────────────────────────── */}
           <section className="mb-8">
             <div className="flex items-center gap-2 mb-3">
-              <UserCog size={16} className="text-primary" />
-              <h2 className="text-base font-bold text-slate-900">Usuarios e invitaciones</h2>
+              <HeartPulse size={16} className="text-primary" />
+              <h2 className="text-base font-bold text-slate-900">Fichas de salud</h2>
+              <span className="text-xs font-bold bg-primary-fixed text-primary px-2 py-0.5 rounded-full">
+                {openSalidas.length}
+              </span>
             </div>
             <p className="text-xs text-on-surface-variant mb-3">
-              {displayName} es un sistema cerrado: las cuentas nuevas solo se crean por
-              invitación. Gestiona quién puede unirse y qué rol tiene cada integrante.
+              Consulta y envía al responsable de cada salida en curso el resumen de fichas de salud de sus
+              participantes.
             </p>
 
-            <div className="flex flex-col gap-6">
-              <InvitacionesManager rolActual="ADMIN" />
-              <UsuariosManager currentUserId={currentUserId} />
-            </div>
-          </section>
-        )}
-
-        {!isLoading && salidas && (
-          <>
-            {/* ── Section 1: Salidas abiertas ─────────────────────────────── */}
-            <section className="mb-8">
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className="text-base font-bold text-slate-900">Salidas abiertas</h2>
-                <span className="text-xs font-bold bg-primary-fixed text-primary px-2 py-0.5 rounded-full">
-                  {openSalidas.length}
-                </span>
-              </div>
-
-              {openSalidas.length === 0 ? (
-                <div className="flex flex-col items-center py-10 gap-3 text-center">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-primary-fixed">
-                    <CheckCircle2 size={22} className="text-primary" />
-                  </div>
-                  <p className="text-sm text-on-surface-variant">No hay salidas abiertas sin cierre</p>
+            {openSalidas.length === 0 ? (
+              <div className="flex flex-col items-center py-10 gap-3 text-center">
+                <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-primary-fixed">
+                  <HeartPulse size={22} className="text-primary" />
                 </div>
-              ) : (
-                <ul className="flex flex-col gap-3">
-                  {openSalidas.map((s) => {
-                    const vencida = isVencida(s)
-                    const alertada = Boolean(s.alertaEnviadaAt)
-                    const participantCount = Array.isArray(s.participantes)
-                      ? s.participantes.length
-                      : 0
-
-                    return (
-                      <li
-                        key={s.id}
-                        className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                          <div className="flex-1 min-w-0">
-                            {typeof s.numeroSalida === 'number' && (
-                              <span className="inline-block text-[10px] font-bold text-secondary bg-primary-fixed px-2 py-0.5 rounded-md mb-1">
-                                N° {s.numeroSalida}
-                              </span>
-                            )}
-                            <p className="font-semibold text-slate-900 text-sm leading-tight">
-                              {s.nombreActividad}
-                            </p>
-                            <p className="text-xs text-on-surface-variant mt-0.5">{s.ubicacionGeografica}</p>
-                          </div>
-                          <div className="flex flex-col items-end gap-1 shrink-0">
-                            {vencida && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-white bg-red-600 px-2 py-0.5 rounded-md">
-                                <Clock size={10} />
-                                VENCIDA
-                              </span>
-                            )}
-                            {alertada && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md">
-                                <BellOff size={10} />
-                                Alerta enviada
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-on-surface-variant mt-2">
-                          <span>
-                            <span className="font-medium text-slate-600">Inicio:</span>{' '}
-                            {formatDate(s.fechaInicio)}
-                          </span>
-                          <span>
-                            <span className="font-medium text-slate-600">Retorno est.:</span>{' '}
-                            {formatDate(s.fechaRetornoEstimada)} {s.horaRetornoEstimada}
-                          </span>
-                          <span>
-                            <span className="font-medium text-slate-600">Hora alerta:</span>{' '}
-                            {s.horaAlerta}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Users size={11} />
-                            {participantCount}{' '}
-                            {participantCount === 1 ? 'participante' : 'participantes'}
-                          </span>
-                        </div>
-
-                        <p className="text-xs text-slate-500 mt-2">
-                          <span className="font-medium text-slate-700">Líder:</span>{' '}
-                          {s.liderCordada}
-                        </p>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </section>
-
-            {/* ── Section: Fichas de salud ────────────────────────────────── */}
-            <section className="mb-8">
-              <div className="flex items-center gap-2 mb-3">
-                <HeartPulse size={16} className="text-primary" />
-                <h2 className="text-base font-bold text-slate-900">Fichas de salud</h2>
-                <span className="text-xs font-bold bg-primary-fixed text-primary px-2 py-0.5 rounded-full">
-                  {openSalidas.length}
-                </span>
+                <p className="text-sm text-on-surface-variant">No hay salidas en curso</p>
               </div>
-              <p className="text-xs text-on-surface-variant mb-3">
-                Consulta y envía al responsable de cada salida en curso el resumen de fichas de salud de sus participantes.
-              </p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {openSalidas.map((s) => {
+                  const isExpanded = expandedSaludId === s.id
+                  const loading = saludLoading[s.id]
+                  const fetchErr = saludError[s.id]
+                  const data = saludData[s.id]
+                  const isEnviando = enviandoId === s.id
+                  const confirmPending = confirmEnvioId === s.id
+                  const successMsg = envioSuccess[s.id]
+                  const errorMsg = envioError[s.id]
 
-              {openSalidas.length === 0 ? (
-                <div className="flex flex-col items-center py-10 gap-3 text-center">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-primary-fixed">
-                    <HeartPulse size={22} className="text-primary" />
-                  </div>
-                  <p className="text-sm text-on-surface-variant">No hay salidas en curso</p>
-                </div>
-              ) : (
-                <ul className="flex flex-col gap-3">
-                  {openSalidas.map((s) => {
-                    const isExpanded = expandedSaludId === s.id
-                    const loading = saludLoading[s.id]
-                    const fetchErr = saludError[s.id]
-                    const data = saludData[s.id]
-                    const isEnviando = enviandoId === s.id
-                    const confirmPending = confirmEnvioId === s.id
-                    const successMsg = envioSuccess[s.id]
-                    const errorMsg = envioError[s.id]
-
-                    return (
-                      <li
-                        key={s.id}
-                        className="bg-white rounded-2xl border border-secondary/15 shadow-sm overflow-hidden"
+                  return (
+                    <li
+                      key={s.id}
+                      className="bg-white rounded-2xl border border-secondary/15 shadow-sm overflow-hidden"
+                    >
+                      {/* Header row: always visible */}
+                      <button
+                        type="button"
+                        onClick={() => void handleToggleSalud(s.id)}
+                        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-container-low transition-colors"
+                        aria-expanded={isExpanded}
                       >
-                        {/* Header row: always visible */}
-                        <button
-                          type="button"
-                          onClick={() => void handleToggleSalud(s.id)}
-                          className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-container-low transition-colors"
-                          aria-expanded={isExpanded}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-slate-900 text-sm leading-tight truncate">
-                              {s.nombreActividad}
-                            </p>
-                            <p className="text-xs text-on-surface-variant mt-0.5">
-                              Líder: {s.liderCordada} ·{' '}
-                              {Array.isArray(s.participantes) ? s.participantes.length : 0} participante(s)
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-xs text-primary font-medium">Ver fichas</span>
-                            {isExpanded ? (
-                              <ChevronUp size={16} className="text-primary" />
-                            ) : (
-                              <ChevronDown size={16} className="text-primary" />
-                            )}
-                          </div>
-                        </button>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-slate-900 text-sm leading-tight truncate">
+                            {s.nombreActividad}
+                          </p>
+                          <p className="text-xs text-on-surface-variant mt-0.5">
+                            Líder: {s.liderCordada} · {Array.isArray(s.participantes) ? s.participantes.length : 0}{' '}
+                            participante(s)
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs text-primary font-medium">Ver fichas</span>
+                          {isExpanded ? (
+                            <ChevronUp size={16} className="text-primary" />
+                          ) : (
+                            <ChevronDown size={16} className="text-primary" />
+                          )}
+                        </div>
+                      </button>
 
-                        {/* Expandable panel */}
-                        {isExpanded && (
-                          <div className="border-t border-primary-fixed px-4 py-3">
-                            {loading && (
-                              <div className="flex items-center gap-2 py-4 text-on-surface-variant">
-                                <Loader2 className="animate-spin text-primary" size={16} />
-                                <p className="text-xs">Cargando fichas de salud...</p>
-                              </div>
-                            )}
+                      {/* Expandable panel */}
+                      {isExpanded && (
+                        <div className="border-t border-primary-fixed px-4 py-3">
+                          {loading && (
+                            <div className="flex items-center gap-2 py-4 text-on-surface-variant">
+                              <Loader2 className="animate-spin text-primary" size={16} />
+                              <p className="text-xs">Cargando fichas de salud...</p>
+                            </div>
+                          )}
 
-                            {fetchErr && (
-                              <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container mb-3">
-                                <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                                <p className="text-xs">{fetchErr}</p>
-                              </div>
-                            )}
+                          {fetchErr && (
+                            <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container mb-3">
+                              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                              <p className="text-xs">{fetchErr}</p>
+                            </div>
+                          )}
 
-                            {data && (
-                              <>
-                                {/* Participant list */}
-                                <ul className="flex flex-col gap-2 mb-4">
-                                  {data.participantes.map((p) => (
-                                    <li
-                                      key={p.rut}
-                                      className="rounded-xl border border-primary-fixed px-3 py-2"
-                                    >
-                                      <div className="flex items-center justify-between gap-2">
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-medium text-slate-900 truncate">
-                                            {p.nombre}
-                                          </p>
-                                          <p className="text-[11px] text-on-surface-variant">RUT: {p.rut}</p>
-                                        </div>
-                                        {!p.fichaEncontrada && <SinFichaBadge />}
-                                        {p.fichaEncontrada && (
-                                          <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md shrink-0">
-                                            {p.salud?.grupoSanguineo}
-                                          </span>
-                                        )}
+                          {data && (
+                            <>
+                              {/* Participant list */}
+                              <ul className="flex flex-col gap-2 mb-4">
+                                {data.participantes.map((p) => (
+                                  <li key={p.rut} className="rounded-xl border border-primary-fixed px-3 py-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-slate-900 truncate">{p.nombre}</p>
+                                        <p className="text-[11px] text-on-surface-variant">RUT: {p.rut}</p>
                                       </div>
-                                      {p.fichaEncontrada && p.salud && (
-                                        <SaludFlags salud={p.salud} />
+                                      {!p.fichaEncontrada && <SinFichaBadge />}
+                                      {p.fichaEncontrada && (
+                                        <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md shrink-0">
+                                          {p.salud?.grupoSanguineo}
+                                        </span>
                                       )}
-                                    </li>
-                                  ))}
-                                </ul>
-
-                                {/* Send action */}
-                                <div className="border-t border-primary-fixed pt-3">
-                                  <p className="text-xs text-on-surface-variant mb-2">
-                                    Se enviará a:{' '}
-                                    <span className="font-medium text-slate-700">
-                                      {data.creatorEmail ?? 'correo vinculado a la cuenta'}
-                                    </span>
-                                  </p>
-
-                                  {successMsg && (
-                                    <div className="flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800 mb-2">
-                                      <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
-                                      <p>{successMsg}</p>
                                     </div>
-                                  )}
+                                    {p.fichaEncontrada && p.salud && <SaludFlags salud={p.salud} />}
+                                  </li>
+                                ))}
+                              </ul>
 
-                                  {errorMsg && (
-                                    <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-xs text-on-error-container mb-2">
-                                      <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                                      <p>{errorMsg}</p>
-                                    </div>
-                                  )}
+                              {/* Send action */}
+                              <div className="border-t border-primary-fixed pt-3">
+                                <p className="text-xs text-on-surface-variant mb-2">
+                                  Se enviará a:{' '}
+                                  <span className="font-medium text-slate-700">
+                                    {data.creatorEmail ?? 'correo vinculado a la cuenta'}
+                                  </span>
+                                </p>
 
-                                  {!confirmPending && !successMsg && (
+                                {successMsg && (
+                                  <div className="flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800 mb-2">
+                                    <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
+                                    <p>{successMsg}</p>
+                                  </div>
+                                )}
+
+                                {errorMsg && (
+                                  <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-xs text-on-error-container mb-2">
+                                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                                    <p>{errorMsg}</p>
+                                  </div>
+                                )}
+
+                                {!confirmPending && !successMsg && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmEnvioId(s.id)}
+                                    disabled={isEnviando}
+                                    className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-primary-hover disabled:opacity-50 transition-colors"
+                                  >
+                                    <Send size={12} />
+                                    Enviar resumen al responsable
+                                  </button>
+                                )}
+
+                                {confirmPending && (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-xs font-semibold text-slate-700">¿Confirmar envío?</p>
                                     <button
                                       type="button"
-                                      onClick={() => setConfirmEnvioId(s.id)}
+                                      onClick={() => void handleEnviarSalud(s.id)}
                                       disabled={isEnviando}
-                                      className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-primary-hover disabled:opacity-50 transition-colors"
+                                      className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-primary-hover disabled:opacity-50 transition-colors"
                                     >
-                                      <Send size={12} />
-                                      Enviar resumen al responsable
+                                      {isEnviando ? (
+                                        <>
+                                          <Loader2 size={12} className="animate-spin" />
+                                          Enviando...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Send size={12} />
+                                          Sí, enviar
+                                        </>
+                                      )}
                                     </button>
-                                  )}
-
-                                  {confirmPending && (
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <p className="text-xs font-semibold text-slate-700">
-                                        ¿Confirmar envío?
-                                      </p>
-                                      <button
-                                        type="button"
-                                        onClick={() => void handleEnviarSalud(s.id)}
-                                        disabled={isEnviando}
-                                        className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-primary-hover disabled:opacity-50 transition-colors"
-                                      >
-                                        {isEnviando ? (
-                                          <>
-                                            <Loader2 size={12} className="animate-spin" />
-                                            Enviando...
-                                          </>
-                                        ) : (
-                                          <>
-                                            <Send size={12} />
-                                            Sí, enviar
-                                          </>
-                                        )}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setConfirmEnvioId(null)}
-                                        disabled={isEnviando}
-                                        className="text-xs font-semibold text-slate-500 hover:text-slate-700 px-2 py-1.5 disabled:opacity-50 transition-colors"
-                                      >
-                                        Cancelar
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </section>
-
-            {/* ── Section 2: Historial de registros ───────────────────────── */}
-            <section>
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className="text-base font-bold text-slate-900">Historial de registros</h2>
-                <span className="text-xs font-bold bg-primary-fixed text-primary px-2 py-0.5 rounded-full">
-                  {allSalidas.length}
-                </span>
-              </div>
-
-              {allSalidas.length === 0 ? (
-                <p className="text-sm text-on-surface-variant py-6 text-center">
-                  No hay salidas registradas en el sistema
-                </p>
-              ) : (
-                <div className="flex flex-col gap-4">
-                  {statusOrder
-                    .filter((st) => grouped[st]?.length)
-                    .map((st) => (
-                      <div key={st}>
-                        <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-2">
-                          {STATUS_LABELS[st]} ({grouped[st].length})
-                        </h3>
-                        <ul className="flex flex-col gap-1">
-                          {grouped[st].map((s) => (
-                            <li
-                              key={s.id}
-                              className="flex items-center gap-3 bg-white rounded-xl border border-secondary/10 px-3 py-2.5"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-slate-900 truncate">
-                                  {s.nombreActividad}
-                                </p>
-                                <p className="text-xs text-on-surface-variant truncate">
-                                  {DISCIPLINA_LABELS[s.disciplina] ?? s.disciplina} ·{' '}
-                                  {formatDate(s.fechaInicio)}
-                                </p>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmEnvioId(null)}
+                                      disabled={isEnviando}
+                                      className="text-xs font-semibold text-slate-500 hover:text-slate-700 px-2 py-1.5 disabled:opacity-50 transition-colors"
+                                    >
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                )}
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span
-                                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[s.status]}`}
-                                >
-                                  {STATUS_LABELS[s.status]}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </section>
+
+          {/* ── Section 2: Historial de registros ───────────────────────── */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <h2 className="text-base font-bold text-slate-900">Historial de registros</h2>
+              <span className="text-xs font-bold bg-primary-fixed text-primary px-2 py-0.5 rounded-full">
+                {allSalidas.length}
+              </span>
+            </div>
+
+            {allSalidas.length === 0 ? (
+              <p className="text-sm text-on-surface-variant py-6 text-center">
+                No hay salidas registradas en el sistema
+              </p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {statusOrder
+                  .filter((st) => grouped[st]?.length)
+                  .map((st) => (
+                    <div key={st}>
+                      <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-2">
+                        {STATUS_LABELS[st]} ({grouped[st].length})
+                      </h3>
+                      <ul className="flex flex-col gap-1">
+                        {grouped[st].map((s) => (
+                          <li
+                            key={s.id}
+                            className="flex items-center gap-3 bg-white rounded-xl border border-secondary/10 px-3 py-2.5"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-slate-900 truncate">{s.nombreActividad}</p>
+                              <p className="text-xs text-on-surface-variant truncate">
+                                {DISCIPLINA_LABELS[s.disciplina] ?? s.disciplina} · {formatDate(s.fechaInicio)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span
+                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[s.status]}`}
+                              >
+                                {STATUS_LABELS[s.status]}
+                              </span>
+                              {/* Cierre indicator */}
+                              {(s._count?.cierres ?? 0) > 0 ? (
+                                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                  Con cierre
                                 </span>
-                                {/* Cierre indicator */}
-                                {(s._count?.cierres ?? 0) > 0 ? (
-                                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
-                                    Con cierre
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
-                                    Sin cierre
-                                  </span>
-                                )}
-                                {s.esRegistroHistorico && (
-                                  <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                                    Histórico
-                                  </span>
-                                )}
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </section>
-          </>
-        )}
+                              ) : (
+                                <span className="text-[10px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
+                                  Sin cierre
+                                </span>
+                              )}
+                              {s.esRegistroHistorico && (
+                                <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                  Histórico
+                                </span>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </AppShell>
   )
 }

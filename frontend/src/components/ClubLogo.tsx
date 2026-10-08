@@ -49,9 +49,7 @@ export function ClubLogo({ className, alt, org }: ClubLogoProps) {
       onError={() => {
         // Baja un escalón nada más: un logo subido roto todavía prueba el
         // estático antes de rendirse al neutral.
-        setState((prev) =>
-          prev.index < candidates.length - 1 ? { key: prev.key, index: prev.index + 1 } : prev,
-        )
+        setState((prev) => (prev.index < candidates.length - 1 ? { key: prev.key, index: prev.index + 1 } : prev))
       }}
     />
   )

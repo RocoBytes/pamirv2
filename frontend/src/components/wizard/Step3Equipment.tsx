@@ -76,7 +76,9 @@ function YesNoField({ label, value, onChange, error }: YesNoFieldProps) {
     <fieldset className="flex flex-col gap-2">
       <legend className="text-sm font-semibold text-primary">
         {label}
-        <span className="text-error ml-1" aria-hidden="true">*</span>
+        <span className="text-error ml-1" aria-hidden="true">
+          *
+        </span>
       </legend>
       <div className="flex gap-2">
         {([true, false] as const).map((opt) => {
@@ -156,7 +158,16 @@ interface RutLookupResultProps {
   onStartExpress: () => void
 }
 
-function RutLookupResult({ rut, integrante, loading, actionLabel, isAdmin, onSelect, onCreateIntegrante, onStartExpress }: RutLookupResultProps) {
+function RutLookupResult({
+  rut,
+  integrante,
+  loading,
+  actionLabel,
+  isAdmin,
+  onSelect,
+  onCreateIntegrante,
+  onStartExpress,
+}: RutLookupResultProps) {
   if (loading) {
     return (
       <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-secondary/20 bg-surface-container-low text-sm text-on-surface-variant">
@@ -192,10 +203,8 @@ function RutLookupResult({ rut, integrante, loading, actionLabel, isAdmin, onSel
     return (
       <div className="flex flex-col gap-2 px-4 py-3 rounded-xl border border-secondary/20 bg-surface-container-low">
         <p className="text-sm text-on-surface-variant">
-          Sin ficha en este club para el RUT{' '}
-          <span className="font-mono font-medium text-slate-700">{rut}</span>.
-          Puedes agregarlo como participante express o pedirle que complete su
-          ficha.
+          Sin ficha en este club para el RUT <span className="font-mono font-medium text-slate-700">{rut}</span>. Puedes
+          agregarlo como participante express o pedirle que complete su ficha.
         </p>
         <button
           type="button"
@@ -248,7 +257,9 @@ export function LiderPicker({ value, participantes, onChange, error }: LiderPick
     <div className="flex flex-col gap-2">
       <label className="text-sm font-semibold text-primary">
         Líder de Cordada
-        <span className="text-error ml-1" aria-hidden="true">*</span>
+        <span className="text-error ml-1" aria-hidden="true">
+          *
+        </span>
       </label>
 
       {!hasParticipants ? (
@@ -315,7 +326,9 @@ export function LiderPicker({ value, participantes, onChange, error }: LiderPick
       )}
 
       {error && (
-        <p className="text-xs text-error" role="alert">{error}</p>
+        <p className="text-xs text-error" role="alert">
+          {error}
+        </p>
       )}
     </div>
   )
@@ -386,24 +399,15 @@ export function ParticipantePicker({ selected, isAdmin, onAdd, onCreateIntegrant
       )}
 
       {isComplete && !loading && alreadyAdded && (
-        <p className="text-xs text-on-surface-variant px-1">
-          Este integrante ya está en la nómina.
-        </p>
+        <p className="text-xs text-on-surface-variant px-1">Este integrante ya está en la nómina.</p>
       )}
 
       {expressStep === 'confirm' && (
-        <ExpressResponsibilityModal
-          onCancel={() => setExpressStep('none')}
-          onConfirm={() => setExpressStep('form')}
-        />
+        <ExpressResponsibilityModal onCancel={() => setExpressStep('none')} onConfirm={() => setExpressStep('form')} />
       )}
 
       {expressStep === 'form' && (
-        <IntegranteExpressModal
-          initialRut={rut}
-          onCancel={() => setExpressStep('none')}
-          onSubmit={handleAddExpress}
-        />
+        <IntegranteExpressModal initialRut={rut} onCancel={() => setExpressStep('none')} onSubmit={handleAddExpress} />
       )}
     </div>
   )
@@ -456,7 +460,9 @@ export function Step3HumanTeam({ defaultValues, isAdmin, onSubmit, onBack, onCre
       <div className="flex flex-col gap-2">
         <span className="text-sm font-semibold text-primary">
           Nómina de Participantes
-          <span className="text-error ml-1" aria-hidden="true">*</span>
+          <span className="text-error ml-1" aria-hidden="true">
+            *
+          </span>
         </span>
         <p className="text-xs text-on-surface-variant">
           Selecciona los integrantes registrados que participarán en esta salida.

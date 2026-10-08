@@ -185,37 +185,40 @@ const CONDITIONAL_PAIRS: { tiene: IntegranteField; detalle: IntegranteField; mes
   { tiene: 'cirugiasLesionesTiene', detalle: 'cirugiasLesionesDetalle', message: 'Describe la cirugía o lesión' },
 ]
 
-describe.each(CONDITIONAL_PAIRS)('validateRegistroStep — paso 3, condicional de $tiene', ({ tiene, detalle, message }) => {
-  it('con Sí y detalle vacío reporta el error — sin depender del paso 4 (campos de paso 4 ausentes)', () => {
-    // A propósito: `values` no trae NINGÚN campo del paso 4 (como ocurre de
-    // verdad mientras la persona está parada en el paso 3).
-    const issues = validateRegistroStep(3, baseStep3Values({ [tiene]: true, [detalle]: '' }))
-    expect(issues).toContainEqual({ field: detalle, message })
-  })
+describe.each(CONDITIONAL_PAIRS)(
+  'validateRegistroStep — paso 3, condicional de $tiene',
+  ({ tiene, detalle, message }) => {
+    it('con Sí y detalle vacío reporta el error — sin depender del paso 4 (campos de paso 4 ausentes)', () => {
+      // A propósito: `values` no trae NINGÚN campo del paso 4 (como ocurre de
+      // verdad mientras la persona está parada en el paso 3).
+      const issues = validateRegistroStep(3, baseStep3Values({ [tiene]: true, [detalle]: '' }))
+      expect(issues).toContainEqual({ field: detalle, message })
+    })
 
-  it('con Sí y detalle en blanco (solo espacios) también reporta el error', () => {
-    const issues = validateRegistroStep(3, baseStep3Values({ [tiene]: true, [detalle]: '   ' }))
-    expect(issues).toContainEqual({ field: detalle, message })
-  })
+    it('con Sí y detalle en blanco (solo espacios) también reporta el error', () => {
+      const issues = validateRegistroStep(3, baseStep3Values({ [tiene]: true, [detalle]: '   ' }))
+      expect(issues).toContainEqual({ field: detalle, message })
+    })
 
-  it('con Sí y detalle relleno, no reporta error', () => {
-    const issues = validateRegistroStep(3, baseStep3Values({ [tiene]: true, [detalle]: 'Detalle real' }))
-    expect(issues.some((i) => i.field === detalle)).toBe(false)
-  })
+    it('con Sí y detalle relleno, no reporta error', () => {
+      const issues = validateRegistroStep(3, baseStep3Values({ [tiene]: true, [detalle]: 'Detalle real' }))
+      expect(issues.some((i) => i.field === detalle)).toBe(false)
+    })
 
-  it('con No, nunca exige detalle', () => {
-    const issues = validateRegistroStep(3, baseStep3Values({ [tiene]: false, [detalle]: '' }))
-    expect(issues.some((i) => i.field === detalle)).toBe(false)
-  })
+    it('con No, nunca exige detalle', () => {
+      const issues = validateRegistroStep(3, baseStep3Values({ [tiene]: false, [detalle]: '' }))
+      expect(issues.some((i) => i.field === detalle)).toBe(false)
+    })
 
-  it('el schema completo también lo reporta cuando el resto del formulario es válido (submit final)', () => {
-    const result = registroIntegranteSchema.safeParse(completeValidFormValues({ [tiene]: true, [detalle]: '' }))
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.issues.some((i) => i.path[0] === detalle)).toBe(true)
-    }
-  })
-})
+    it('el schema completo también lo reporta cuando el resto del formulario es válido (submit final)', () => {
+      const result = registroIntegranteSchema.safeParse(completeValidFormValues({ [tiene]: true, [detalle]: '' }))
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues.some((i) => i.path[0] === detalle)).toBe(true)
+      }
+    })
+  },
+)
 
 describe('validateRegistroStep — casos válidos por paso', () => {
   it('paso 1 completo y válido no reporta errores', () => {

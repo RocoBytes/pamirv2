@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react'
-import { Loader2, CheckCircle, AlertCircle, ArrowLeft, ArrowRight, UserPlus, AtSign, Lock, ShieldCheck } from 'lucide-react'
+import {
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  UserPlus,
+  AtSign,
+  Lock,
+  ShieldCheck,
+} from 'lucide-react'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { PasswordInput } from './ui/PasswordInput'
@@ -26,15 +36,16 @@ interface AuthPageProps {
 export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, inviteToken }: AuthPageProps) {
   const isDesktop = useIsDesktop()
 
-  const initialView: View = verifiedStatus === 'success'
-    ? 'verify-success'
-    : verifiedStatus === 'error'
-    ? 'verify-error'
-    : resetToken
-    ? 'reset'
-    : inviteToken
-    ? 'accept-invite'
-    : 'login'
+  const initialView: View =
+    verifiedStatus === 'success'
+      ? 'verify-success'
+      : verifiedStatus === 'error'
+        ? 'verify-error'
+        : resetToken
+          ? 'reset'
+          : inviteToken
+            ? 'accept-invite'
+            : 'login'
 
   const [view, setView] = useState<View>(initialView)
   const [submitting, setSubmitting] = useState(false)
@@ -90,7 +101,9 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
     }
   }, [inviteToken])
 
-  function clearError() { setError(null) }
+  function clearError() {
+    setError(null)
+  }
 
   // Rama "cuenta nueva": comportamiento de siempre.
   async function handleAcceptInviteNueva(e: React.FormEvent) {
@@ -227,14 +240,15 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
       <div className="min-h-dvh flex flex-col bg-surface-container-lowest px-4">
         <div className="flex-1 flex items-center justify-center py-10">
           <div className="w-full max-w-[360px] flex flex-col gap-8">
-
             {/* ── Verificación exitosa ─────────────────────────────────── */}
             {view === 'verify-success' && (
               <div className="flex flex-col items-center gap-4 text-center">
                 <CheckCircle size={48} className="text-primary" />
                 <h1 className="text-xl font-bold text-slate-800">¡Cuenta verificada!</h1>
                 <p className="text-on-surface-variant text-sm">Tu email fue confirmado. Ahora puedes iniciar sesión.</p>
-                <Button fullWidth onClick={() => setView('login')}>Iniciar sesión</Button>
+                <Button fullWidth onClick={() => setView('login')}>
+                  Iniciar sesión
+                </Button>
               </div>
             )}
 
@@ -244,7 +258,9 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                 <AlertCircle size={48} className="text-error" />
                 <h1 className="text-xl font-bold text-slate-800">Enlace inválido</h1>
                 <p className="text-on-surface-variant text-sm">El enlace de verificación es inválido o ya fue usado.</p>
-                <Button fullWidth onClick={() => setView('login')}>Volver al inicio</Button>
+                <Button fullWidth onClick={() => setView('login')}>
+                  Volver al inicio
+                </Button>
               </div>
             )}
 
@@ -258,8 +274,12 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                 {resetDone ? (
                   <div className="flex flex-col gap-4 text-center">
                     <CheckCircle size={40} className="text-primary mx-auto" />
-                    <p className="text-slate-700 text-sm font-medium">¡Contraseña actualizada! Ya puedes iniciar sesión.</p>
-                    <Button fullWidth onClick={() => setView('login')}>Iniciar sesión</Button>
+                    <p className="text-slate-700 text-sm font-medium">
+                      ¡Contraseña actualizada! Ya puedes iniciar sesión.
+                    </p>
+                    <Button fullWidth onClick={() => setView('login')}>
+                      Iniciar sesión
+                    </Button>
                   </div>
                 ) : (
                   <form onSubmit={(e) => void handleReset(e)} className="flex flex-col gap-4">
@@ -272,7 +292,11 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                       autoComplete="new-password"
                       leftIcon={<Lock size={16} />}
                     />
-                    {error && <p className="text-xs text-error" role="alert">{error}</p>}
+                    {error && (
+                      <p className="text-xs text-error" role="alert">
+                        {error}
+                      </p>
+                    )}
                     <Button type="submit" fullWidth disabled={submitting}>
                       {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Actualizar contraseña'}
                     </Button>
@@ -295,8 +319,12 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                   <div className="flex flex-col items-center gap-4 text-center">
                     <AlertCircle size={48} className="text-error" />
                     <h1 className="text-xl font-bold text-slate-800">Invitación no disponible</h1>
-                    <p className="text-on-surface-variant text-sm" role="alert">{inviteLoadError}</p>
-                    <Button fullWidth onClick={() => setView('login')}>Volver al inicio</Button>
+                    <p className="text-on-surface-variant text-sm" role="alert">
+                      {inviteLoadError}
+                    </p>
+                    <Button fullWidth onClick={() => setView('login')}>
+                      Volver al inicio
+                    </Button>
                   </div>
                 )}
 
@@ -309,7 +337,8 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                       </div>
                       <p className="text-on-surface-variant text-sm">
                         <span className="font-semibold text-slate-700">{inviteInfo.invitadoPor}</span> te invitó a
-                        unirse a <span className="font-semibold text-slate-700">{clubDisplayName(inviteInfo.organization)}</span>{' '}
+                        unirse a{' '}
+                        <span className="font-semibold text-slate-700">{clubDisplayName(inviteInfo.organization)}</span>{' '}
                         como <span className="font-semibold text-slate-700">{inviteInfo.rolLabel}</span>. Inicia sesión
                         con tu correo y tu contraseña de siempre para unirte.
                       </p>
@@ -339,14 +368,21 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                       <PasswordInput
                         label="Contraseña"
                         value={existingPassword}
-                        onChange={(e) => { setExistingPassword(e.target.value); setInviteError(null) }}
+                        onChange={(e) => {
+                          setExistingPassword(e.target.value)
+                          setInviteError(null)
+                        }}
                         required
                         autoComplete="current-password"
                         leftIcon={<Lock size={16} />}
                         disabled={!inviteInfo.organization?.slug}
                       />
 
-                      {inviteError && <p className="text-xs text-error" role="alert">{inviteError}</p>}
+                      {inviteError && (
+                        <p className="text-xs text-error" role="alert">
+                          {inviteError}
+                        </p>
+                      )}
 
                       <Button type="submit" fullWidth disabled={inviteSubmitting || !inviteInfo.organization?.slug}>
                         {inviteSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Iniciar sesión y unirme'}
@@ -364,7 +400,8 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                       </div>
                       <p className="text-on-surface-variant text-sm">
                         <span className="font-semibold text-slate-700">{inviteInfo.invitadoPor}</span> te invitó a
-                        unirse a <span className="font-semibold text-slate-700">{clubDisplayName(inviteInfo.organization)}</span>{' '}
+                        unirse a{' '}
+                        <span className="font-semibold text-slate-700">{clubDisplayName(inviteInfo.organization)}</span>{' '}
                         como <span className="font-semibold text-slate-700">{inviteInfo.rolLabel}</span>.
                       </p>
                     </div>
@@ -384,7 +421,10 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                         type="text"
                         label="Nombre completo"
                         value={inviteName}
-                        onChange={(e) => { setInviteName(e.target.value); setInviteError(null) }}
+                        onChange={(e) => {
+                          setInviteName(e.target.value)
+                          setInviteError(null)
+                        }}
                         required
                         autoComplete="name"
                       />
@@ -393,7 +433,10 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                         label="Contraseña"
                         hint="Mínimo 8 caracteres"
                         value={invitePassword}
-                        onChange={(e) => { setInvitePassword(e.target.value); setInviteError(null) }}
+                        onChange={(e) => {
+                          setInvitePassword(e.target.value)
+                          setInviteError(null)
+                        }}
                         required
                         autoComplete="new-password"
                         leftIcon={<Lock size={16} />}
@@ -402,13 +445,20 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                       <PasswordInput
                         label="Confirmar contraseña"
                         value={inviteConfirmPassword}
-                        onChange={(e) => { setInviteConfirmPassword(e.target.value); setInviteError(null) }}
+                        onChange={(e) => {
+                          setInviteConfirmPassword(e.target.value)
+                          setInviteError(null)
+                        }}
                         required
                         autoComplete="new-password"
                         leftIcon={<Lock size={16} />}
                       />
 
-                      {inviteError && <p className="text-xs text-error" role="alert">{inviteError}</p>}
+                      {inviteError && (
+                        <p className="text-xs text-error" role="alert">
+                          {inviteError}
+                        </p>
+                      )}
 
                       <Button type="submit" fullWidth disabled={inviteSubmitting}>
                         {inviteSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Crear cuenta'}
@@ -426,7 +476,8 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                   onClick={() => setView('login')}
                   className="inline-flex items-center gap-1 self-start text-sm text-on-surface-variant hover:text-slate-700 transition-colors rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
-                  <ArrowLeft size={14} />Volver
+                  <ArrowLeft size={14} />
+                  Volver
                 </button>
                 <div className="flex flex-col gap-1 -mt-4">
                   <h1 className="text-xl font-bold text-slate-800">Restablecer contraseña</h1>
@@ -435,8 +486,13 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                 {forgotSent ? (
                   <div className="flex flex-col gap-3 text-center">
                     <CheckCircle size={40} className="text-primary mx-auto" />
-                    <p className="text-slate-700 text-sm">Si el email está registrado, recibirás el enlace en breve. Revisa tu bandeja de entrada y la carpeta de spam.</p>
-                    <Button variant="ghost" fullWidth onClick={() => setView('login')}>Volver al inicio</Button>
+                    <p className="text-slate-700 text-sm">
+                      Si el email está registrado, recibirás el enlace en breve. Revisa tu bandeja de entrada y la
+                      carpeta de spam.
+                    </p>
+                    <Button variant="ghost" fullWidth onClick={() => setView('login')}>
+                      Volver al inicio
+                    </Button>
                   </div>
                 ) : (
                   <form onSubmit={(e) => void handleForgot(e)} className="flex flex-col gap-4">
@@ -450,7 +506,11 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                       autoComplete="email"
                       leftIcon={<AtSign size={16} />}
                     />
-                    {error && <p className="text-xs text-error" role="alert">{error}</p>}
+                    {error && (
+                      <p className="text-xs text-error" role="alert">
+                        {error}
+                      </p>
+                    )}
                     <Button type="submit" fullWidth disabled={submitting}>
                       {submitting ? <Loader2 size={16} className="animate-spin" /> : 'Enviar enlace'}
                     </Button>
@@ -496,7 +556,10 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                     type="email"
                     label="Correo electrónico"
                     value={email}
-                    onChange={(e) => { setEmail(e.target.value); clearError() }}
+                    onChange={(e) => {
+                      setEmail(e.target.value)
+                      clearError()
+                    }}
                     placeholder="tu@correo.cl"
                     required
                     autoComplete="email"
@@ -505,7 +568,10 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                   <PasswordInput
                     label="Contraseña"
                     value={password}
-                    onChange={(e) => { setPassword(e.target.value); clearError() }}
+                    onChange={(e) => {
+                      setPassword(e.target.value)
+                      clearError()
+                    }}
                     required
                     autoComplete="current-password"
                     leftIcon={<Lock size={16} />}
@@ -520,14 +586,21 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                     />
                     <button
                       type="button"
-                      onClick={() => { clearError(); setView('forgot') }}
+                      onClick={() => {
+                        clearError()
+                        setView('forgot')
+                      }}
                       className="text-xs text-secondary whitespace-nowrap hover:underline rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
                       ¿Olvidaste tu contraseña?
                     </button>
                   </div>
 
-                  {error && <p className="text-xs text-error" role="alert">{error}</p>}
+                  {error && (
+                    <p className="text-xs text-error" role="alert">
+                      {error}
+                    </p>
+                  )}
 
                   <Button type="submit" fullWidth disabled={submitting || isLoading}>
                     {submitting ? (
@@ -547,7 +620,6 @@ export function AuthPage({ onLogin, isLoading, verifiedStatus, resetToken, invit
                 </div>
               </>
             )}
-
           </div>
         </div>
 

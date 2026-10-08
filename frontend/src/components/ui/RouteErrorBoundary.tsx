@@ -24,7 +24,10 @@ export class RouteErrorBoundary extends Component<RouteErrorBoundaryProps, Route
     if (!this.state.failed) return this.props.children
     return (
       <div className="min-h-screen bg-alpine-canvas flex items-center justify-center px-4">
-        <div role="alert" className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-secondary/15 p-6 text-center">
+        <div
+          role="alert"
+          className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-secondary/15 p-6 text-center"
+        >
           <p className="text-sm text-slate-700 mb-5">
             No se pudo mostrar esta pantalla. Revisa tu conexión e inténtalo de nuevo.
           </p>

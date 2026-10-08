@@ -2,13 +2,7 @@ import { useState, useEffect } from 'react'
 import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import {
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  ShieldCheck,
-  Mountain,
-} from 'lucide-react'
+import { Loader2, AlertCircle, CheckCircle2, ShieldCheck, Mountain } from 'lucide-react'
 
 import { fetchEvaluacion, submitEvaluacion } from '../lib/api'
 import type { EvaluacionInfo } from '../lib/api'
@@ -18,21 +12,9 @@ import { Button } from './ui/Button'
 import { ClubLogo } from './ClubLogo'
 
 const evaluacionSchema = z.object({
-  notaObjetivos: z
-    .number({ error: 'Selecciona una calificación' })
-    .int()
-    .min(1)
-    .max(5),
-  notaItinerario: z
-    .number({ error: 'Selecciona una calificación' })
-    .int()
-    .min(1)
-    .max(5),
-  notaLider: z
-    .number({ error: 'Selecciona una calificación' })
-    .int()
-    .min(1)
-    .max(5),
+  notaObjetivos: z.number({ error: 'Selecciona una calificación' }).int().min(1).max(5),
+  notaItinerario: z.number({ error: 'Selecciona una calificación' }).int().min(1).max(5),
+  notaLider: z.number({ error: 'Selecciona una calificación' }).int().min(1).max(5),
   comentario: z.string().max(2000, 'Máximo 2000 caracteres').optional(),
 })
 
@@ -52,7 +34,9 @@ function NotaField({ legend, labelMin, labelMax, value, error, onChange }: NotaF
     <fieldset className="flex flex-col gap-2">
       <legend className="text-sm font-semibold text-primary">
         {legend}
-        <span className="text-error ml-1" aria-hidden="true">*</span>
+        <span className="text-error ml-1" aria-hidden="true">
+          *
+        </span>
       </legend>
       <div className="flex items-center justify-between gap-1 text-xs text-on-surface-variant mb-1">
         <span>1 &mdash; {labelMin}</span>
@@ -216,20 +200,20 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
           Evaluación express de salida
         </div>
         <h1 className="text-xl font-bold text-slate-900">{info.nombreActividad}</h1>
-        <p className="text-sm text-on-surface-variant mt-0.5">
-          Solo te tomará 1 minuto.
-        </p>
+        <p className="text-sm text-on-surface-variant mt-0.5">Solo te tomará 1 minuto.</p>
       </div>
 
       <div className="flex items-start gap-2 rounded-xl bg-primary-fixed border border-primary/20 p-3 mb-6 text-sm text-primary">
         <ShieldCheck size={18} className="shrink-0 mt-0.5" />
         <p>
-          Esta evaluación es <strong>anónima</strong>: tu respuesta no queda asociada a tu
-          nombre ni a tu correo.
+          Esta evaluación es <strong>anónima</strong>: tu respuesta no queda asociada a tu nombre ni a tu correo.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 sm:p-6">
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="flex flex-col gap-6 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 sm:p-6"
+      >
         <Controller
           control={control}
           name="notaObjetivos"
@@ -291,8 +275,12 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
           />
           <div className="flex items-center justify-between">
             {errors.comentario ? (
-              <p className="text-xs text-error" role="alert">{errors.comentario.message}</p>
-            ) : <span />}
+              <p className="text-xs text-error" role="alert">
+                {errors.comentario.message}
+              </p>
+            ) : (
+              <span />
+            )}
             <span
               className={[
                 'text-xs tabular-nums',

@@ -58,9 +58,7 @@ interface QuickItem {
 
 function Tag({ children, tone }: { children: ReactNode; tone: string }) {
   return (
-    <span
-      className={`shrink-0 rounded px-1.5 py-0.5 text-label-caps font-bold uppercase tracking-[0.05em] ${tone}`}
-    >
+    <span className={`shrink-0 rounded px-1.5 py-0.5 text-label-caps font-bold uppercase tracking-[0.05em] ${tone}`}>
       {children}
     </span>
   )
@@ -142,9 +140,7 @@ export function QuickAccess({
             ariaLabel: 'Abrir documentación del club',
             icon: BookOpen,
             well: 'bg-secondary-fixed text-on-secondary-fixed',
-            badge: (
-              <Tag tone="bg-secondary-fixed text-on-secondary-fixed">Socios {memberBadge}</Tag>
-            ),
+            badge: <Tag tone="bg-secondary-fixed text-on-secondary-fixed">Socios {memberBadge}</Tag>,
             onClick: onDocumentos,
           } satisfies QuickItem,
         ]
@@ -218,11 +214,7 @@ export function QuickAccess({
   }))
 
   const personalizarDialog = personalizando && (
-    <PersonalizarNav
-      tabs={personalizarTabs}
-      quick={personalizarQuick}
-      onClose={() => setPersonalizando(false)}
-    />
+    <PersonalizarNav tabs={personalizarTabs} quick={personalizarQuick} onClose={() => setPersonalizando(false)} />
   )
 
   // ── Desktop: 4 tarjetas ricas + una fila de acciones de gestión ───────────
@@ -263,9 +255,7 @@ export function QuickAccess({
                 className={`${cardSurface} ${cardInteractive} group p-4 flex flex-col justify-between gap-3 text-left rounded-xl`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <span
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${item.well}`}
-                  >
+                  <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${item.well}`}>
                     <Icon size={20} aria-hidden="true" />
                   </span>
                   {item.badge}
@@ -300,18 +290,12 @@ export function QuickAccess({
                   className={`${cardSurface} ${cardInteractive} px-4 py-3 flex items-center justify-between gap-3 text-left rounded-xl`}
                 >
                   <span className="flex items-center gap-3 min-w-0">
-                    <span
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${item.well}`}
-                    >
+                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${item.well}`}>
                       <Icon size={18} aria-hidden="true" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-body-sm font-bold text-on-surface leading-tight">
-                        {item.title}
-                      </span>
-                      <span className="block text-label-caps text-on-surface-variant mt-0.5">
-                        {item.description}
-                      </span>
+                      <span className="block text-body-sm font-bold text-on-surface leading-tight">{item.title}</span>
+                      <span className="block text-label-caps text-on-surface-variant mt-0.5">{item.description}</span>
                     </span>
                   </span>
                   <ChevronRight size={16} className="text-on-surface-variant shrink-0" aria-hidden="true" />
@@ -348,12 +332,7 @@ export function QuickAccess({
         Accesos Rápidos
       </SectionLabel>
 
-      <motion.div
-        className="grid grid-cols-4 gap-2"
-        variants={listContainer}
-        initial="hidden"
-        animate="visible"
-      >
+      <motion.div className="grid grid-cols-4 gap-2" variants={listContainer} initial="hidden" animate="visible">
         {tiles.map((item) => {
           const Icon = item.icon
           return (
@@ -366,9 +345,7 @@ export function QuickAccess({
               whileTap={pressable.whileTap}
               className={`${cardSurface} flex flex-col items-center justify-start gap-1.5 p-2 pt-3 rounded-xl min-h-[88px] text-center active:bg-surface-container-low transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
             >
-              <span
-                className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${item.well}`}
-              >
+              <span className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${item.well}`}>
                 <Icon size={20} aria-hidden="true" />
               </span>
               <span
@@ -395,9 +372,7 @@ export function QuickAccess({
             <span className="w-10 h-10 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center shrink-0">
               <MoreHorizontal size={20} aria-hidden="true" />
             </span>
-            <span className="text-label-caps font-semibold text-on-surface leading-tight">
-              Ver más
-            </span>
+            <span className="text-label-caps font-semibold text-on-surface leading-tight">Ver más</span>
           </motion.button>
         )}
       </motion.div>
@@ -437,62 +412,55 @@ export function QuickAccess({
               }}
             >
               {!isDesktop && (
-                <div
-                  aria-hidden="true"
-                  className="mx-auto mb-3 h-1 w-10 rounded-full bg-outline-variant"
-                />
+                <div aria-hidden="true" className="mx-auto mb-3 h-1 w-10 rounded-full bg-outline-variant" />
               )}
               <div className="flex items-center justify-between gap-3 pb-3 border-b border-outline-variant/40 mb-3">
-              <h2 id="accesos-adicionales-title" className="text-headline-md font-bold text-on-surface">
-                Accesos Adicionales
-              </h2>
-              <button
-                ref={closeButtonRef}
-                type="button"
-                onClick={closeSheet}
-                aria-label="Cerrar accesos adicionales"
-                className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <X size={18} aria-hidden="true" />
-              </button>
-            </div>
+                <h2 id="accesos-adicionales-title" className="text-headline-md font-bold text-on-surface">
+                  Accesos Adicionales
+                </h2>
+                <button
+                  ref={closeButtonRef}
+                  type="button"
+                  onClick={closeSheet}
+                  aria-label="Cerrar accesos adicionales"
+                  className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <X size={18} aria-hidden="true" />
+                </button>
+              </div>
 
-            <div className="flex flex-col gap-1">
-              {overflow.map((item) => {
-                const Icon = item.icon
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => {
-                      closeSheet()
-                      item.onClick()
-                    }}
-                    aria-label={item.ariaLabel}
-                    className="flex items-center gap-3 p-3 rounded-lg text-left hover:bg-surface-container-low transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    <span
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${item.well}`}
+              <div className="flex flex-col gap-1">
+                {overflow.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        closeSheet()
+                        item.onClick()
+                      }}
+                      aria-label={item.ariaLabel}
+                      className="flex items-center gap-3 p-3 rounded-lg text-left hover:bg-surface-container-low transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
-                      <Icon size={20} aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-title-md font-semibold text-on-surface leading-tight">
-                        {item.title}
+                      <span className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${item.well}`}>
+                        <Icon size={20} aria-hidden="true" />
                       </span>
-                      <span className="block text-body-sm text-on-surface-variant">
-                        {item.description}
+                      <span className="min-w-0">
+                        <span className="block text-title-md font-semibold text-on-surface leading-tight">
+                          {item.title}
+                        </span>
+                        <span className="block text-body-sm text-on-surface-variant">{item.description}</span>
                       </span>
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
+                    </button>
+                  )
+                })}
+              </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-        {personalizarDialog}
+      {personalizarDialog}
     </section>
   )
 }

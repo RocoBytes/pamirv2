@@ -115,9 +115,7 @@ function SalidaCard({
           {DISCIPLINA_LABELS[salida.disciplina] && (
             <span className="flex items-center gap-1.5 col-span-2">
               <Backpack size={13} className="text-outline shrink-0" aria-hidden="true" />
-              <span className="font-medium text-secondary">
-                {DISCIPLINA_LABELS[salida.disciplina]}
-              </span>
+              <span className="font-medium text-secondary">{DISCIPLINA_LABELS[salida.disciplina]}</span>
             </span>
           )}
         </div>
@@ -192,8 +190,8 @@ export function MisSalidasPanel({
           </span>
           <p className="text-title-md font-bold text-on-surface mb-1">Sin salidas activas en curso</p>
           <p className="text-body-sm text-on-surface-variant mb-5 leading-relaxed">
-            No tienes avisos de expedición pendientes de retorno. Cuando salgas a la montaña, usa el
-            formulario de arriba para habilitar el seguimiento de seguridad.
+            No tienes avisos de expedición pendientes de retorno. Cuando salgas a la montaña, usa el formulario de
+            arriba para habilitar el seguimiento de seguridad.
           </p>
           <Button variant="primary" size="sm" onClick={onNewSalida}>
             <Plus size={16} aria-hidden="true" />
@@ -203,12 +201,7 @@ export function MisSalidasPanel({
       )}
 
       {!isLoading && !error && salidas.length > 0 && (
-        <motion.div
-          className="grid gap-3"
-          variants={listContainer}
-          initial="hidden"
-          animate="visible"
-        >
+        <motion.div className="grid gap-3" variants={listContainer} initial="hidden" animate="visible">
           {salidas.map((salida) => (
             <motion.div key={salida.id} variants={listItem} className="min-w-0">
               <SalidaCard salida={salida} currentUserId={currentUserId} onClick={onSelectSalida} />
@@ -247,12 +240,8 @@ export function MisSalidasPanel({
           <History size={20} aria-hidden="true" />
         </span>
         <span className="text-left min-w-0">
-          <span className="block text-title-md font-semibold text-on-surface leading-tight">
-            Histórico de Salidas
-          </span>
-          <span className="block text-body-sm text-on-surface-variant">
-            Salidas cerradas en las que participaste
-          </span>
+          <span className="block text-title-md font-semibold text-on-surface leading-tight">Histórico de Salidas</span>
+          <span className="block text-body-sm text-on-surface-variant">Salidas cerradas en las que participaste</span>
         </span>
       </span>
       {expanded ? (
@@ -264,49 +253,43 @@ export function MisSalidasPanel({
   )
 
   const historialList = !isAdmin && expanded && (
-        <div className="mt-3">
-          {historicosLoading && (
-            <div className="flex flex-col items-center justify-center py-8 gap-3 text-on-surface-variant">
-              <Loader2 className="animate-spin text-primary" size={24} aria-hidden="true" />
-              <p className="text-body-base">Cargando históricos...</p>
-            </div>
-          )}
-
-          {historicosError && !historicosLoading && (
-            <div className="flex flex-col items-center py-8 gap-3 text-center">
-              <AlertCircle size={28} className="text-error" aria-hidden="true" />
-              <p className="text-body-base text-on-surface-variant">{historicosError}</p>
-              <Button variant="secondary" size="sm" onClick={() => void loadHistoricos()}>
-                Reintentar
-              </Button>
-            </div>
-          )}
-
-          {!historicosLoading && !historicosError && historicos.length === 0 && (
-            <div className="flex flex-col items-center py-8 gap-2 text-center">
-              <span className="w-12 h-12 rounded-2xl bg-surface-container text-on-surface-variant flex items-center justify-center">
-                <History size={20} aria-hidden="true" />
-              </span>
-              <p className="text-body-base text-on-surface-variant">
-                No participaste en salidas cerradas todavía
-              </p>
-            </div>
-          )}
-
-          {!historicosLoading && !historicosError && historicos.length > 0 && (
-            <div className="grid gap-3">
-              {historicos.map((salida) => (
-                <div key={salida.id} className="min-w-0">
-                  <SalidaCard
-                    salida={salida}
-                    currentUserId={currentUserId}
-                    onClick={onSelectSalida}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+    <div className="mt-3">
+      {historicosLoading && (
+        <div className="flex flex-col items-center justify-center py-8 gap-3 text-on-surface-variant">
+          <Loader2 className="animate-spin text-primary" size={24} aria-hidden="true" />
+          <p className="text-body-base">Cargando históricos...</p>
         </div>
+      )}
+
+      {historicosError && !historicosLoading && (
+        <div className="flex flex-col items-center py-8 gap-3 text-center">
+          <AlertCircle size={28} className="text-error" aria-hidden="true" />
+          <p className="text-body-base text-on-surface-variant">{historicosError}</p>
+          <Button variant="secondary" size="sm" onClick={() => void loadHistoricos()}>
+            Reintentar
+          </Button>
+        </div>
+      )}
+
+      {!historicosLoading && !historicosError && historicos.length === 0 && (
+        <div className="flex flex-col items-center py-8 gap-2 text-center">
+          <span className="w-12 h-12 rounded-2xl bg-surface-container text-on-surface-variant flex items-center justify-center">
+            <History size={20} aria-hidden="true" />
+          </span>
+          <p className="text-body-base text-on-surface-variant">No participaste en salidas cerradas todavía</p>
+        </div>
+      )}
+
+      {!historicosLoading && !historicosError && historicos.length > 0 && (
+        <div className="grid gap-3">
+          {historicos.map((salida) => (
+            <div key={salida.id} className="min-w-0">
+              <SalidaCard salida={salida} currentUserId={currentUserId} onClick={onSelectSalida} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 
   if (isDesktop) {

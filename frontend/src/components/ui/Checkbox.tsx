@@ -24,7 +24,10 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   return (
     <label
       htmlFor={checkboxId}
-      className={['inline-flex items-center gap-2 min-h-11 py-2 cursor-pointer select-none text-sm text-on-surface-variant', className]
+      className={[
+        'inline-flex items-center gap-2 min-h-11 py-2 cursor-pointer select-none text-sm text-on-surface-variant',
+        className,
+      ]
         .filter(Boolean)
         .join(' ')}
     >

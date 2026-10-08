@@ -4,11 +4,7 @@ import type { CSSProperties } from 'react'
 
 export type EstadoEvento = 'BORRADOR' | 'PUBLICADO' | 'FINALIZADO' | 'CANCELADO'
 
-export type EstadoInscripcion =
-  | 'POSTULADO'
-  | 'RETIRADO'
-  | 'SELECCIONADO'
-  | 'NO_SELECCIONADO'
+export type EstadoInscripcion = 'POSTULADO' | 'RETIRADO' | 'SELECCIONADO' | 'NO_SELECCIONADO'
 
 export interface CategoriaEventoRecord {
   id: number
@@ -91,11 +87,7 @@ export interface InscripcionPayload {
 
 // ─── Postulantes (vista admin) ───────────────────────────────────────────────
 
-export type TipoNotificacion =
-  | 'INSCRIPCION_CONFIRMADA'
-  | 'SELECCIONADO'
-  | 'NO_SELECCIONADO'
-  | 'EVENTO_CANCELADO'
+export type TipoNotificacion = 'INSCRIPCION_CONFIRMADA' | 'SELECCIONADO' | 'NO_SELECCIONADO' | 'EVENTO_CANCELADO'
 
 export type EstadoNotificacion = 'PENDIENTE' | 'ENVIADA' | 'ERROR'
 
@@ -206,13 +198,7 @@ export const DIFICULTAD_LABELS: Record<number, string> = {
 
 // ─── Estado visible derivado (spec §4) ───────────────────────────────────────
 
-export type EstadoVisibleTone =
-  | 'draft'
-  | 'open'
-  | 'closed'
-  | 'confirmed'
-  | 'done'
-  | 'cancelled'
+export type EstadoVisibleTone = 'draft' | 'open' | 'closed' | 'confirmed' | 'done' | 'cancelled'
 
 export interface EstadoVisible {
   badge: string
@@ -299,10 +285,7 @@ function esColorClaro(hex: string): boolean {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6
 }
 
-export function categoriaChipStyle(
-  color: string,
-  variant: 'solid' | 'tint' = 'solid',
-): CSSProperties {
+export function categoriaChipStyle(color: string, variant: 'solid' | 'tint' = 'solid'): CSSProperties {
   if (variant === 'tint') {
     return { backgroundColor: `${color}1f`, color }
   }

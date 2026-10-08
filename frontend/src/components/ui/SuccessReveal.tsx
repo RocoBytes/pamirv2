@@ -102,9 +102,7 @@ export function SuccessReveal({
   // El ORIGEN queda congelado en el clic —la onda nace de donde estuvo el dedo,
   // no persigue al botón si el layout se mueve— pero la ESCALA se recalcula si
   // la ventana cambia de tamaño antes de quedar tapada.
-  const [scale, setScale] = useState(() =>
-    coverScale(origin, window.innerWidth, window.innerHeight),
-  )
+  const [scale, setScale] = useState(() => coverScale(origin, window.innerWidth, window.innerHeight))
   const [gateOpen, setGateOpen] = useState(false)
   const [covered, setCovered] = useState(false)
 
@@ -128,8 +126,7 @@ export function SuccessReveal({
   // partir de ahí, crecer más no cambia nada de lo que se ve.
   useEffect(() => {
     if (covered || retracting) return
-    const recompute = () =>
-      setScale(coverScale(origin, window.innerWidth, window.innerHeight))
+    const recompute = () => setScale(coverScale(origin, window.innerWidth, window.innerHeight))
     window.addEventListener('resize', recompute)
     return () => window.removeEventListener('resize', recompute)
   }, [covered, retracting, origin])
@@ -237,42 +234,38 @@ export function SuccessReveal({
           este contenedor exista desde el montaje y vacío: el lector de
           pantalla anuncia cuando el contenido CAMBIA, y acá cambia dos veces
           (a "Guardando…" y después a la confirmación). */}
-      <div
-        role="status"
-        aria-live="polite"
-        className="relative flex items-center justify-center"
-      >
-      <AnimatePresence>
-        {showSuccess && (
-          <motion.div
-            key="success"
-            className="relative flex flex-col items-center gap-4 text-center"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: DURATION.surface, ease: EASE_OUT }}
-          >
-            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-white/15">
-              <Check size={36} strokeWidth={3} className="text-white" aria-hidden="true" />
-            </div>
-            <p className="text-2xl font-extrabold text-white">{title}</p>
-            {detail && <p className="text-sm font-medium text-white/85">{detail}</p>}
-          </motion.div>
-        )}
+      <div role="status" aria-live="polite" className="relative flex items-center justify-center">
+        <AnimatePresence>
+          {showSuccess && (
+            <motion.div
+              key="success"
+              className="relative flex flex-col items-center gap-4 text-center"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: DURATION.surface, ease: EASE_OUT }}
+            >
+              <div className="flex items-center justify-center w-16 h-16 rounded-full bg-white/15">
+                <Check size={36} strokeWidth={3} className="text-white" aria-hidden="true" />
+              </div>
+              <p className="text-2xl font-extrabold text-white">{title}</p>
+              {detail && <p className="text-sm font-medium text-white/85">{detail}</p>}
+            </motion.div>
+          )}
 
-        {showSaving && (
-          <motion.div
-            key="saving"
-            className="relative flex items-center gap-2 text-sm font-medium text-white/85"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: DURATION.base }}
-          >
-            <Loader2 className="animate-spin" size={16} aria-hidden="true" />
-            {savingLabel}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {showSaving && (
+            <motion.div
+              key="saving"
+              className="relative flex items-center gap-2 text-sm font-medium text-white/85"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: DURATION.base }}
+            >
+              <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+              {savingLabel}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Salida de emergencia. Va FUERA de la región viva de arriba: no es

@@ -36,33 +36,28 @@ export function UsuariosManager({ currentUserId }: UsuariosManagerProps) {
     void load()
   }, [load])
 
-  const handleCambiarRol = useCallback(
-    async (usuario: UsuarioAdmin, nuevoRol: Rol) => {
-      if (nuevoRol === usuario.rol) return
-      setSavingId(usuario.id)
-      setRowError((prev) => ({ ...prev, [usuario.id]: null }))
-      try {
-        const actualizado = await cambiarRolUsuario(usuario.id, nuevoRol)
-        setUsuarios((prev) => prev?.map((u) => (u.id === actualizado.id ? actualizado : u)) ?? prev)
-      } catch (err) {
-        setRowError((prev) => ({
-          ...prev,
-          [usuario.id]: err instanceof Error ? err.message : 'No se pudo actualizar el rol',
-        }))
-      } finally {
-        setSavingId(null)
-      }
-    },
-    [],
-  )
+  const handleCambiarRol = useCallback(async (usuario: UsuarioAdmin, nuevoRol: Rol) => {
+    if (nuevoRol === usuario.rol) return
+    setSavingId(usuario.id)
+    setRowError((prev) => ({ ...prev, [usuario.id]: null }))
+    try {
+      const actualizado = await cambiarRolUsuario(usuario.id, nuevoRol)
+      setUsuarios((prev) => prev?.map((u) => (u.id === actualizado.id ? actualizado : u)) ?? prev)
+    } catch (err) {
+      setRowError((prev) => ({
+        ...prev,
+        [usuario.id]: err instanceof Error ? err.message : 'No se pudo actualizar el rol',
+      }))
+    } finally {
+      setSavingId(null)
+    }
+  }, [])
 
   const usuariosFiltrados = useMemo(() => {
     if (!usuarios) return usuarios
     const q = filtro.trim().toLowerCase()
     if (!q) return usuarios
-    return usuarios.filter(
-      (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
-    )
+    return usuarios.filter((u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
   }, [usuarios, filtro])
 
   return (
@@ -95,11 +90,7 @@ export function UsuariosManager({ currentUserId }: UsuariosManagerProps) {
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
           <div className="flex-1">
             <p>{loadError}</p>
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="mt-1 font-semibold underline text-xs"
-            >
+            <button type="button" onClick={() => void load()} className="mt-1 font-semibold underline text-xs">
               Reintentar
             </button>
           </div>

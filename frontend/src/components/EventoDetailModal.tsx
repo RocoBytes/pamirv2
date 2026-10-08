@@ -45,15 +45,7 @@ function FilaFicha({ label, value }: { label: string; value: string }) {
   )
 }
 
-function SeccionTexto({
-  titulo,
-  texto,
-  children,
-}: {
-  titulo: string
-  texto?: string
-  children?: ReactNode
-}) {
+function SeccionTexto({ titulo, texto, children }: { titulo: string; texto?: string; children?: ReactNode }) {
   return (
     <section className="bg-white rounded-2xl border border-secondary/15 p-5 shadow-sm">
       <h3 className="text-sm font-bold text-primary mb-2">{titulo}</h3>
@@ -145,9 +137,7 @@ export function EventoDetailModal({
   const visible = deriveEstadoVisible(evento)
   const rango = formatRangoFechas(evento.fechaInicio, evento.fechaFin)
   const inscripcionesAbiertas =
-    evento.estado === 'PUBLICADO' &&
-    !!evento.fechaCorte &&
-    new Date(evento.fechaCorte).getTime() > Date.now()
+    evento.estado === 'PUBLICADO' && !!evento.fechaCorte && new Date(evento.fechaCorte).getTime() > Date.now()
   const miEstado = evento.miInscripcion?.estado ?? null
   const corteTexto = evento.fechaCorte ? formatCorteSantiago(new Date(evento.fechaCorte)) : null
 
@@ -186,16 +176,12 @@ export function EventoDetailModal({
                   {evento.categoria.nombre}
                 </span>
               )}
-              <span
-                className={`text-xs font-semibold px-3 py-1 rounded-full ${ESTADO_VISIBLE_COLORS[visible.tone]}`}
-              >
+              <span className={`text-xs font-semibold px-3 py-1 rounded-full ${ESTADO_VISIBLE_COLORS[visible.tone]}`}>
                 {visible.badge}
               </span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 leading-tight">
-              {evento.titulo}
-            </h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 leading-tight">{evento.titulo}</h1>
 
             {evento.avisoDestacado && (
               <p className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-sm font-medium text-amber-800 mb-2">
@@ -213,19 +199,14 @@ export function EventoDetailModal({
             {/* Ficha (estilo DAV: etiqueta / valor) */}
             <div className="text-sm mt-4 pt-2 border-t border-slate-100">
               {rango && (
-                <FilaFicha
-                  label="Fecha"
-                  value={evento.horaInicio ? `${rango} · ${evento.horaInicio} h` : rango}
-                />
+                <FilaFicha label="Fecha" value={evento.horaInicio ? `${rango} · ${evento.horaInicio} h` : rango} />
               )}
               {evento.duracionTexto && <FilaFicha label="Duración" value={evento.duracionTexto} />}
               {evento.ubicacion && <FilaFicha label="Ubicación" value={evento.ubicacion} />}
               {evento.reunionCoordinacion && (
                 <FilaFicha label="Reunión de coordinación" value={evento.reunionCoordinacion} />
               )}
-              {evento.organizadorNombre && (
-                <FilaFicha label="Organizador" value={evento.organizadorNombre} />
-              )}
+              {evento.organizadorNombre && <FilaFicha label="Organizador" value={evento.organizadorNombre} />}
               {evento.dificultad !== null && (
                 <FilaFicha
                   label="Dificultad"
@@ -233,10 +214,7 @@ export function EventoDetailModal({
                 />
               )}
               {evento.alturaMaximaMsnm !== null && (
-                <FilaFicha
-                  label="Altura máxima"
-                  value={`${evento.alturaMaximaMsnm.toLocaleString('es-CL')} msnm`}
-                />
+                <FilaFicha label="Altura máxima" value={`${evento.alturaMaximaMsnm.toLocaleString('es-CL')} msnm`} />
               )}
               {evento.cupos !== null && (
                 <FilaFicha
@@ -245,10 +223,7 @@ export function EventoDetailModal({
                 />
               )}
               {evento.fechaCorte && (
-                <FilaFicha
-                  label="Cierre de inscripciones"
-                  value={formatCorteSantiago(new Date(evento.fechaCorte))}
-                />
+                <FilaFicha label="Cierre de inscripciones" value={formatCorteSantiago(new Date(evento.fechaCorte))} />
               )}
             </div>
           </div>
@@ -275,9 +250,7 @@ export function EventoDetailModal({
             )}
             {evento.incluye && <SeccionTexto titulo="Incluye" texto={evento.incluye} />}
             {evento.noIncluye && <SeccionTexto titulo="No incluye" texto={evento.noIncluye} />}
-            {evento.recomendaciones && (
-              <SeccionTexto titulo="Recomendaciones" texto={evento.recomendaciones} />
-            )}
+            {evento.recomendaciones && <SeccionTexto titulo="Recomendaciones" texto={evento.recomendaciones} />}
           </div>
 
           {/* Bloque de inscripción */}
@@ -320,12 +293,7 @@ export function EventoDetailModal({
                       >
                         Volver
                       </Button>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        loading={retirando}
-                        onClick={() => void handleRetirar()}
-                      >
+                      <Button variant="danger" size="sm" loading={retirando} onClick={() => void handleRetirar()}>
                         Confirmar retiro
                       </Button>
                     </div>

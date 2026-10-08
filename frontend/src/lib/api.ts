@@ -1,4 +1,13 @@
-import type { SalidaFormData, SalidaRecord, GpxUploadResponse, PronosticoUploadResponse, User, IntegranteRecord, Participante, OrganizationBrand } from '../types/salida'
+import type {
+  SalidaFormData,
+  SalidaRecord,
+  GpxUploadResponse,
+  PronosticoUploadResponse,
+  User,
+  IntegranteRecord,
+  Participante,
+  OrganizationBrand,
+} from '../types/salida'
 import type {
   CategoriaEventoRecord,
   EventoRecord,
@@ -35,9 +44,7 @@ import type {
 
 // En desarrollo el proxy de Vite redirige /api → localhost:3000.
 // En producción (Vercel) no hay proxy: se usa VITE_API_URL apuntando a Render.com.
-const API_BASE = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api`
-  : '/api'
+const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api'
 
 // Único punto de integración de X-Club: cada una de las ~40 llamadas
 // autenticadas de este archivo pasa por acá, así que agregar el header acá
@@ -86,10 +93,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-export async function loginWithCredentials(
-  email: string,
-  password: string,
-): Promise<{ user: User; token: string }> {
+export async function loginWithCredentials(email: string, password: string): Promise<{ user: User; token: string }> {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -107,10 +111,7 @@ export async function forgotPassword(email: string): Promise<{ message: string }
   return handleResponse<{ message: string }>(res)
 }
 
-export async function resetPassword(
-  token: string,
-  password: string,
-): Promise<{ message: string }> {
+export async function resetPassword(token: string, password: string): Promise<{ message: string }> {
   const res = await fetch(`${API_BASE}/auth/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -158,9 +159,7 @@ export async function getSalida(id: string): Promise<SalidaRecord> {
 
 // Los metadatos del GPX nunca viajan en este payload: el archivo se sube
 // después, a través de uploadGpx(), una vez creada la salida.
-export async function createSalida(
-  data: Omit<SalidaFormData, 'gpxFile'>,
-): Promise<SalidaRecord> {
+export async function createSalida(data: Omit<SalidaFormData, 'gpxFile'>): Promise<SalidaRecord> {
   const res = await fetch(`${API_BASE}/salidas`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -169,10 +168,7 @@ export async function createSalida(
   return handleResponse<SalidaRecord>(res)
 }
 
-export async function updateSalida(
-  id: string,
-  data: Partial<Omit<SalidaFormData, 'gpxFile'>>,
-): Promise<SalidaRecord> {
+export async function updateSalida(id: string, data: Partial<Omit<SalidaFormData, 'gpxFile'>>): Promise<SalidaRecord> {
   const res = await fetch(`${API_BASE}/salidas/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -269,9 +265,7 @@ export interface CreateIntegrantePayload {
   derechoImagen: boolean
 }
 
-export async function createIntegrante(
-  data: CreateIntegrantePayload,
-): Promise<IntegranteRecord> {
+export async function createIntegrante(data: CreateIntegrantePayload): Promise<IntegranteRecord> {
   const res = await fetch(`${API_BASE}/integrantes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -281,10 +275,7 @@ export async function createIntegrante(
 }
 
 export async function getIntegranteByRut(rut: string): Promise<IntegranteRecord | null> {
-  const res = await fetch(
-    `${API_BASE}/integrantes/by-rut/${encodeURIComponent(rut)}`,
-    { headers: authHeaders() },
-  )
+  const res = await fetch(`${API_BASE}/integrantes/by-rut/${encodeURIComponent(rut)}`, { headers: authHeaders() })
   if (res.status === 404) return null
   return handleResponse<IntegranteRecord>(res)
 }
@@ -364,10 +355,7 @@ export async function fetchEvaluacion(token: string): Promise<EvaluacionInfo> {
   return handleResponse<EvaluacionInfo>(res)
 }
 
-export async function submitEvaluacion(
-  token: string,
-  data: SubmitEvaluacionPayload,
-): Promise<{ ok: boolean }> {
+export async function submitEvaluacion(token: string, data: SubmitEvaluacionPayload): Promise<{ ok: boolean }> {
   const res = await fetch(`${API_BASE}/evaluaciones/${encodeURIComponent(token)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -483,10 +471,9 @@ export async function fetchSalidaArchivoUrl(
   salidaId: string,
   tipo: 'gpx' | 'pronostico',
 ): Promise<DownloadUrlResponse> {
-  const res = await fetch(
-    `${API_BASE}/salidas/${encodeURIComponent(salidaId)}/archivos/${tipo}/url`,
-    { headers: authHeaders() },
-  )
+  const res = await fetch(`${API_BASE}/salidas/${encodeURIComponent(salidaId)}/archivos/${tipo}/url`, {
+    headers: authHeaders(),
+  })
   return handleResponse<DownloadUrlResponse>(res)
 }
 
@@ -655,7 +642,9 @@ export async function enviarSaludSalida(
     method: 'POST',
     headers: authHeaders(),
   })
-  return handleResponse<{ sent: boolean; to: string; participantesConFicha: number; participantesSinFicha: number }>(res)
+  return handleResponse<{ sent: boolean; to: string; participantesConFicha: number; participantesSinFicha: number }>(
+    res,
+  )
 }
 
 // ─── Eventos del club ─────────────────────────────────────────────────────────

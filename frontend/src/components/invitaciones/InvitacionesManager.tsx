@@ -1,21 +1,7 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react'
-import {
-  UserPlus,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  Copy,
-  Send,
-  Ban,
-  Inbox,
-} from 'lucide-react'
+import { UserPlus, Loader2, AlertCircle, CheckCircle2, Copy, Send, Ban, Inbox } from 'lucide-react'
 
-import {
-  listarInvitaciones,
-  crearInvitacion,
-  revocarInvitacion,
-  reenviarInvitacion,
-} from '../../lib/api'
+import { listarInvitaciones, crearInvitacion, revocarInvitacion, reenviarInvitacion } from '../../lib/api'
 import type { Invitacion, EstadoInvitacion, Rol } from '../../types/invitacion'
 import { ROL_LABELS, ESTADO_LABELS } from '../../types/invitacion'
 import { rolesInvitables } from '../../lib/roles'
@@ -49,7 +35,9 @@ function formatDate(iso: string): string {
 
 function EstadoBadge({ estado }: { estado: EstadoInvitacion }) {
   return (
-    <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md ${ESTADO_BADGE_CLASS[estado]}`}>
+    <span
+      className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md ${ESTADO_BADGE_CLASS[estado]}`}
+    >
       {ESTADO_LABELS[estado]}
     </span>
   )
@@ -93,9 +81,7 @@ function EnlaceBanner({ inviteUrl, emailEnviado }: EnlaceBannerProps) {
             : 'No se pudo enviar el correo. Comparte el enlace manualmente.'}
         </p>
       </div>
-      <p className="text-xs">
-        El enlace es personal, de un solo uso y vale por 7 días.
-      </p>
+      <p className="text-xs">El enlace es personal, de un solo uso y vale por 7 días.</p>
       <div className="flex flex-col sm:flex-row gap-2">
         <input
           type="text"
@@ -296,11 +282,7 @@ export function InvitacionesManager({ rolActual }: InvitacionesManagerProps) {
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
           <div className="flex-1">
             <p>{listError}</p>
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="mt-1 font-semibold underline text-xs"
-            >
+            <button type="button" onClick={() => void load()} className="mt-1 font-semibold underline text-xs">
               Reintentar
             </button>
           </div>

@@ -23,10 +23,7 @@ interface DocumentosAdminSectionProps {
   onChanged?: () => void
 }
 
-export function DocumentosAdminSection({
-  variant = 'panel',
-  onChanged,
-}: DocumentosAdminSectionProps) {
+export function DocumentosAdminSection({ variant = 'panel', onChanged }: DocumentosAdminSectionProps) {
   const { memberBadge } = useOrganization()
   const [docs, setDocs] = useState<DocumentoRecord[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -246,9 +243,7 @@ export function DocumentosAdminSection({
       )}
 
       {docs && docs.length === 0 && (
-        <p className="text-sm text-on-surface-variant py-4 text-center">
-          Aún no hay documentos cargados.
-        </p>
+        <p className="text-sm text-on-surface-variant py-4 text-center">Aún no hay documentos cargados.</p>
       )}
 
       {docs && docs.length > 0 && (
@@ -278,11 +273,7 @@ export function DocumentosAdminSection({
                       disabled={isDeleting}
                       className="inline-flex items-center gap-1 bg-red-600 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
                     >
-                      {isDeleting ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : (
-                        'Sí, borrar'
-                      )}
+                      {isDeleting ? <Loader2 size={12} className="animate-spin" /> : 'Sí, borrar'}
                     </button>
                     <button
                       type="button"

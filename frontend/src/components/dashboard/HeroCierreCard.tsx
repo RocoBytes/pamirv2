@@ -30,9 +30,7 @@ export function HeroCierreCard({ available, locked, isDesktop, onClick }: HeroCi
             Post-Salida
           </span>
         </div>
-        <h2 className="text-headline-md font-extrabold tracking-tight text-on-surface/70">
-          Ficha de Cierre
-        </h2>
+        <h2 className="text-headline-md font-extrabold tracking-tight text-on-surface/70">Ficha de Cierre</h2>
         <p className="text-body-sm text-on-surface-variant max-w-sm">
           {locked
             ? 'Registra tu primera salida para desbloquear esta sección'
@@ -59,12 +57,8 @@ export function HeroCierreCard({ available, locked, isDesktop, onClick }: HeroCi
             <ShieldCheck size={20} className="text-pine" aria-hidden="true" />
           </span>
           <span className="min-w-0">
-            <span className="block text-title-md font-semibold text-on-surface leading-tight">
-              Cierre de Retorno
-            </span>
-            <span className="block text-body-sm text-on-surface-variant truncate">
-              ¿Regresaste? Cancela la alerta
-            </span>
+            <span className="block text-title-md font-semibold text-on-surface leading-tight">Cierre de Retorno</span>
+            <span className="block text-body-sm text-on-surface-variant truncate">¿Regresaste? Cancela la alerta</span>
           </span>
         </span>
         <span className="shrink-0 h-9 px-3 rounded-lg bg-surface-container-high text-on-surface text-body-medium font-semibold flex items-center">
@@ -95,8 +89,8 @@ export function HeroCierreCard({ available, locked, isDesktop, onClick }: HeroCi
           Ficha de Cierre &amp; Retorno
         </h2>
         <p className="text-body-sm text-on-surface-variant leading-relaxed max-w-md">
-          Notifica tu llegada de vuelta para cancelar la ventana de emergencia y registrar las
-          novedades de la ruta realizada.
+          Notifica tu llegada de vuelta para cancelar la ventana de emergencia y registrar las novedades de la ruta
+          realizada.
         </p>
       </div>
 

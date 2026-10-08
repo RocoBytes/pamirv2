@@ -11,12 +11,7 @@ import { cardSurface } from './Card'
  * `animate-pulse` de Tailwind anima solo opacidad, y motion-reduce la desactiva.
  */
 export function Skeleton({ className = '' }: { className?: string }) {
-  return (
-    <div
-      className={`bg-surface-container motion-safe:animate-pulse rounded ${className}`}
-      aria-hidden="true"
-    />
-  )
+  return <div className={`bg-surface-container motion-safe:animate-pulse rounded ${className}`} aria-hidden="true" />
 }
 
 /** Esqueleto con la silueta de una SalidaCard. */

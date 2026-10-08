@@ -55,7 +55,9 @@ function formatDate(iso: string): string {
 
 function EstadoBadge({ estado }: { estado: EstadoCodigoQr }) {
   return (
-    <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md ${ESTADO_BADGE_CLASS[estado]}`}>
+    <span
+      className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md ${ESTADO_BADGE_CLASS[estado]}`}
+    >
       {ESTADO_CODIGO_QR_LABELS[estado]}
     </span>
   )
@@ -271,9 +273,16 @@ function QrDirectoPanel({ codigo: codigoInicial, qrUrl, onGenerarOtro, onCerrar 
   return (
     <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-5 mb-5 flex flex-col items-center gap-3 text-center">
       {codigoInicial.etiqueta && <p className="text-sm font-semibold text-slate-700">{codigoInicial.etiqueta}</p>}
-      <QrCode value={qrUrl} size={240} alt="QR directo" className="rounded-xl bg-white p-2 border border-secondary/10" />
+      <QrCode
+        value={qrUrl}
+        size={240}
+        alt="QR directo"
+        className="rounded-xl bg-white p-2 border border-secondary/10"
+      />
       <p className="text-sm font-semibold text-primary">Vence en {formatCountdown(msRestantes)}</p>
-      <p className="text-xs text-on-surface-variant">Sirve una sola vez y se actualiza solo apenas alguien se registre.</p>
+      <p className="text-xs text-on-surface-variant">
+        Sirve una sola vez y se actualiza solo apenas alguien se registre.
+      </p>
 
       {cancelError && (
         <p className="text-xs text-error" role="alert">
@@ -358,7 +367,12 @@ function PanelQr({ codigo, qrUrl, slug }: PanelQrProps) {
   return (
     <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-5 mb-5 flex flex-col items-center gap-3 text-center">
       {codigo.etiqueta && <p className="text-sm font-semibold text-slate-700">{codigo.etiqueta}</p>}
-      <QrCode value={qrUrl} size={220} alt="Código QR del club" className="rounded-xl bg-white p-2 border border-secondary/10" />
+      <QrCode
+        value={qrUrl}
+        size={220}
+        alt="Código QR del club"
+        className="rounded-xl bg-white p-2 border border-secondary/10"
+      />
       <div className="flex flex-col gap-0.5">
         <p className="text-sm text-on-surface-variant">Vence: {formatDate(codigo.expiresAt)}</p>
         <p className="text-sm text-on-surface-variant">
@@ -743,4 +757,3 @@ export function CodigosQrManager({ rolActual }: CodigosQrManagerProps) {
     </div>
   )
 }
-

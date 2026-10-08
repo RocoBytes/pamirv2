@@ -30,9 +30,15 @@ export function ClubAccessErrorPage({ status, message, org, onLogout, onMisClube
         <ClubLogo org={org} alt="" className="w-14 h-14 object-contain" />
         <AlertCircle size={32} className="text-error" />
         <h1 className="text-headline-lg text-slate-800">No se pudo abrir el club</h1>
-        <p className="text-sm text-slate-700" role="alert">{message}</p>
+        <p className="text-sm text-slate-700" role="alert">
+          {message}
+        </p>
         <div className="flex flex-col gap-2 w-full">
-          {onMisClubes && <Button fullWidth onClick={onMisClubes}>Mis clubes</Button>}
+          {onMisClubes && (
+            <Button fullWidth onClick={onMisClubes}>
+              Mis clubes
+            </Button>
+          )}
           <Button variant={onMisClubes ? 'ghost' : 'primary'} fullWidth onClick={onLogout}>
             <LogOut size={16} />
             Cerrar sesión

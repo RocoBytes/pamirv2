@@ -1,12 +1,6 @@
 import { test, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import {
-  setAuth,
-  mockNoIntegrante,
-  mockSalidas,
-  mockCreateIntegrante,
-  MOCK_INTEGRANTE,
-} from './helpers'
+import { setAuth, mockNoIntegrante, mockSalidas, mockCreateIntegrante, MOCK_INTEGRANTE } from './helpers'
 
 async function goToRegistroIntegrante(page: Page) {
   await setAuth(page)
@@ -291,9 +285,7 @@ test.describe('RegistroIntegrante – flujo de éxito', () => {
 })
 
 test.describe('RegistroIntegrante – error del servidor', () => {
-  test('un POST fallido deja al usuario en el wizard con el mensaje visible y sus datos intactos', async ({
-    page,
-  }) => {
+  test('un POST fallido deja al usuario en el wizard con el mensaje visible y sus datos intactos', async ({ page }) => {
     await goToRegistroIntegrante(page)
     await page.route('**/api/integrantes', (route) => {
       if (route.request().method() === 'POST') {

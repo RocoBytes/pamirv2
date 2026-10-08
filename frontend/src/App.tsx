@@ -4,7 +4,12 @@ import { useAuth } from './hooks/useAuth'
 import { OrganizationProvider } from './contexts/OrganizationContext'
 import { NavPreferencesProvider } from './contexts/NavPreferencesContext'
 import { documentTitle, esSocioDelClub } from './lib/club-brand'
-import { clubSlugFromPath, redirectLegacyClubQueryParam, redirectSignedOutClubPath, puedeAbrirClub } from './lib/club-path'
+import {
+  clubSlugFromPath,
+  redirectLegacyClubQueryParam,
+  redirectSignedOutClubPath,
+  puedeAbrirClub,
+} from './lib/club-path'
 import { migrateUnkeyedDraftToCurrentClub, loadAuth } from './lib/storage'
 import { AuthPage } from './components/AuthPage'
 import { Dashboard } from './components/Dashboard'
@@ -36,9 +41,7 @@ import { puedeInvitar } from './lib/roles'
 // que abrir aunque se pierda la señal en la montaña, y un chunk lazy no
 // llegaría. Los componentes son exports nombrados, de ahí el `.then` que los
 // devuelve como `default`.
-const EventoAdminPage = lazy(() =>
-  import('./components/EventoAdminPage').then((m) => ({ default: m.EventoAdminPage })),
-)
+const EventoAdminPage = lazy(() => import('./components/EventoAdminPage').then((m) => ({ default: m.EventoAdminPage })))
 const AdminPanel = lazy(() => import('./components/AdminPanel').then((m) => ({ default: m.AdminPanel })))
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })))
 const SalidaEditForm = lazy(() => import('./components/SalidaEditForm').then((m) => ({ default: m.SalidaEditForm })))
@@ -46,7 +49,21 @@ const InvitarPage = lazy(() =>
   import('./components/invitaciones/InvitarPage').then((m) => ({ default: m.InvitarPage })),
 )
 
-type Route = 'dashboard' | 'nueva-salida' | 'nuevo-integrante' | 'nueva-cierre' | 'nuevo-integrante-standalone' | 'documentos' | 'contactos' | 'admin-panel' | 'admin-dashboard' | 'editar-salida' | 'eventos' | 'crear-evento' | 'gestionar-evento' | 'invitar'
+type Route =
+  | 'dashboard'
+  | 'nueva-salida'
+  | 'nuevo-integrante'
+  | 'nueva-cierre'
+  | 'nuevo-integrante-standalone'
+  | 'documentos'
+  | 'contactos'
+  | 'admin-panel'
+  | 'admin-dashboard'
+  | 'editar-salida'
+  | 'eventos'
+  | 'crear-evento'
+  | 'gestionar-evento'
+  | 'invitar'
 
 function getQueryParam(name: string): string | null {
   return new URLSearchParams(window.location.search).get(name)
@@ -76,7 +93,16 @@ redirectSignedOutClubPath({ hasSession: !!loadAuth()?.token })
 // Recibe la sesión ya resuelta por App() en vez de llamar useAuth() de nuevo
 // (crearía un segundo estado independiente): así App() puede envolver todo
 // este árbol en OrganizationProvider con el club de la MISMA sesión.
-function AppContent({ user, token, isLoading, loginWithCredentials, logout, refreshSession, clubAccessError, sessionChecked }: ReturnType<typeof useAuth>) {
+function AppContent({
+  user,
+  token,
+  isLoading,
+  loginWithCredentials,
+  logout,
+  refreshSession,
+  clubAccessError,
+  sessionChecked,
+}: ReturnType<typeof useAuth>) {
   const [route, setRoute] = useState<Route>('dashboard')
   const [actionSalidaId, setActionSalidaId] = useState<string | null>(null)
   const [actionEventoId, setActionEventoId] = useState<string | null>(null)
@@ -86,9 +112,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   // Token de invitación (sistema cerrado): viaja en el fragmento de la URL
   // (`#invite=<token>`) a propósito, para que nunca llegue al servidor ni a
   // los logs del proxy. Se lee una sola vez al montar.
-  const [inviteToken, setInviteToken] = useState<string | null>(() =>
-    parseInviteToken(window.location.hash),
-  )
+  const [inviteToken, setInviteToken] = useState<string | null>(() => parseInviteToken(window.location.hash))
   // Token del QR reusable del club (`#qr=<token>`): #invite= tiene prioridad
   // si por algún motivo llegaran ambos en el mismo fragmento.
   const [qrToken, setQrToken] = useState<string | null>(() =>
@@ -209,9 +233,15 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
     if (!pathSlug || !clubAccessError) return
     let cancelled = false
     fetchMarcaClub(pathSlug)
-      .then((org) => { if (!cancelled) setPathSlugOrg(org) })
-      .catch(() => { /* club-not-found ya cubre esto con org: null */ })
-    return () => { cancelled = true }
+      .then((org) => {
+        if (!cancelled) setPathSlugOrg(org)
+      })
+      .catch(() => {
+        /* club-not-found ya cubre esto con org: null */
+      })
+    return () => {
+      cancelled = true
+    }
   }, [pathSlug, clubAccessError])
 
   // Contexto del chrome compartido (header, barra inferior, pie). Se arma una
@@ -256,7 +286,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
     // `cancelled` descarta respuestas que lleguen después de un logout
     let cancelled = false
     fetchMyIntegrante()
-      .then(result => {
+      .then((result) => {
         if (cancelled) return
         setIntegrante(result)
         setIntegranteChecked(true)
@@ -266,7 +296,9 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
         setIntegrante(null)
         setIntegranteChecked(true)
       })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [isAuthenticated, debePedirIntegrante])
 
   const verifiedParam = getQueryParam('verified')
@@ -343,11 +375,13 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
       <div className="min-h-screen bg-alpine-canvas flex items-center justify-center px-4">
         <div className="max-w-sm w-full bg-white rounded-2xl shadow-sm border border-secondary/15 p-6 text-center">
           <p className="text-sm text-slate-700 mb-5">
-            Ya iniciaste sesión como <span className="font-semibold">{user?.email}</span>. Para
-            aceptar esta invitación debes cerrar sesión.
+            Ya iniciaste sesión como <span className="font-semibold">{user?.email}</span>. Para aceptar esta invitación
+            debes cerrar sesión.
           </p>
           <div className="flex flex-col gap-2">
-            <Button fullWidth onClick={logout}>Cerrar sesión y continuar</Button>
+            <Button fullWidth onClick={logout}>
+              Cerrar sesión y continuar
+            </Button>
             <Button variant="ghost" fullWidth onClick={() => setInviteToken(null)}>
               Seguir con mi sesión
             </Button>
@@ -397,9 +431,7 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
             onCreateIntegrante={() => setRoute('nuevo-integrante')}
           />
         </div>
-        {route === 'nuevo-integrante' && (
-          <RegistroIntegrante onBack={() => setRoute('nueva-salida')} />
-        )}
+        {route === 'nuevo-integrante' && <RegistroIntegrante onBack={() => setRoute('nueva-salida')} />}
       </>
     )
   }
@@ -409,11 +441,17 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
       <RegistroIntegrante
         onBack={() => setRoute('dashboard')}
         defaultEmail={!hasIntegrante ? user?.email : undefined}
-        onComplete={!hasIntegrante ? () => {
-          // Refetch para conocer la membresía recién registrada (gate de documentos)
-          fetchMyIntegrante().then(setIntegrante).catch(() => {})
-          setRoute('dashboard')
-        } : undefined}
+        onComplete={
+          !hasIntegrante
+            ? () => {
+                // Refetch para conocer la membresía recién registrada (gate de documentos)
+                fetchMyIntegrante()
+                  .then(setIntegrante)
+                  .catch(() => {})
+                setRoute('dashboard')
+              }
+            : undefined
+        }
       />
     )
   }
@@ -436,7 +474,10 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
         gestorCategoriaIds={gestorCategoriaIds}
         onBack={() => setRoute('dashboard')}
         onCrearEvento={() => setRoute('crear-evento')}
-        onGestionarEvento={(id) => { setActionEventoId(id); setRoute('gestionar-evento') }}
+        onGestionarEvento={(id) => {
+          setActionEventoId(id)
+          setRoute('gestionar-evento')
+        }}
         shell={shell}
       />
     )
@@ -462,8 +503,14 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
         eventoId={actionEventoId}
         esAdminEventos={esAdminEventos}
         gestorCategoriaIds={gestorCategoriaIds}
-        onDone={() => { setActionEventoId(null); setRoute('eventos') }}
-        onCancel={() => { setActionEventoId(null); setRoute('eventos') }}
+        onDone={() => {
+          setActionEventoId(null)
+          setRoute('eventos')
+        }}
+        onCancel={() => {
+          setActionEventoId(null)
+          setRoute('eventos')
+        }}
       />
     )
   }
@@ -481,15 +528,13 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
   }
 
   if (route === 'admin-dashboard' && isAdmin) {
-    return <AdminDashboard
-        shell={shell} onBack={() => setRoute('admin-panel')} />
+    return <AdminDashboard shell={shell} onBack={() => setRoute('admin-panel')} />
   }
 
   if (route === 'invitar' && user && puedeInvitarUsuario) {
     // Rol garantizado LIDER o ADMIN por puedeInvitarUsuario; el `?? 'SOCIO'`
     // solo satisface el tipo (User.rol es opcional por sesiones antiguas).
-    return <InvitarPage
-        shell={shell} rolActual={user.rol ?? 'SOCIO'} onBack={() => setRoute('dashboard')} />
+    return <InvitarPage shell={shell} rolActual={user.rol ?? 'SOCIO'} onBack={() => setRoute('dashboard')} />
   }
 
   if (route === 'editar-salida' && isAdmin && actionSalidaId) {
@@ -497,8 +542,14 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
       <SalidaEditForm
         shell={shell}
         salidaId={actionSalidaId}
-        onDone={() => { setActionSalidaId(null); setRoute('dashboard') }}
-        onCancel={() => { setActionSalidaId(null); setRoute('dashboard') }}
+        onDone={() => {
+          setActionSalidaId(null)
+          setRoute('dashboard')
+        }}
+        onCancel={() => {
+          setActionSalidaId(null)
+          setRoute('dashboard')
+        }}
       />
     )
   }
@@ -509,8 +560,14 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
         user={user}
         isAdmin={isAdmin}
         salidaId={actionSalidaId ?? undefined}
-        onDone={() => { setActionSalidaId(null); setRoute('dashboard') }}
-        onCancel={() => { setActionSalidaId(null); setRoute('dashboard') }}
+        onDone={() => {
+          setActionSalidaId(null)
+          setRoute('dashboard')
+        }}
+        onCancel={() => {
+          setActionSalidaId(null)
+          setRoute('dashboard')
+        }}
       />
     )
   }
@@ -529,8 +586,14 @@ function AppContent({ user, token, isLoading, loginWithCredentials, logout, refr
       onContactos={() => setRoute('contactos')}
       onEventos={() => setRoute('eventos')}
       onAdminPanel={() => setRoute('admin-panel')}
-      onEditSalida={(id) => { setActionSalidaId(id); setRoute('editar-salida') }}
-      onCloseSalida={(id) => { setActionSalidaId(id); setRoute('nueva-cierre') }}
+      onEditSalida={(id) => {
+        setActionSalidaId(id)
+        setRoute('editar-salida')
+      }}
+      onCloseSalida={(id) => {
+        setActionSalidaId(id)
+        setRoute('nueva-cierre')
+      }}
       puedeInvitar={puedeInvitarUsuario}
       onInvitar={() => setRoute('invitar')}
     />

@@ -77,15 +77,7 @@ function formatMes(key: string): string {
 
 // ─── Presentational primitives (filled to the grid cell via h-full) ─────────────
 
-function MetricCard({
-  label,
-  value,
-  subtitle,
-}: {
-  label: string
-  value: string | number
-  subtitle?: string
-}) {
+function MetricCard({ label, value, subtitle }: { label: string; value: string | number; subtitle?: string }) {
   return (
     <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 h-full flex flex-col justify-center overflow-hidden">
       <p className="text-2xl font-bold text-primary leading-tight">{value}</p>
@@ -95,24 +87,12 @@ function MetricCard({
   )
 }
 
-function ChartCard({
-  title,
-  empty,
-  children,
-}: {
-  title: string
-  empty?: boolean
-  children: ReactNode
-}) {
+function ChartCard({ title, empty, children }: { title: string; empty?: boolean; children: ReactNode }) {
   return (
     <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 h-full flex flex-col overflow-hidden">
-      <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-3 shrink-0">
-        {title}
-      </h3>
+      <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-3 shrink-0">{title}</h3>
       {empty ? (
-        <p className="text-xs text-on-surface-variant py-8 text-center">
-          Sin datos para los filtros seleccionados
-        </p>
+        <p className="text-xs text-on-surface-variant py-8 text-center">Sin datos para los filtros seleccionados</p>
       ) : (
         <div className="flex-1 min-h-0">{children}</div>
       )}
@@ -165,11 +145,7 @@ export const WIDGETS: WidgetDef[] = [
     title: 'Con cierre',
     geometry: { x: 8, y: 0, ...TILE },
     render: (d) => (
-      <MetricCard
-        label="Con cierre"
-        value={d.metrics.conCierre}
-        subtitle={`${d.metrics.pctConCierre}% del total`}
-      />
+      <MetricCard label="Con cierre" value={d.metrics.conCierre} subtitle={`${d.metrics.pctConCierre}% del total`} />
     ),
   },
   {
@@ -188,9 +164,7 @@ export const WIDGETS: WidgetDef[] = [
     id: 'promedio_participantes',
     title: 'Promedio por salida',
     geometry: { x: 8, y: 2, ...TILE },
-    render: (d) => (
-      <MetricCard label="Promedio por salida" value={d.metrics.promedioParticipantes} />
-    ),
+    render: (d) => <MetricCard label="Promedio por salida" value={d.metrics.promedioParticipantes} />,
   },
   {
     id: 'participantes_express',
@@ -242,14 +216,7 @@ export const WIDGETS: WidgetDef[] = [
         <ChartCard title="Salidas por estado" empty={estadoData.length === 0}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie
-                data={estadoData}
-                dataKey="total"
-                nameKey="label"
-                innerRadius={55}
-                outerRadius={85}
-                paddingAngle={2}
-              >
+              <Pie data={estadoData} dataKey="total" nameKey="label" innerRadius={55} outerRadius={85} paddingAngle={2}>
                 {estadoData.map((_, i) => (
                   <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                 ))}
@@ -276,13 +243,7 @@ export const WIDGETS: WidgetDef[] = [
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="total"
-                name="Salidas"
-                stroke={COLOR_SALIDAS}
-                strokeWidth={2}
-              />
+              <Line type="monotone" dataKey="total" name="Salidas" stroke={COLOR_SALIDAS} strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -359,10 +320,7 @@ export const WIDGETS: WidgetDef[] = [
         total: x.total,
       }))
       return (
-        <ChartCard
-          title="Calidad de experiencia (distribución)"
-          empty={d.calidad.totalRespuestas === 0}
-        >
+        <ChartCard title="Calidad de experiencia (distribución)" empty={d.calidad.totalRespuestas === 0}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={calidadDistData}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
@@ -393,13 +351,7 @@ export const WIDGETS: WidgetDef[] = [
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
               <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
               <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="promedio"
-                name="Promedio"
-                stroke={COLOR_CALIDAD}
-                strokeWidth={2}
-              />
+              <Line type="monotone" dataKey="promedio" name="Promedio" stroke={COLOR_CALIDAD} strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -440,10 +392,7 @@ export const WIDGETS: WidgetDef[] = [
         { label: 'Accidentes', total: d.salidaVsCierre.conAccidentes },
       ]
       return (
-        <ChartCard
-          title="Comparación salida vs cierre"
-          empty={salidaVsCierreData.every((x) => x.total === 0)}
-        >
+        <ChartCard title="Comparación salida vs cierre" empty={salidaVsCierreData.every((x) => x.total === 0)}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={salidaVsCierreData}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
@@ -459,9 +408,7 @@ export const WIDGETS: WidgetDef[] = [
   },
 ]
 
-export const WIDGET_MAP: Record<string, WidgetDef> = Object.fromEntries(
-  WIDGETS.map((w) => [w.id, w]),
-)
+export const WIDGET_MAP: Record<string, WidgetDef> = Object.fromEntries(WIDGETS.map((w) => [w.id, w]))
 
 // Single source of truth for the default arrangement and "restore default".
 export const DEFAULT_LAYOUT: DashboardWidgetLayout[] = WIDGETS.map((w) => ({

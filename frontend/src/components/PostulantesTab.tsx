@@ -1,23 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import {
-  AlertCircle,
-  AlertTriangle,
-  Car,
-  Check,
-  CheckCircle2,
-  Clock,
-  Loader2,
-  Send,
-  Users,
-  X,
-} from 'lucide-react'
+import { AlertCircle, AlertTriangle, Car, Check, CheckCircle2, Clock, Loader2, Send, Users, X } from 'lucide-react'
 
 import type { PostulantesResponse, PostulanteRow } from '../types/evento'
-import {
-  ESTADO_INSCRIPCION_COLORS,
-  ESTADO_INSCRIPCION_LABELS,
-  TIPO_NOTIFICACION_LABELS,
-} from '../types/evento'
+import { ESTADO_INSCRIPCION_COLORS, ESTADO_INSCRIPCION_LABELS, TIPO_NOTIFICACION_LABELS } from '../types/evento'
 import type { MembresiaClub } from '../types/salida'
 import { CLUB_BADGE_LABELS } from '../types/salida'
 import { fetchPostulantes, finalizarEvento, reenviarNotificaciones } from '../lib/api'
@@ -89,9 +74,7 @@ export function PostulantesTab({ eventoId, onFinalizado }: PostulantesTabProps) 
       setError(null)
       // La selección solo puede contener filas que sigan POSTULADO
       setSeleccion((prev) => {
-        const validos = new Set(
-          response.postulantes.filter((p) => p.estado === 'POSTULADO').map((p) => p.id),
-        )
+        const validos = new Set(response.postulantes.filter((p) => p.estado === 'POSTULADO').map((p) => p.id))
         return new Set([...prev].filter((id) => validos.has(id)))
       })
     } catch (err) {
@@ -182,9 +165,7 @@ export function PostulantesTab({ eventoId, onFinalizado }: PostulantesTabProps) 
     setResultadoReenvio(null)
     try {
       const r = await reenviarNotificaciones(eventoId)
-      setResultadoReenvio(
-        `${r.despachadas} enviadas · ${r.fallidas} fallidas · ${r.pendientes} pendientes`,
-      )
+      setResultadoReenvio(`${r.despachadas} enviadas · ${r.fallidas} fallidas · ${r.pendientes} pendientes`)
       await load()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'No se pudo reenviar')
@@ -286,16 +267,13 @@ export function PostulantesTab({ eventoId, onFinalizado }: PostulantesTabProps) 
                 Seleccionados {sel} / {cupos} cupos
               </p>
               <p className="text-xs text-on-surface-variant">
-                {conductores.length}{' '}
-                {conductores.length === 1 ? 'conductor seleccionado' : 'conductores seleccionados'} ·{' '}
-                {asientos} asientos ofrecidos · {pasajeros}{' '}
-                {pasajeros === 1 ? 'pasajero' : 'pasajeros'} sin vehículo —{' '}
+                {conductores.length} {conductores.length === 1 ? 'conductor seleccionado' : 'conductores seleccionados'}{' '}
+                · {asientos} asientos ofrecidos · {pasajeros} {pasajeros === 1 ? 'pasajero' : 'pasajeros'} sin vehículo
+                —{' '}
                 {asientos >= pasajeros ? (
                   <span className="font-semibold text-pine">transporte cubierto</span>
                 ) : (
-                  <span className="font-semibold text-error">
-                    faltan {pasajeros - asientos} asientos
-                  </span>
+                  <span className="font-semibold text-error">faltan {pasajeros - asientos} asientos</span>
                 )}
               </p>
             </div>
@@ -321,22 +299,13 @@ export function PostulantesTab({ eventoId, onFinalizado }: PostulantesTabProps) 
 
       <div className="flex flex-wrap gap-2 justify-end">
         {hayPendientes && (
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={reenviando}
-            onClick={() => void handleReenviar()}
-          >
+          <Button variant="secondary" size="sm" loading={reenviando} onClick={() => void handleReenviar()}>
             <Send size={15} />
             Reenviar pendientes
           </Button>
         )}
         {esPublicado && postulantes.length > 0 && (
-          <Button
-            size="sm"
-            disabled={sel < 1 || sel > cupos}
-            onClick={() => setConfirmando(true)}
-          >
+          <Button size="sm" disabled={sel < 1 || sel > cupos} onClick={() => setConfirmando(true)}>
             Finalizar evento
           </Button>
         )}
@@ -347,9 +316,7 @@ export function PostulantesTab({ eventoId, onFinalizado }: PostulantesTabProps) 
           title="Finalizar evento"
           message={`Se confirmarán ${sel} participantes y se notificará a ${noSeleccionados} no seleccionados. Esto cierra las inscripciones y no se puede deshacer.`}
           warning={
-            antesDelCorte
-              ? 'Aún no se cumple la fecha de corte; las inscripciones se cerrarán ahora.'
-              : undefined
+            antesDelCorte ? 'Aún no se cumple la fecha de corte; las inscripciones se cerrarán ahora.' : undefined
           }
           confirmLabel="Finalizar"
           busy={finalizando}

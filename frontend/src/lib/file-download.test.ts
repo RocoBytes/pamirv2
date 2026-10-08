@@ -21,9 +21,7 @@ describe('startFileDownload', () => {
       url: 'https://storage.googleapis.com/pamirv2-files-dev/orgs/x/gpx/abc.gpx?sig=1',
       expiresInSeconds: 600,
     })
-    expect(assign).toHaveBeenCalledWith(
-      'https://storage.googleapis.com/pamirv2-files-dev/orgs/x/gpx/abc.gpx?sig=1',
-    )
+    expect(assign).toHaveBeenCalledWith('https://storage.googleapis.com/pamirv2-files-dev/orgs/x/gpx/abc.gpx?sig=1')
     expect(open).not.toHaveBeenCalled()
   })
 
@@ -48,17 +46,13 @@ describe('startFileDownload', () => {
   })
 
   it('rejects a non-https URL without navigating anywhere', () => {
-    expect(() =>
-      startFileDownload({ url: 'javascript:alert(1)', expiresInSeconds: 600 }),
-    ).toThrow('https')
+    expect(() => startFileDownload({ url: 'javascript:alert(1)', expiresInSeconds: 600 })).toThrow('https')
     expect(assign).not.toHaveBeenCalled()
     expect(open).not.toHaveBeenCalled()
   })
 
   it('rejects a memory:-style fake URL', () => {
-    expect(() =>
-      startFileDownload({ url: 'memory://local/fake.gpx', expiresInSeconds: 600 }),
-    ).toThrow('https')
+    expect(() => startFileDownload({ url: 'memory://local/fake.gpx', expiresInSeconds: 600 })).toThrow('https')
   })
 })
 
@@ -70,11 +64,9 @@ describe('describeFileDownloadError', () => {
   })
 
   it('passes through the server message for 403 when present (it names the club)', () => {
-    expect(
-      describeFileDownloadError(
-        new ApiError('No eres socio de Andino Club Pamir', 403),
-      ),
-    ).toBe('No eres socio de Andino Club Pamir')
+    expect(describeFileDownloadError(new ApiError('No eres socio de Andino Club Pamir', 403))).toBe(
+      'No eres socio de Andino Club Pamir',
+    )
   })
 
   it('falls back to a generic 403 message when the server sent none', () => {

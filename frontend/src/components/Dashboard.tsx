@@ -118,11 +118,7 @@ export function Dashboard({
               </p>
             </div>
             <span className="inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0 bg-surface-container-lowest border border-outline-variant/40 px-3 py-1.5 rounded-lg text-body-sm text-on-surface-variant">
-              <Satellite
-                size={15}
-                className={isOnline ? 'text-pine' : 'text-amber-600'}
-                aria-hidden="true"
-              />
+              <Satellite size={15} className={isOnline ? 'text-pine' : 'text-amber-600'} aria-hidden="true" />
               {isOnline ? 'Red operativa' : 'Sin conexión a la red'}
             </span>
           </div>
@@ -168,12 +164,7 @@ export function Dashboard({
         {/* Las dos acciones centrales: declarar la salida y cerrar el retorno. */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
           <HeroSalidaCard locked={locked} isDesktop={isDesktop} onClick={onNewSalida} />
-          <HeroCierreCard
-            available={puedeCerrar}
-            locked={locked}
-            isDesktop={isDesktop}
-            onClick={onNewCierre}
-          />
+          <HeroCierreCard available={puedeCerrar} locked={locked} isDesktop={isDesktop} onClick={onNewCierre} />
         </section>
 
         <QuickAccess

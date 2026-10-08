@@ -21,15 +21,23 @@ import { EventoCalendar } from './EventoCalendar'
 import { EventoDetailModal } from './EventoDetailModal'
 
 const MESES_LARGO = [
-  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
 ]
 
 // Mes calendario actual visto desde Santiago
 function mesActualSantiago(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' })
-    .format(new Date())
-    .slice(0, 7)
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date()).slice(0, 7)
 }
 
 function labelMes(mes: string): string {
@@ -89,9 +97,7 @@ export function EventosPage({
     try {
       const categorias = slugsSeleccionados.length > 0 ? slugsSeleccionados : undefined
       const data = await fetchEventos(
-        vista === 'calendario'
-          ? { mes, categorias }
-          : { categorias, incluirPasados: verPasados || undefined },
+        vista === 'calendario' ? { mes, categorias } : { categorias, incluirPasados: verPasados || undefined },
       )
       setEventos(data)
     } catch (err) {
@@ -106,200 +112,198 @@ export function EventosPage({
   }, [loadEventos])
 
   function toggleCategoria(slug: string) {
-    setSlugsSeleccionados((prev) =>
-      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug],
-    )
+    setSlugsSeleccionados((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]))
   }
 
   return (
     <AppShell shell={shell} active="eventos" onBack={onBack}>
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
-              <CalendarDays size={14} />
-              {shortName}
-            </div>
-            <h1 className="text-xl font-bold text-slate-900">Eventos del club</h1>
-            <p className="text-sm text-on-surface-variant mt-0.5">
-              Calendario de actividades e inscripciones.
-            </p>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
+            <CalendarDays size={14} />
+            {shortName}
           </div>
-          <div className="flex items-center gap-2">
-            {/* Toggle calendario / lista */}
-            <div className="inline-flex rounded-xl border border-secondary/20 bg-white p-0.5">
-              <button
-                type="button"
-                onClick={() => setVista('calendario')}
-                aria-pressed={vista === 'calendario'}
-                className={[
-                  'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                  vista === 'calendario' ? 'bg-primary text-white' : 'text-on-surface-variant hover:bg-surface-container-low',
-                ].join(' ')}
-              >
-                <CalendarDays size={14} />
-                Calendario
-              </button>
-              <button
-                type="button"
-                onClick={() => setVista('lista')}
-                aria-pressed={vista === 'lista'}
-                className={[
-                  'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                  vista === 'lista' ? 'bg-primary text-white' : 'text-on-surface-variant hover:bg-surface-container-low',
-                ].join(' ')}
-              >
-                <List size={14} />
-                Lista
-              </button>
-            </div>
-            {puedeGestionar && (
-              <Button variant="primary" size="sm" onClick={onCrearEvento}>
-                <Plus size={16} />
-                Crear evento
-              </Button>
-            )}
-          </div>
+          <h1 className="text-xl font-bold text-slate-900">Eventos del club</h1>
+          <p className="text-sm text-on-surface-variant mt-0.5">Calendario de actividades e inscripciones.</p>
         </div>
-
-        {/* Filtros: chips de categoría + ver pasados */}
-        <div className="mb-5 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setSlugsSeleccionados([])}
-            aria-pressed={slugsSeleccionados.length === 0}
-            className={[
-              'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-              slugsSeleccionados.length === 0
-                ? 'bg-primary text-white border-primary'
-                : 'bg-white text-on-surface-variant border-secondary/20 hover:bg-surface-container-low',
-            ].join(' ')}
-          >
-            Todas
-          </button>
-          {categorias.map((cat) => {
-            const activa = slugsSeleccionados.includes(cat.slug)
-            return (
-              <button
-                key={cat.slug}
-                type="button"
-                onClick={() => toggleCategoria(cat.slug)}
-                aria-pressed={activa}
-                className={[
-                  'inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                  activa
-                    ? 'bg-primary-fixed text-primary border-primary/40'
-                    : 'bg-white text-on-surface-variant border-secondary/20 hover:bg-surface-container-low',
-                ].join(' ')}
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: cat.color }}
-                  aria-hidden="true"
-                />
-                {cat.nombre}
-              </button>
-            )
-          })}
-          {vista === 'lista' && (
-            <label className="ml-auto inline-flex items-center gap-2 text-xs font-medium text-on-surface-variant cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={verPasados}
-                onChange={(e) => setVerPasados(e.target.checked)}
-                className="w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
-              />
-              Ver pasados
-            </label>
+        <div className="flex items-center gap-2">
+          {/* Toggle calendario / lista */}
+          <div className="inline-flex rounded-xl border border-secondary/20 bg-white p-0.5">
+            <button
+              type="button"
+              onClick={() => setVista('calendario')}
+              aria-pressed={vista === 'calendario'}
+              className={[
+                'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                vista === 'calendario'
+                  ? 'bg-primary text-white'
+                  : 'text-on-surface-variant hover:bg-surface-container-low',
+              ].join(' ')}
+            >
+              <CalendarDays size={14} />
+              Calendario
+            </button>
+            <button
+              type="button"
+              onClick={() => setVista('lista')}
+              aria-pressed={vista === 'lista'}
+              className={[
+                'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                vista === 'lista' ? 'bg-primary text-white' : 'text-on-surface-variant hover:bg-surface-container-low',
+              ].join(' ')}
+            >
+              <List size={14} />
+              Lista
+            </button>
+          </div>
+          {puedeGestionar && (
+            <Button variant="primary" size="sm" onClick={onCrearEvento}>
+              <Plus size={16} />
+              Crear evento
+            </Button>
           )}
         </div>
+      </div>
 
-        {/* Navegación de mes (solo calendario) */}
-        {vista === 'calendario' && (
-          <div className="mb-4 flex items-center justify-between bg-primary text-white rounded-2xl px-2 py-1.5">
+      {/* Filtros: chips de categoría + ver pasados */}
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setSlugsSeleccionados([])}
+          aria-pressed={slugsSeleccionados.length === 0}
+          className={[
+            'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+            slugsSeleccionados.length === 0
+              ? 'bg-primary text-white border-primary'
+              : 'bg-white text-on-surface-variant border-secondary/20 hover:bg-surface-container-low',
+          ].join(' ')}
+        >
+          Todas
+        </button>
+        {categorias.map((cat) => {
+          const activa = slugsSeleccionados.includes(cat.slug)
+          return (
             <button
+              key={cat.slug}
               type="button"
-              onClick={() => setMes((m) => shiftMes(m, -1))}
-              aria-label="Mes anterior"
-              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              onClick={() => toggleCategoria(cat.slug)}
+              aria-pressed={activa}
+              className={[
+                'inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                activa
+                  ? 'bg-primary-fixed text-primary border-primary/40'
+                  : 'bg-white text-on-surface-variant border-secondary/20 hover:bg-surface-container-low',
+              ].join(' ')}
             >
-              <ChevronLeft size={18} />
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: cat.color }}
+                aria-hidden="true"
+              />
+              {cat.nombre}
             </button>
-            <p className="text-sm font-bold tracking-wide">{labelMes(mes)}</p>
-            <button
-              type="button"
-              onClick={() => setMes((m) => shiftMes(m, 1))}
-              aria-label="Mes siguiente"
-              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
+          )
+        })}
+        {vista === 'lista' && (
+          <label className="ml-auto inline-flex items-center gap-2 text-xs font-medium text-on-surface-variant cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={verPasados}
+              onChange={(e) => setVerPasados(e.target.checked)}
+              className="w-4 h-4 rounded border-secondary/40 text-primary focus:ring-primary"
+            />
+            Ver pasados
+          </label>
         )}
+      </div>
 
-        {/* States */}
-        {isLoading && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
-            <Loader2 className="animate-spin text-primary" size={28} />
-            <p className="text-sm">Cargando eventos...</p>
+      {/* Navegación de mes (solo calendario) */}
+      {vista === 'calendario' && (
+        <div className="mb-4 flex items-center justify-between bg-primary text-white rounded-2xl px-2 py-1.5">
+          <button
+            type="button"
+            onClick={() => setMes((m) => shiftMes(m, -1))}
+            aria-label="Mes anterior"
+            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <p className="text-sm font-bold tracking-wide">{labelMes(mes)}</p>
+          <button
+            type="button"
+            onClick={() => setMes((m) => shiftMes(m, 1))}
+            aria-label="Mes siguiente"
+            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      )}
+
+      {/* States */}
+      {isLoading && (
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
+          <Loader2 className="animate-spin text-primary" size={28} />
+          <p className="text-sm">Cargando eventos...</p>
+        </div>
+      )}
+
+      {error && !isLoading && (
+        <div className="flex flex-col items-center py-12 gap-4 text-center">
+          <AlertCircle size={32} className="text-error" />
+          <div>
+            <p className="font-semibold text-slate-700">Error al cargar</p>
+            <p className="text-sm text-on-surface-variant mt-1">{error}</p>
           </div>
-        )}
+          <Button variant="secondary" size="sm" onClick={() => void loadEventos()}>
+            Reintentar
+          </Button>
+        </div>
+      )}
 
-        {error && !isLoading && (
-          <div className="flex flex-col items-center py-12 gap-4 text-center">
-            <AlertCircle size={32} className="text-error" />
-            <div>
-              <p className="font-semibold text-slate-700">Error al cargar</p>
-              <p className="text-sm text-on-surface-variant mt-1">{error}</p>
+      {!isLoading && !error && vista === 'calendario' && (
+        <EventoCalendar eventos={eventos} mes={mes} onSelect={setSelectedEventoId} />
+      )}
+
+      {!isLoading && !error && vista === 'lista' && eventos.length === 0 && (
+        <div className="flex flex-col items-center py-12 gap-3 text-center">
+          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-fixed">
+            <CalendarOff size={24} className="text-primary" />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-700">Sin eventos próximos</p>
+            <p className="text-sm text-on-surface-variant mt-0.5">
+              {puedeGestionar
+                ? 'Usa el botón Crear evento para publicar la primera actividad'
+                : 'Cuando el club publique actividades las verás aquí'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!isLoading && !error && vista === 'lista' && eventos.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+          {eventos.map((evento) => (
+            <div key={evento.id} className="min-w-0">
+              <EventoCard evento={evento} onClick={setSelectedEventoId} />
+              {puedeGestionarCategoria(esAdminEventos, gestorCategoriaIds, evento.categoriaId) && (
+                <button
+                  onClick={() => onGestionarEvento(evento.id)}
+                  className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-secondary hover:text-primary px-2 py-1 rounded-lg hover:bg-primary-fixed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label={`Gestionar ${evento.titulo}`}
+                >
+                  <Settings2 size={13} />
+                  Gestionar
+                </button>
+              )}
             </div>
-            <Button variant="secondary" size="sm" onClick={() => void loadEventos()}>
-              Reintentar
-            </Button>
-          </div>
-        )}
-
-        {!isLoading && !error && vista === 'calendario' && (
-          <EventoCalendar eventos={eventos} mes={mes} onSelect={setSelectedEventoId} />
-        )}
-
-        {!isLoading && !error && vista === 'lista' && eventos.length === 0 && (
-          <div className="flex flex-col items-center py-12 gap-3 text-center">
-            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-fixed">
-              <CalendarOff size={24} className="text-primary" />
-            </div>
-            <div>
-              <p className="font-semibold text-slate-700">Sin eventos próximos</p>
-              <p className="text-sm text-on-surface-variant mt-0.5">
-                {puedeGestionar
-                  ? 'Usa el botón Crear evento para publicar la primera actividad'
-                  : 'Cuando el club publique actividades las verás aquí'}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {!isLoading && !error && vista === 'lista' && eventos.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
-            {eventos.map((evento) => (
-              <div key={evento.id} className="min-w-0">
-                <EventoCard evento={evento} onClick={setSelectedEventoId} />
-                {puedeGestionarCategoria(esAdminEventos, gestorCategoriaIds, evento.categoriaId) && (
-                  <button
-                    onClick={() => onGestionarEvento(evento.id)}
-                    className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-secondary hover:text-primary px-2 py-1 rounded-lg hover:bg-primary-fixed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    aria-label={`Gestionar ${evento.titulo}`}
-                  >
-                    <Settings2 size={13} />
-                    Gestionar
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+          ))}
+        </div>
+      )}
 
       {selectedEventoId && (
         <EventoDetailModal

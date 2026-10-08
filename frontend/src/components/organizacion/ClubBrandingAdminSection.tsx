@@ -87,8 +87,8 @@ export function ClubBrandingAdminSection({ refreshSession }: ClubBrandingAdminSe
         <h2 className="text-base font-bold text-on-surface">Logo del club</h2>
       </div>
       <p className="text-xs text-on-surface-variant mb-3">
-        Sube el logo propio de {shortName} (PNG o JPG, máx. 2 MB). Se ve en el login y en toda la
-        app, incluso antes de iniciar sesión.
+        Sube el logo propio de {shortName} (PNG o JPG, máx. 2 MB). Se ve en el login y en toda la app, incluso antes de
+        iniciar sesión.
       </p>
 
       <div className="bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 mb-4 flex flex-col gap-3">

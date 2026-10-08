@@ -385,7 +385,9 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
             Registro directo
           </div>
           <h1 className="text-xl font-bold text-slate-900">
-            {directoModo === 'crear' ? `Únete a ${clubDisplayName(state.organization)}` : `Inicia sesión para unirte a ${clubDisplayName(state.organization)}`}
+            {directoModo === 'crear'
+              ? `Únete a ${clubDisplayName(state.organization)}`
+              : `Inicia sesión para unirte a ${clubDisplayName(state.organization)}`}
           </h1>
           <p className="text-sm text-on-surface-variant mt-1">
             {directoModo === 'crear'
@@ -404,7 +406,10 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
               type="text"
               label="Nombre completo"
               value={directoName}
-              onChange={(e) => { setDirectoName(e.target.value); setSubmitError(null) }}
+              onChange={(e) => {
+                setDirectoName(e.target.value)
+                setSubmitError(null)
+              }}
               required
               autoComplete="name"
               disabled={submitting}
@@ -414,7 +419,10 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
               type="email"
               label="Correo electrónico"
               value={directoEmail}
-              onChange={(e) => { setDirectoEmail(e.target.value); setSubmitError(null) }}
+              onChange={(e) => {
+                setDirectoEmail(e.target.value)
+                setSubmitError(null)
+              }}
               placeholder="persona@ejemplo.com"
               required
               autoComplete="email"
@@ -426,7 +434,10 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
               label="Contraseña"
               hint="Mínimo 8 caracteres"
               value={directoPassword}
-              onChange={(e) => { setDirectoPassword(e.target.value); setSubmitError(null) }}
+              onChange={(e) => {
+                setDirectoPassword(e.target.value)
+                setSubmitError(null)
+              }}
               required
               autoComplete="new-password"
               disabled={submitting}
@@ -436,14 +447,21 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
             <PasswordInput
               label="Confirmar contraseña"
               value={directoConfirmPassword}
-              onChange={(e) => { setDirectoConfirmPassword(e.target.value); setSubmitError(null) }}
+              onChange={(e) => {
+                setDirectoConfirmPassword(e.target.value)
+                setSubmitError(null)
+              }}
               required
               autoComplete="new-password"
               disabled={submitting}
               leftIcon={<Lock size={16} />}
             />
 
-            {submitError && <p className="text-xs text-error" role="alert">{submitError}</p>}
+            {submitError && (
+              <p className="text-xs text-error" role="alert">
+                {submitError}
+              </p>
+            )}
 
             <Button type="submit" loading={submitting} fullWidth>
               {submitting ? 'Creando cuenta...' : 'Unirme ahora'}
@@ -477,7 +495,10 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
               type="email"
               label="Correo electrónico"
               value={signInEmail}
-              onChange={(e) => { setSignInEmail(e.target.value); setSubmitError(null) }}
+              onChange={(e) => {
+                setSignInEmail(e.target.value)
+                setSubmitError(null)
+              }}
               placeholder="persona@ejemplo.com"
               required
               autoComplete="email"
@@ -488,14 +509,21 @@ export function QrInvitacionPage({ token, isAuthenticated, onIrALaApp, onLogin }
             <PasswordInput
               label="Contraseña"
               value={signInPassword}
-              onChange={(e) => { setSignInPassword(e.target.value); setSubmitError(null) }}
+              onChange={(e) => {
+                setSignInPassword(e.target.value)
+                setSubmitError(null)
+              }}
               required
               autoComplete="current-password"
               disabled={submitting}
               leftIcon={<Lock size={16} />}
             />
 
-            {submitError && <p className="text-xs text-error" role="alert">{submitError}</p>}
+            {submitError && (
+              <p className="text-xs text-error" role="alert">
+                {submitError}
+              </p>
+            )}
 
             <Button type="submit" loading={submitting} fullWidth>
               {submitting ? 'Iniciando sesión...' : 'Iniciar sesión y unirme'}

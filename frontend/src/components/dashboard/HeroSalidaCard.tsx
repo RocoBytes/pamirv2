@@ -29,25 +29,16 @@ export function HeroSalidaCard({ locked, isDesktop, onClick }: HeroSalidaCardPro
 
   if (locked) {
     return (
-      <div
-        className={`${NIGHT_SURFACE} p-6 sm:p-7 opacity-90`}
-        aria-label="Formulario de salida bloqueado"
-      >
+      <div className={`${NIGHT_SURFACE} p-6 sm:p-7 opacity-90`} aria-label="Formulario de salida bloqueado">
         <div className="relative z-10 flex flex-col gap-3">
           <div className="flex items-center gap-2.5">
             <span className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
               <Lock size={18} className="text-white/70" aria-hidden="true" />
             </span>
-            <span className="text-label-caps uppercase tracking-[0.05em] font-bold text-white/50">
-              {shortName}
-            </span>
+            <span className="text-label-caps uppercase tracking-[0.05em] font-bold text-white/50">{shortName}</span>
           </div>
-          <h2 className="text-headline-md font-extrabold tracking-tight text-white/80">
-            Formulario de Salida
-          </h2>
-          <p className="text-body-sm text-white/60 max-w-sm">
-            Completa tu ficha de integrante para desbloquear
-          </p>
+          <h2 className="text-headline-md font-extrabold tracking-tight text-white/80">Formulario de Salida</h2>
+          <p className="text-body-sm text-white/60 max-w-sm">Completa tu ficha de integrante para desbloquear</p>
         </div>
       </div>
     )
@@ -83,8 +74,8 @@ export function HeroSalidaCard({ locked, isDesktop, onClick }: HeroSalidaCardPro
           {isDesktop ? 'Formulario de Salida' : 'Registrar Nueva Salida'}
         </h2>
         <p className="text-body-sm text-white/70 leading-relaxed max-w-md">
-          Registra tu itinerario, cordada, ventana de retorno y contactos de emergencia antes de
-          perder señal celular en montaña.
+          Registra tu itinerario, cordada, ventana de retorno y contactos de emergencia antes de perder señal celular en
+          montaña.
         </p>
       </div>
 

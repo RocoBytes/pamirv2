@@ -56,15 +56,7 @@ interface AppShellProps {
  * montar las dos y esconder una dejaría dos barras de navegación en el árbol de
  * accesibilidad y dos coincidencias por cada etiqueta. Solo una llega al DOM.
  */
-export function AppShell({
-  shell,
-  active,
-  title,
-  onBack,
-  width = 'wide',
-  chrome = 'full',
-  children,
-}: AppShellProps) {
+export function AppShell({ shell, active, title, onBack, width = 'wide', chrome = 'full', children }: AppShellProps) {
   const isDesktop = useIsDesktop()
   const showNav = chrome === 'full'
 
@@ -119,11 +111,7 @@ export function AppShell({
         (isDesktop ? (
           <AppFooter />
         ) : (
-          <BottomNav
-            active={active}
-            onNavigate={shell.onNavigate}
-            canSeeDocumentos={shell.canSeeDocumentos}
-          />
+          <BottomNav active={active} onNavigate={shell.onNavigate} canSeeDocumentos={shell.canSeeDocumentos} />
         ))}
     </div>
   )

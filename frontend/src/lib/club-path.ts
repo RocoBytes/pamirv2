@@ -38,12 +38,7 @@ const RESERVED_TOP_LEVEL_SLUGS = new Set([
 // así que un segmento de 1 char o larguísimo que cumpliera SLUG_PATTERN nunca
 // debe tratarse como club ni viajar en el header X-Club de api.ts.
 function isClubSlug(value: string): boolean {
-  return (
-    value.length >= 2 &&
-    value.length <= 40 &&
-    SLUG_PATTERN.test(value) &&
-    !RESERVED_TOP_LEVEL_SLUGS.has(value)
-  )
+  return value.length >= 2 && value.length <= 40 && SLUG_PATTERN.test(value) && !RESERVED_TOP_LEVEL_SLUGS.has(value)
 }
 
 // pathname es inyectable (mismo criterio que storage.ts/club-preferido.ts,

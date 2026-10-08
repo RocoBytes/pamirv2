@@ -115,7 +115,9 @@ function CheckChipGroup({ label, options, value, onChange, error }: CheckChipGro
     <fieldset className="flex flex-col gap-2">
       <legend className="text-sm font-semibold text-primary">
         {label}
-        <span className="text-error ml-1" aria-hidden="true">*</span>
+        <span className="text-error ml-1" aria-hidden="true">
+          *
+        </span>
       </legend>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
@@ -182,11 +184,7 @@ export function Step2Participants({ defaultValues, onSubmit, onBack, isAdmin = f
       {/* Registro histórico — visible solo para el administrador */}
       {isAdmin && (
         <label className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 cursor-pointer">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-4 w-4 accent-primary"
-            {...register('esRegistroHistorico')}
-          />
+          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-primary" {...register('esRegistroHistorico')} />
           <span className="text-sm text-amber-900">
             <span className="font-semibold">Registro histórico</span>
             <span className="block text-amber-800/90">
@@ -283,7 +281,9 @@ export function Step2Participants({ defaultValues, onSubmit, onBack, isAdmin = f
           <div className="flex flex-col gap-1.5 pl-1">
             <label htmlFor="retenCarabineros" className="text-sm font-semibold text-primary">
               Retén de Carabineros
-              <span className="text-error ml-1" aria-hidden="true">*</span>
+              <span className="text-error ml-1" aria-hidden="true">
+                *
+              </span>
             </label>
             <input
               id="retenCarabineros"
@@ -298,7 +298,9 @@ export function Step2Participants({ defaultValues, onSubmit, onBack, isAdmin = f
               ].join(' ')}
             />
             {errors.retenCarabineros && (
-              <p className="text-xs text-error" role="alert">{errors.retenCarabineros.message}</p>
+              <p className="text-xs text-error" role="alert">
+                {errors.retenCarabineros.message}
+              </p>
             )}
           </div>
         )}
@@ -308,13 +310,17 @@ export function Step2Participants({ defaultValues, onSubmit, onBack, isAdmin = f
           <div className="flex flex-col gap-3 pl-1">
             <p className="text-sm font-semibold text-primary">
               Datos del familiar / contacto externo
-              <span className="text-error ml-1" aria-hidden="true">*</span>
+              <span className="text-error ml-1" aria-hidden="true">
+                *
+              </span>
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="nombreFamiliar" className="text-xs font-semibold text-primary">
                   Nombre
-                  <span className="text-error ml-1" aria-hidden="true">*</span>
+                  <span className="text-error ml-1" aria-hidden="true">
+                    *
+                  </span>
                 </label>
                 <input
                   id="nombreFamiliar"
@@ -329,13 +335,17 @@ export function Step2Participants({ defaultValues, onSubmit, onBack, isAdmin = f
                   ].join(' ')}
                 />
                 {errors.nombreFamiliar && (
-                  <p className="text-xs text-error" role="alert">{errors.nombreFamiliar.message}</p>
+                  <p className="text-xs text-error" role="alert">
+                    {errors.nombreFamiliar.message}
+                  </p>
                 )}
               </div>
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="telefonoFamiliar" className="text-xs font-semibold text-primary">
                   Teléfono
-                  <span className="text-error ml-1" aria-hidden="true">*</span>
+                  <span className="text-error ml-1" aria-hidden="true">
+                    *
+                  </span>
                 </label>
                 <input
                   id="telefonoFamiliar"
@@ -350,7 +360,9 @@ export function Step2Participants({ defaultValues, onSubmit, onBack, isAdmin = f
                   ].join(' ')}
                 />
                 {errors.telefonoFamiliar && (
-                  <p className="text-xs text-error" role="alert">{errors.telefonoFamiliar.message}</p>
+                  <p className="text-xs text-error" role="alert">
+                    {errors.telefonoFamiliar.message}
+                  </p>
                 )}
               </div>
             </div>

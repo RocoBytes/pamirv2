@@ -23,12 +23,13 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   return (
     <div className="flex flex-col gap-1">
       {label && (
-        <label
-          htmlFor={selectId}
-          className="text-sm font-semibold text-primary"
-        >
+        <label htmlFor={selectId} className="text-sm font-semibold text-primary">
           {label}
-          {props.required && <span className="text-error ml-1" aria-hidden="true">*</span>}
+          {props.required && (
+            <span className="text-error ml-1" aria-hidden="true">
+              *
+            </span>
+          )}
         </label>
       )}
       <div className="relative">
@@ -40,17 +41,13 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
             'transition-colors duration-150',
             'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
             'disabled:bg-surface-container-low disabled:text-on-surface-variant/60 disabled:cursor-not-allowed',
-            error
-              ? 'border-error focus:ring-error focus:border-error'
-              : 'border-secondary/40',
+            error ? 'border-error focus:ring-error focus:border-error' : 'border-secondary/40',
             className,
           ]
             .filter(Boolean)
             .join(' ')}
           aria-invalid={error ? 'true' : undefined}
-          aria-describedby={
-            error ? `${selectId}-error` : hint ? `${selectId}-hint` : undefined
-          }
+          aria-describedby={error ? `${selectId}-error` : hint ? `${selectId}-hint` : undefined}
           {...props}
         >
           {placeholder && (
