@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
+import { lazy, useState, useEffect, useMemo } from 'react'
 import { MotionConfig } from 'motion/react'
 import { useAuth } from './hooks/useAuth'
 import { OrganizationProvider } from './contexts/OrganizationContext'
@@ -25,7 +25,10 @@ import { QrInvitacionPage } from './components/QrInvitacionPage'
 import { MisClubesPage } from './components/MisClubesPage'
 import { ClubAccessErrorPage } from './components/ClubAccessErrorPage'
 import { Button } from './components/ui/Button'
-import { RouteErrorBoundary } from './components/ui/RouteErrorBoundary'
+import { ErrorBoundary } from './components/ui/ErrorBoundary'
+import { Spinner } from './components/ui/Spinner'
+import { LazyScreen } from './components/LazyScreen'
+import { AppErrorScreen } from './components/AppErrorScreen'
 import { fetchMyIntegrante, fetchMarcaClub } from './lib/api'
 import type { IntegranteRecord, OrganizationBrand } from './types/salida'
 import { parseInviteToken, parseQrToken } from './lib/invite-token'
@@ -68,15 +71,6 @@ type Route =
 function getQueryParam(name: string): string | null {
   return new URLSearchParams(window.location.search).get(name)
 }
-
-const Spinner = () => (
-  <div className="min-h-screen bg-alpine-canvas flex items-center justify-center">
-    <div className="flex flex-col items-center gap-3 text-slate-500">
-      <div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-      <p className="text-sm">Cargando...</p>
-    </div>
-  </div>
-)
 
 // Corre una sola vez, antes del primer render: reescribe un link legacy
 // ?club=<slug> a /<slug> (ver Global Constraints del plan de esta PR) antes
@@ -258,6 +252,14 @@ function AppContent({
     // Navega a la raíz sin slug: la raíz SIEMPRE muestra Mis clubes ahora
     // (Decisión del 2026-09-25), así que este link nunca es un callejón.
     onCambiarClub: (user?.clubes?.length ?? 0) > 1 ? () => window.location.assign('/') : undefined,
+  }
+
+  // Salida de una pantalla lazy que no cargó (ver LazyScreen): vuelve al
+  // dashboard, que vive en el bundle de entrada y por eso siempre abre.
+  function volverAlInicio() {
+    setActionSalidaId(null)
+    setActionEventoId(null)
+    setRoute('dashboard')
   }
 
   // document.title sigue al club de la sesión; sin sesión (o mientras /me no
@@ -485,72 +487,88 @@ function AppContent({
 
   if (route === 'crear-evento' && puedeGestionarEventos) {
     return (
-      <EventoAdminPage
-        shell={shell}
-        eventoId={null}
-        esAdminEventos={esAdminEventos}
-        gestorCategoriaIds={gestorCategoriaIds}
-        onDone={() => setRoute('eventos')}
-        onCancel={() => setRoute('eventos')}
-      />
+      <LazyScreen onBack={volverAlInicio}>
+        <EventoAdminPage
+          shell={shell}
+          eventoId={null}
+          esAdminEventos={esAdminEventos}
+          gestorCategoriaIds={gestorCategoriaIds}
+          onDone={() => setRoute('eventos')}
+          onCancel={() => setRoute('eventos')}
+        />
+      </LazyScreen>
     )
   }
 
   if (route === 'gestionar-evento' && puedeGestionarEventos && actionEventoId) {
     return (
-      <EventoAdminPage
-        shell={shell}
-        eventoId={actionEventoId}
-        esAdminEventos={esAdminEventos}
-        gestorCategoriaIds={gestorCategoriaIds}
-        onDone={() => {
-          setActionEventoId(null)
-          setRoute('eventos')
-        }}
-        onCancel={() => {
-          setActionEventoId(null)
-          setRoute('eventos')
-        }}
-      />
+      <LazyScreen onBack={volverAlInicio}>
+        <EventoAdminPage
+          shell={shell}
+          eventoId={actionEventoId}
+          esAdminEventos={esAdminEventos}
+          gestorCategoriaIds={gestorCategoriaIds}
+          onDone={() => {
+            setActionEventoId(null)
+            setRoute('eventos')
+          }}
+          onCancel={() => {
+            setActionEventoId(null)
+            setRoute('eventos')
+          }}
+        />
+      </LazyScreen>
     )
   }
 
   if (route === 'admin-panel' && isAdmin && user) {
     return (
-      <AdminPanel
-        shell={shell}
-        onBack={() => setRoute('dashboard')}
-        onDashboard={() => setRoute('admin-dashboard')}
-        currentUserId={user.id}
-        refreshSession={refreshSession}
-      />
+      <LazyScreen onBack={volverAlInicio}>
+        <AdminPanel
+          shell={shell}
+          onBack={() => setRoute('dashboard')}
+          onDashboard={() => setRoute('admin-dashboard')}
+          currentUserId={user.id}
+          refreshSession={refreshSession}
+        />
+      </LazyScreen>
     )
   }
 
   if (route === 'admin-dashboard' && isAdmin) {
-    return <AdminDashboard shell={shell} onBack={() => setRoute('admin-panel')} />
+    return (
+      <LazyScreen onBack={volverAlInicio}>
+        <AdminDashboard shell={shell} onBack={() => setRoute('admin-panel')} />
+      </LazyScreen>
+    )
   }
 
   if (route === 'invitar' && user && puedeInvitarUsuario) {
     // Rol garantizado LIDER o ADMIN por puedeInvitarUsuario; el `?? 'SOCIO'`
     // solo satisface el tipo (User.rol es opcional por sesiones antiguas).
-    return <InvitarPage shell={shell} rolActual={user.rol ?? 'SOCIO'} onBack={() => setRoute('dashboard')} />
+    return (
+      <LazyScreen onBack={volverAlInicio}>
+        <InvitarPage shell={shell} rolActual={user.rol ?? 'SOCIO'} onBack={() => setRoute('dashboard')} />
+      </LazyScreen>
+    )
   }
 
   if (route === 'editar-salida' && isAdmin && actionSalidaId) {
     return (
-      <SalidaEditForm
-        shell={shell}
-        salidaId={actionSalidaId}
-        onDone={() => {
-          setActionSalidaId(null)
-          setRoute('dashboard')
-        }}
-        onCancel={() => {
-          setActionSalidaId(null)
-          setRoute('dashboard')
-        }}
-      />
+      <LazyScreen onBack={volverAlInicio}>
+        <SalidaEditForm
+          shell={shell}
+          salidaId={actionSalidaId}
+          onDone={() => {
+            setActionSalidaId(null)
+            setRoute('dashboard')
+          }}
+          onCancel={() => {
+            setActionSalidaId(null)
+            setRoute('dashboard')
+          }}
+        />
+      </LazyScreen>
     )
   }
 
@@ -616,16 +634,12 @@ export default function App() {
             preferencias, y al cerrar sesión se descartan para que el próximo
             usuario de este navegador no herede la navegación del anterior. */}
         <NavPreferencesProvider enabled={!!(auth.user && auth.token)}>
-          {/* Un solo límite para todas las pantallas lazy: mientras llega el chunk
-              se muestra el mismo Spinner de la carga inicial, y lo que ya
-              estaba montado conserva su estado. Si el chunk no llega, el
-              RouteErrorBoundary ofrece reintentar en vez de dejar la pantalla
-              en blanco. */}
-          <RouteErrorBoundary>
-            <Suspense fallback={<Spinner />}>
-              <AppContent {...auth} />
-            </Suspense>
-          </RouteErrorBoundary>
+          {/* Red de seguridad de toda la app: sin ella, un fallo de render deja
+              la pantalla en blanco. Las pantallas lazy tienen su propio límite
+              (LazyScreen), así que un chunk que no carga no llega hasta acá. */}
+          <ErrorBoundary fallback={({ reset }) => <AppErrorScreen onRetry={reset} />}>
+            <AppContent {...auth} />
+          </ErrorBoundary>
         </NavPreferencesProvider>
       </OrganizationProvider>
     </MotionConfig>
