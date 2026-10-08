@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import type { Page, Route } from '@playwright/test'
 import { setAuth, mockMe, mockHasIntegrante, mockSalidas, MOCK_ADMIN, MOCK_USER } from './helpers'
 

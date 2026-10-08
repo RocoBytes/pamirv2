@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import type { Page } from '@playwright/test'
 import { setAuth, mockNoIntegrante, mockSalidas, mockCreateIntegrante, MOCK_INTEGRANTE } from './helpers'
 
@@ -251,7 +251,7 @@ test.describe('RegistroIntegrante – flujo de éxito', () => {
         capturedBody = route.request().postDataJSON() as Record<string, unknown>
         void route.fulfill({ status: 201, json: MOCK_INTEGRANTE })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
 
@@ -291,7 +291,7 @@ test.describe('RegistroIntegrante – error del servidor', () => {
       if (route.request().method() === 'POST') {
         void route.fulfill({ status: 500, json: { error: 'No se pudo registrar el integrante' } })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
 

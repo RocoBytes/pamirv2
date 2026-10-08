@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import {
   setAuth,
   mockMe,
@@ -553,6 +553,8 @@ test.describe('La migración también corre en un login fresco, no solo en una s
     await page.route('**/api/auth/login', (route) => {
       void route.fulfill({ status: 200, json: { user: userConUnClub, token: 'mock-jwt-fresh-login' } })
     })
+    // Tras iniciar sesión la app vuelve a leer su sesión en /api/me.
+    await mockMe(page, userConUnClub)
     await mockHasIntegrante(page)
     await mockSalidas(page)
 

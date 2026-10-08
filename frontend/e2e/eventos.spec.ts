@@ -1,4 +1,5 @@
-import { test, expect, type Page, type Route } from '@playwright/test'
+import { test, expect } from './fixtures'
+import type { Page, Route } from '@playwright/test'
 import { setAuth, mockMe, mockHasIntegrante, mockSalidas, MOCK_USER, MOCK_ADMIN, MOCK_GESTOR } from './helpers'
 
 const MOCK_CATEGORIA = {
@@ -95,7 +96,7 @@ async function mockDetalleConInscripcion(page: Page, inicial: MiEstado) {
       estado.mi = 'retirado'
       void route.fulfill({ status: 200, json: { inscripcion: { id: 'insc-001', estado: 'RETIRADO' } } })
     } else {
-      void route.continue()
+      void route.fallback()
     }
   })
 

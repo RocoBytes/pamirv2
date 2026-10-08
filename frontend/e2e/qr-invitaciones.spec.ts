@@ -1,7 +1,8 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import type { Route } from '@playwright/test'
 import {
   setAuth,
+  mockMe,
   mockHasIntegrante,
   mockNoIntegrante,
   mockSalidas,
@@ -54,7 +55,7 @@ test.describe('QR del club — ADMIN', () => {
       if (route.request().method() === 'GET') {
         void route.fulfill({ status: 200, json: { invitaciones: [] } })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
   })
@@ -79,7 +80,7 @@ test.describe('QR del club — ADMIN', () => {
         })
         return
       }
-      await route.continue()
+      await route.fallback()
     })
 
     await page.route('**/api/invitaciones/qr/qr-001', (route: Route) => {
@@ -153,7 +154,7 @@ test.describe('QR del club — ADMIN', () => {
         })
         return
       }
-      await route.continue()
+      await route.fallback()
     })
 
     // El primer código pasa a AGOTADO con "registrado" en su primer poll (a
@@ -208,7 +209,7 @@ test.describe('QR del club — LIDER', () => {
       if (route.request().method() === 'GET') {
         void route.fulfill({ status: 200, json: { invitaciones: [] } })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
     await page.route('**/api/invitaciones/qr', (route: Route) => {
@@ -218,7 +219,7 @@ test.describe('QR del club — LIDER', () => {
           json: { codigos: [mockCodigo({ creadoPor: { id: MOCK_LIDER.id, name: MOCK_LIDER.name } })] },
         })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
 
@@ -391,26 +392,24 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
       registrarBody = route.request().postDataJSON()
       void route.fulfill({ status: 201, json: { ok: true } })
     })
+    // Mismo fixture que en invitaciones.spec.ts: login devuelve el club
+    // PRIMARIO (Pamir), nunca el del QR — prueba que la pantalla no
+    // confía en este valor (Ruling 1 del plan de esta PR).
+    const usuarioExistente = {
+      id: 'user-existente-002',
+      email: 'socio@elmontanista.example.com',
+      name: 'Existente',
+      rol: 'SOCIO',
+      gestorCategorias: [],
+      organization: PAMIR_ORG,
+      clubes: [],
+    }
     await page.route('**/api/auth/login', (route) => {
-      void route.fulfill({
-        status: 200,
-        json: {
-          // Mismo fixture que en invitaciones.spec.ts: login devuelve el club
-          // PRIMARIO (Pamir), nunca el del QR — prueba que la pantalla no
-          // confía en este valor (Ruling 1 del plan de esta PR).
-          user: {
-            id: 'user-existente-002',
-            email: 'socio@elmontanista.example.com',
-            name: 'Existente',
-            rol: 'SOCIO',
-            gestorCategorias: [],
-            organization: PAMIR_ORG,
-            clubes: [],
-          },
-          token: 'mock-jwt-existente-2',
-        },
-      })
+      void route.fulfill({ status: 200, json: { user: usuarioExistente, token: 'mock-jwt-existente-2' } })
     })
+    // La página a la que aterriza el login (/el-montanista) lee su sesión y sus salidas.
+    await mockMe(page, usuarioExistente)
+    await mockSalidas(page, [])
 
     await page.goto('/#qr=tokDirecto')
     await page.getByRole('button', { name: /Ya tienes cuenta RIALA/ }).click()
@@ -530,7 +529,7 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
       })
     })
     const peticiones: string[] = []
-    // route.fallback() (no route.continue()): las rutas de Playwright se
+    // route.fallback() (no route.fallback()): las rutas de Playwright se
     // prueban en orden LIFO, así que este handler amplio se evalúa ANTES que
     // el de '**/api/qr/consultar' de arriba — fallback() le cede el paso a
     // ese handler más específico en vez de mandar la petición directo a la

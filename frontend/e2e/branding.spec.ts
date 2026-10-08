@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import type { Page, Route } from '@playwright/test'
 import {
   setAuth,
@@ -56,7 +56,7 @@ async function mockMontanistaScreens(page: Page) {
     if (route.request().method() === 'GET') {
       void route.fulfill({ status: 200, json: { invitaciones: [] } })
     } else {
-      void route.continue()
+      void route.fallback()
     }
   })
   await page.route('**/api/admin/dashboard-layout', (route: Route) => {
@@ -346,10 +346,12 @@ test.describe('Branding por club — pantallas sin sesión', () => {
 test.describe('Ownership del borrador — un mismo navegador, más de un usuario', () => {
   test('un usuario de OTRO club que inicia sesión en el mismo navegador purga el borrador previo', async ({ page }) => {
     let currentUser: unknown = MOCK_USER // Pamir
+    // setAuth también registra un /api/me por defecto: este, que cambia de
+    // usuario a mitad del test, va DESPUÉS para que sea el que gana.
+    await setAuth(page, MOCK_USER)
     await page.route('**/api/me', (route: Route) => {
       void route.fulfill({ status: 200, json: { user: currentUser } })
     })
-    await setAuth(page, MOCK_USER)
     await mockHasIntegrante(page)
     await mockSalidas(page, [])
     await page.goto('/')

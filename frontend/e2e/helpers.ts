@@ -122,8 +122,14 @@ export const MOCK_INTEGRANTE_MONTANISTA = {
   createdAt: new Date().toISOString(),
 }
 
-/** Injects a valid auth session into localStorage before page load */
+/**
+ * Injects a valid auth session into localStorage before page load, and answers
+ * GET /api/me with that same user (the SPA re-reads its session on mount). A
+ * spec that needs /api/me to say something else registers mockMe afterwards:
+ * the most recent route wins.
+ */
 export async function setAuth(page: Page, user = MOCK_USER, token = 'mock-jwt-token') {
+  await mockMe(page, user)
   await page.addInitScript(
     ({ user, token }) => {
       localStorage.setItem('pamir_auth', JSON.stringify({ user, token }))
@@ -159,7 +165,7 @@ export async function mockSalidas(page: Page, salidas: unknown[] = []) {
     if (route.request().method() === 'GET') {
       void route.fulfill({ status: 200, json: salidas })
     } else {
-      void route.continue()
+      void route.fallback()
     }
   })
 }
@@ -177,7 +183,35 @@ export async function mockCreateIntegrante(page: Page) {
     if (route.request().method() === 'POST') {
       void route.fulfill({ status: 201, json: MOCK_INTEGRANTE })
     } else {
-      void route.continue()
+      void route.fallback()
     }
   })
+}
+
+/**
+ * Baseline answers for the reads nearly every screen makes, whatever the spec is
+ * about. e2e/fixtures.ts installs them for every test BEFORE the spec's own
+ * routes, so any mock a spec registers wins. Only GET is answered; any other
+ * method is handed on (route.fallback) and, with no mock, fails the test.
+ */
+export async function mockApiDefaults(page: Page) {
+  const get = (pattern: string, status: number, json: unknown) =>
+    page.route(pattern, (route: Route) => {
+      if (route.request().method() === 'GET') {
+        void route.fulfill({ status, json })
+      } else {
+        void route.fallback()
+      }
+    })
+
+  // No saved navigation preferences: the app shows its default tabs.
+  await get('**/api/me/nav-preferences', 200, { preferences: null })
+  // No events.
+  await get('**/api/eventos*', 200, [])
+  // The session has no member record yet (mockHasIntegrante overrides it).
+  await get('**/api/integrantes/me', 404, { error: 'Sin ficha de integrante' })
+  // No reusable invitation QR codes yet.
+  await get('**/api/invitaciones/qr', 200, { codigos: [] })
+  // Public club brand: nothing known about the club.
+  await get('**/api/clubes/*/marca', 404, { error: 'Club no encontrado' })
 }

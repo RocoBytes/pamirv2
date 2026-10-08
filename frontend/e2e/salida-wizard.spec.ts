@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from './fixtures'
+import type { Page } from '@playwright/test'
 import { setAuth, mockHasIntegrante, mockSalidas, mockIntegranteByRut } from './helpers'
 
 // Draft válido para los pasos 1-4: permite entrar directo al paso guardado

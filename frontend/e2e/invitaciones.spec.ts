@@ -1,7 +1,8 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import type { Route } from '@playwright/test'
 import {
   setAuth,
+  mockMe,
   mockNoIntegrante,
   mockHasIntegrante,
   mockSalidas,
@@ -134,27 +135,25 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
         json: { message: 'Te uniste al club. Ya puedes iniciar sesión.', email: 'existente@example.com' },
       })
     })
+    // El login SIEMPRE devuelve el club PRIMARIO de la cuenta (Pamir en
+    // este fixture) — nunca el club recién unido (Ruling 1 del plan de
+    // esta PR): esto prueba que la pantalla NO confía en este valor para
+    // decidir a dónde navegar.
+    const usuarioExistente = {
+      id: 'user-existente-001',
+      email: 'existente@example.com',
+      name: 'Existente',
+      rol: 'SOCIO',
+      gestorCategorias: [],
+      organization: PAMIR_ORG,
+      clubes: [],
+    }
     await page.route('**/api/auth/login', (route) => {
-      void route.fulfill({
-        status: 200,
-        // El login SIEMPRE devuelve el club PRIMARIO de la cuenta (Pamir en
-        // este fixture) — nunca el club recién unido (Ruling 1 del plan de
-        // esta PR): esto prueba que la pantalla NO confía en este valor para
-        // decidir a dónde navegar.
-        json: {
-          user: {
-            id: 'user-existente-001',
-            email: 'existente@example.com',
-            name: 'Existente',
-            rol: 'SOCIO',
-            gestorCategorias: [],
-            organization: PAMIR_ORG,
-            clubes: [],
-          },
-          token: 'mock-jwt-existente',
-        },
-      })
+      void route.fulfill({ status: 200, json: { user: usuarioExistente, token: 'mock-jwt-existente' } })
     })
+    // La página a la que aterriza el login (/el-montanista) lee su sesión y sus salidas.
+    await mockMe(page, usuarioExistente)
+    await mockSalidas(page, [])
 
     await page.goto('/el-montanista#invite=tokExistente')
 
@@ -264,7 +263,7 @@ test.describe('Invitar — LIDER', () => {
       if (route.request().method() === 'GET') {
         void route.fulfill({ status: 200, json: { invitaciones: [] } })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
 
@@ -307,7 +306,7 @@ test.describe('Invitar — LIDER', () => {
         })
         return
       }
-      await route.continue()
+      await route.fallback()
     })
 
     await page.goto('/')
@@ -365,7 +364,7 @@ test.describe('Panel de Administración — usuarios e invitaciones', () => {
       if (route.request().method() === 'GET') {
         void route.fulfill({ status: 200, json: { invitaciones: [] } })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
   })
@@ -395,7 +394,7 @@ test.describe('Panel de Administración — usuarios e invitaciones', () => {
           ],
         })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
 
