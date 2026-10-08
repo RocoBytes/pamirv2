@@ -14,6 +14,7 @@ import {
   previousStep,
   progressLabel,
   validateRegistroStep,
+  staleErrorFields,
   type IntegranteFormData,
   type IntegranteField,
 } from './registro-integrante-steps'
@@ -258,5 +259,61 @@ describe('validateRegistroStep — aislamiento entre pasos', () => {
   it('el paso 4 nunca reporta campos de otro paso', () => {
     const issues = validateRegistroStep(4, { ...VALID_STEP4, alergiasTiene: true, alergiasDetalle: '' })
     expect(issues).toEqual([])
+  })
+})
+
+// ─── staleErrorFields ─────────────────────────────────────────────────────────
+// Decide qué errores limpia la revalidación en vivo de RegistroIntegrante.tsx.
+// Regresión del "Maximum update depth exceeded": el efecto llamaba
+// clearErrors() para todo campo válido del paso, haya o no error pintado, y
+// cada llamada notifica al formulario → render → efecto → clearErrors → ...
+// La garantía que protege este bloque: sin error pintado, NO se limpia nada.
+
+const NO_ERRORS = () => false
+const ERRORS_ON = (...fields: IntegranteField[]) => {
+  const set = new Set(fields)
+  return (field: IntegranteField) => set.has(field)
+}
+
+describe('staleErrorFields', () => {
+  it('sin ningún error pintado no devuelve nada, aunque todos los valores sean válidos (corta el bucle)', () => {
+    expect(staleErrorFields(1, VALID_STEP1, NO_ERRORS)).toEqual([])
+    expect(staleErrorFields(2, VALID_STEP2, NO_ERRORS)).toEqual([])
+    expect(staleErrorFields(3, VALID_STEP3, NO_ERRORS)).toEqual([])
+    expect(staleErrorFields(4, VALID_STEP4, NO_ERRORS)).toEqual([])
+  })
+
+  it('devuelve el campo que tiene error y cuyo valor ya es válido', () => {
+    expect(staleErrorFields(1, VALID_STEP1, ERRORS_ON('nombreCompleto'))).toEqual(['nombreCompleto'])
+  })
+
+  it('no devuelve un campo con error cuyo valor sigue siendo inválido', () => {
+    const values = { ...VALID_STEP1, nombreCompleto: '' }
+    expect(staleErrorFields(1, values, ERRORS_ON('nombreCompleto'))).toEqual([])
+  })
+
+  it('devuelve solo los corregidos cuando hay varios errores pintados, en el orden del paso', () => {
+    const values = { ...VALID_STEP1, rut: 'mal-formado' }
+    expect(staleErrorFields(1, values, ERRORS_ON('rut', 'region', 'nombreCompleto'))).toEqual([
+      'nombreCompleto',
+      'region',
+    ])
+  })
+
+  it('ignora los errores pintados en campos de otro paso', () => {
+    expect(staleErrorFields(2, VALID_STEP2, ERRORS_ON('nombreCompleto', 'alergiasDetalle'))).toEqual([])
+  })
+
+  it('paso 3: el detalle de "Sí" sigue sin limpiarse hasta que se rellena', () => {
+    const sinDetalle = baseStep3Values({ alergiasTiene: true, alergiasDetalle: '' })
+    expect(staleErrorFields(3, sinDetalle, ERRORS_ON('alergiasDetalle'))).toEqual([])
+
+    const conDetalle = baseStep3Values({ alergiasTiene: true, alergiasDetalle: 'Penicilina' })
+    expect(staleErrorFields(3, conDetalle, ERRORS_ON('alergiasDetalle'))).toEqual(['alergiasDetalle'])
+  })
+
+  it('paso 3: cambiar a "No" limpia el error del detalle que ya no es obligatorio', () => {
+    const values = baseStep3Values({ alergiasTiene: false, alergiasDetalle: '' })
+    expect(staleErrorFields(3, values, ERRORS_ON('alergiasDetalle'))).toEqual(['alergiasDetalle'])
   })
 })

@@ -280,3 +280,21 @@ export function validateRegistroStep(
     message: issue.message,
   }))
 }
+
+// Campos de `stepId` cuyo error pintado ya no corresponde: tienen un error Y
+// su valor actual es válido para ese paso. Es lo único que la revalidación en
+// vivo debe limpiar.
+//
+// El "tienen un error" es la mitad que importa: clearErrors() notifica a TODO
+// suscriptor del formulario aunque no haya nada que limpiar, y el efecto que
+// lo llama corre en cada cambio de valores — llamarlo "por si acaso" provoca
+// un render nuevo, que vuelve a correr el efecto, y así hasta que React corta
+// con "Maximum update depth exceeded".
+export function staleErrorFields(
+  stepId: RegistroIntegranteStepId,
+  values: Partial<IntegranteFormData>,
+  hasError: (field: IntegranteField) => boolean,
+): IntegranteField[] {
+  const stillInvalid = new Set(validateRegistroStep(stepId, values).map((issue) => issue.field))
+  return REGISTRO_INTEGRANTE_STEP_FIELDS[stepId].filter((field) => !stillInvalid.has(field) && hasError(field))
+}

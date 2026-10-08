@@ -27,6 +27,7 @@ import {
   firstErrorFieldInStep,
   progressLabel,
   validateRegistroStep,
+  staleErrorFields,
 } from '../lib/registro-integrante-steps'
 
 // ─── RUT formatter ───────────────────────────────────────────────────────────
@@ -352,6 +353,7 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
     watch,
     setValue,
     getValues,
+    getFieldState,
     setError,
     clearErrors,
     setFocus,
@@ -404,14 +406,18 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
   // solo. Usa el mismo validateRegistroStep (nunca el schema completo), así
   // que nunca reintroduce el bug de depender de otro paso. Solo LIMPIA
   // errores que ya no aplican — nunca crea uno nuevo mientras se escribe.
+  //
+  // Solo llama a clearErrors() para un campo que TIENE un error pintado
+  // (staleErrorFields): clearErrors notifica a todo el formulario aunque no
+  // haya nada que limpiar, y este efecto corre en cada render (`values` es un
+  // objeto nuevo cada vez) — antes, llamarlo para todo campo válido
+  // re-renderizaba, volvía a correr el efecto y repetía hasta "Maximum update
+  // depth exceeded".
   useEffect(() => {
-    const fields = REGISTRO_INTEGRANTE_STEP_FIELDS[currentStep]
-    const issues = validateRegistroStep(currentStep, values)
-    const stillInvalid = new Set(issues.map((issue) => issue.field))
-    for (const field of fields) {
-      if (!stillInvalid.has(field)) clearErrors(field)
+    for (const field of staleErrorFields(currentStep, values, (f) => getFieldState(f).error !== undefined)) {
+      clearErrors(field)
     }
-  }, [values, currentStep, clearErrors])
+  }, [values, currentStep, clearErrors, getFieldState])
 
   // Advierte antes de perder datos sin enviar — se desactiva sola tras un
   // envío exitoso (success) o si el formulario nunca se tocó (isDirty).

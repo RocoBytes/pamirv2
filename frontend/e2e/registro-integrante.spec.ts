@@ -324,6 +324,41 @@ test.describe('RegistroIntegrante – error del servidor', () => {
   })
 })
 
+test.describe('RegistroIntegrante – revalidación en vivo', () => {
+  test('un error se limpia solo al corregir el campo, sin volver a tocar "Siguiente"', async ({ page }) => {
+    await goToRegistroIntegrante(page)
+    await siguiente(page)
+    const requeridos = page.getByText('Campo requerido')
+    await expect(requeridos.first()).toBeVisible()
+    const antes = await requeridos.count()
+    expect(antes).toBeGreaterThan(1)
+
+    await page.getByPlaceholder('Ej: Juan Andrés Pérez González').fill('María Paz López')
+    // Solo se va el error del campo corregido; los demás siguen visibles.
+    await expect(requeridos).toHaveCount(antes - 1)
+  })
+
+  test('recorrer los 4 pasos, con errores de por medio, no dispara "Maximum update depth exceeded"', async ({
+    page,
+  }) => {
+    // React solo avisa de un bucle de renderizado con console.error: no rompe
+    // nada a la vista (React corta el bucle), así que el único modo de
+    // atraparlo es escuchar la consola.
+    const loopErrors: string[] = []
+    page.on('console', (msg) => {
+      if (msg.type() === 'error' && msg.text().includes('Maximum update depth exceeded')) {
+        loopErrors.push(msg.text())
+      }
+    })
+
+    await goToRegistroIntegrante(page)
+    await siguiente(page) // paso 1 vacío: se pintan errores y el efecto de revalidación corre con ellos
+    await arriveAtStep4(page)
+
+    expect(loopErrors).toEqual([])
+  })
+})
+
 test.describe('RegistroIntegrante – advertencia antes de salir', () => {
   test('con datos sin guardar, "Volver" pide confirmación antes de salir', async ({ page }) => {
     await goToRegistroIntegrante(page)
