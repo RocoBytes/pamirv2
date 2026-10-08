@@ -1,0 +1,8 @@
+# Generated, vendored or machine-written: prettier must never touch these.
+node_modules
+dist
+coverage
+test-results
+src/generated
+prisma/migrations
+package-lock.json

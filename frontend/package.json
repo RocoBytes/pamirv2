@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"e2e/**/*.ts\" \"*.{ts,js}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"e2e/**/*.ts\" \"*.{ts,js}\"",
     "test": "vitest run",
     "preview": "vite preview",
     "test:e2e": "playwright test",
