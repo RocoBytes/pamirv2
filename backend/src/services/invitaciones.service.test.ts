@@ -346,7 +346,8 @@ describe('crearInvitacion', () => {
     const stored = invitaciones[0];
     assert.ok(stored);
     // El token en claro nunca aparece en ningún campo persistido.
-    for (const value of Object.values(stored as Record<string, unknown>)) {
+    const persistedValues: unknown[] = Object.values(stored);
+    for (const value of persistedValues) {
       if (typeof value === 'string') {
         assert.equal(value.includes(token), false);
       }
@@ -645,6 +646,8 @@ describe('consultarInvitacion', () => {
         slug: 'pamir',
         name: 'Andino Club Pamir',
         shortName: 'Pamir',
+        hasLogo: false,
+        logoVersion: null,
       }),
     });
     const creada = await crearInvitacion(deps, ADMIN, { email: 'x@club.cl' });
@@ -659,6 +662,8 @@ describe('consultarInvitacion', () => {
         slug: 'pamir',
         name: 'Andino Club Pamir',
         shortName: 'Pamir',
+        hasLogo: false,
+        logoVersion: null,
       });
     }
   });
@@ -1023,7 +1028,7 @@ describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
     if (!crear.ok) return;
     const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
 
-    const result = await aceptarInvitacion(deps, token, {}, { verifiedEmail: 'alguien-mas@club.cl' });
+    const result = await aceptarInvitacion(deps, token, { name: undefined, password: undefined }, { verifiedEmail: 'alguien-mas@club.cl' });
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.status, 403);

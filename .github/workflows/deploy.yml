@@ -31,6 +31,9 @@ jobs:
       - run: npx prisma generate
 
       - run: npm run lint
+      # Includes the *.test.ts files, which `npm run build` (tsc → dist)
+      # deliberately leaves out.
+      - run: npm run typecheck
       - run: npm test
       - run: npm run build
 
