@@ -47,20 +47,20 @@
     "oneoff:rebrand-house-club": "tsx src/scripts/rebrand-house-club.ts"
   },
   "dependencies": {
-    "@google-cloud/storage": "^8.2.0",
-    "@prisma/adapter-pg": "^7.7.0",
-    "@prisma/client": "^7.7.0",
+    "@google-cloud/storage": "^8.3.0",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "bcrypt": "^6.0.0",
     "busboy": "^1.6.0",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
-    "express": "^4.22.1",
+    "express": "^4.22.3",
     "express-rate-limit": "^8.4.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^10.0.10",
     "pg": "^8.20.0",
-    "prisma": "^7.7.0",
+    "prisma": "^7.10.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -77,9 +77,13 @@
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.5.0",
     "prettier": "^3.8.3",
-    "tsx": "^4.21.0",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.2",
+    "mysql2": "^3.23.1"
   },
   "keywords": [],
   "author": "",
