@@ -417,11 +417,13 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
   //
   // Solo llama a clearErrors() para un campo que TIENE un error pintado
   // (staleErrorFields): clearErrors notifica a todo el formulario aunque no
-  // haya nada que limpiar, y `values` (useWatch) cambia de identidad con cada
-  // notificación — antes, llamarlo para todo campo válido re-renderizaba, volvía
-  // a correr este efecto y repetía hasta "Maximum update depth exceeded".
+  // haya nada que limpiar. Con watch(), que devolvía un objeto nuevo en cada
+  // render, llamarlo para todo campo válido re-renderizaba, volvía a correr
+  // este efecto y repetía hasta "Maximum update depth exceeded"; la guarda lo
+  // corta en el origen y evita notificaciones inútiles.
   useEffect(() => {
-    for (const field of staleErrorFields(currentStep, values, (f) => getFieldState(f).error !== undefined)) {
+    const hasPaintedError = (field: IntegranteField) => getFieldState(field).error !== undefined
+    for (const field of staleErrorFields(currentStep, values, hasPaintedError)) {
       clearErrors(field)
     }
   }, [values, currentStep, clearErrors, getFieldState])

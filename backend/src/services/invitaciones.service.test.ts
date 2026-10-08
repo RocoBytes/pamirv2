@@ -1195,6 +1195,9 @@ describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
     if (!crear.ok) return;
     const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
 
+    // aceptarInvitacion only reads body.name / body.password (it never checks which
+    // keys are present), so the explicit undefineds just satisfy the input type: the
+    // scenario would behave the same with an empty object.
     const result = await aceptarInvitacion(
       deps,
       token,

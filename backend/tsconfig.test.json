@@ -1,4 +1,8 @@
 {
+  // Type-checks the WHOLE src tree (production code and *.test.ts) with noEmit:
+  // tsconfig.json leaves the tests out of the build, so this is the only config
+  // that sees them. Keep `include` as the full src; narrowing it to the tests
+  // would stop checking the code they import.
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true

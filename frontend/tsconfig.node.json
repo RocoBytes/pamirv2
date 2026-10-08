@@ -20,5 +20,8 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
+  /* Tooling configs that ship in the Docker build context, so `tsc -b` (run by
+     `npm run build` inside the image) can check them. playwright.config.ts is
+     not here because .dockerignore excludes it: it lives in tsconfig.e2e.json. */
   "include": ["vite.config.ts", "vitest.config.ts"]
 }

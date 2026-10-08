@@ -330,9 +330,7 @@ test.describe('RegistroIntegrante – revalidación en vivo', () => {
     await expect(requeridos).toHaveCount(antes - 1)
   })
 
-  test('recorrer los 4 pasos, con errores de por medio, no dispara "Maximum update depth exceeded"', async ({
-    page,
-  }) => {
+  test('pintar y corregir un error en cada paso no dispara "Maximum update depth exceeded"', async ({ page }) => {
     // React solo avisa de un bucle de renderizado con console.error: no rompe
     // nada a la vista (React corta el bucle), así que el único modo de
     // atraparlo es escuchar la consola.
@@ -344,8 +342,40 @@ test.describe('RegistroIntegrante – revalidación en vivo', () => {
     })
 
     await goToRegistroIntegrante(page)
-    await siguiente(page) // paso 1 vacío: se pintan errores y el efecto de revalidación corre con ellos
-    await arriveAtStep4(page)
+
+    // En cada paso se pinta un error y luego se corrige: eso hace que el efecto
+    // de revalidación llame a clearErrors, que es justo lo que antes disparaba
+    // el bucle.
+    // Paso 1: formulario vacío.
+    await siguiente(page)
+    await expect(page.getByText('Campo requerido').first()).toBeVisible()
+    await fillStep1(page)
+    await expect(page.getByText('Campo requerido')).toHaveCount(0)
+    await siguiente(page)
+    await expectAtStep(page, 2)
+
+    // Paso 2: igual.
+    await siguiente(page)
+    await expect(page.getByText('Campo requerido').first()).toBeVisible()
+    await fillStep2(page)
+    await expect(page.getByText('Campo requerido')).toHaveCount(0)
+    await siguiente(page)
+    await expectAtStep(page, 3)
+
+    // Paso 3: "Sí" sin detalle lo exige; escribirlo limpia el error.
+    await fillStep3(page, { alergiasSi: true })
+    await siguiente(page)
+    await expect(page.getByText('Describe las alergias conocidas')).toBeVisible()
+    await page.getByPlaceholder(/Penicilina/i).fill('Penicilina')
+    await expect(page.getByText('Describe las alergias conocidas')).toHaveCount(0)
+    await siguiente(page)
+    await expectAtStep(page, 4)
+
+    // Paso 4: registrar sin aceptar las cláusulas las marca; aceptarlas limpia el error.
+    await page.getByRole('button', { name: /Registrar Integrante/i }).click()
+    await expect(page.getByText('Debes aceptar esta declaración para continuar')).toBeVisible()
+    await checkAllClauses(page)
+    await expect(page.getByText('Debes aceptar esta declaración para continuar')).toHaveCount(0)
 
     expect(loopErrors).toEqual([])
   })
