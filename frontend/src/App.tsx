@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
 import { MotionConfig } from 'motion/react'
 import { useAuth } from './hooks/useAuth'
 import { OrganizationProvider } from './contexts/OrganizationContext'
@@ -16,19 +16,35 @@ import type { ShellContext } from './components/shell/AppShell'
 import { DocumentosPage } from './components/DocumentosPage'
 import { ContactosPage } from './components/ContactosPage'
 import { EventosPage } from './components/EventosPage'
-import { EventoAdminPage } from './components/EventoAdminPage'
-import { AdminPanel } from './components/AdminPanel'
-import { AdminDashboard } from './components/AdminDashboard'
-import { SalidaEditForm } from './components/SalidaEditForm'
-import { InvitarPage } from './components/invitaciones/InvitarPage'
 import { QrInvitacionPage } from './components/QrInvitacionPage'
 import { MisClubesPage } from './components/MisClubesPage'
 import { ClubAccessErrorPage } from './components/ClubAccessErrorPage'
 import { Button } from './components/ui/Button'
+import { RouteErrorBoundary } from './components/ui/RouteErrorBoundary'
 import { fetchMyIntegrante, fetchMarcaClub } from './lib/api'
 import type { IntegranteRecord, OrganizationBrand } from './types/salida'
 import { parseInviteToken, parseQrToken } from './lib/invite-token'
 import { puedeInvitar } from './lib/roles'
+
+// Pantallas de administración y gestión: las usa una minoría, desde un
+// escritorio, y no hacen falta para el primer render, así que cada una viaja
+// en su propio chunk y se pide recién al navegar a ella. El AdminDashboard
+// arrastra recharts y la grilla de widgets, que por sí solos pesaban más que
+// todo el resto de la app. Las pantallas de uso en terreno (wizard de salida,
+// ficha de integrante, cierre, documentos, contactos de emergencia, eventos)
+// se quedan en el bundle de entrada A PROPÓSITO: una vez cargada la app tienen
+// que abrir aunque se pierda la señal en la montaña, y un chunk lazy no
+// llegaría. Los componentes son exports nombrados, de ahí el `.then` que los
+// devuelve como `default`.
+const EventoAdminPage = lazy(() =>
+  import('./components/EventoAdminPage').then((m) => ({ default: m.EventoAdminPage })),
+)
+const AdminPanel = lazy(() => import('./components/AdminPanel').then((m) => ({ default: m.AdminPanel })))
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })))
+const SalidaEditForm = lazy(() => import('./components/SalidaEditForm').then((m) => ({ default: m.SalidaEditForm })))
+const InvitarPage = lazy(() =>
+  import('./components/invitaciones/InvitarPage').then((m) => ({ default: m.InvitarPage })),
+)
 
 type Route = 'dashboard' | 'nueva-salida' | 'nuevo-integrante' | 'nueva-cierre' | 'nuevo-integrante-standalone' | 'documentos' | 'contactos' | 'admin-panel' | 'admin-dashboard' | 'editar-salida' | 'eventos' | 'crear-evento' | 'gestionar-evento' | 'invitar'
 
@@ -537,7 +553,16 @@ export default function App() {
             preferencias, y al cerrar sesión se descartan para que el próximo
             usuario de este navegador no herede la navegación del anterior. */}
         <NavPreferencesProvider enabled={!!(auth.user && auth.token)}>
-          <AppContent {...auth} />
+          {/* Un solo límite para todas las pantallas lazy: mientras llega el chunk
+              se muestra el mismo Spinner de la carga inicial, y lo que ya
+              estaba montado conserva su estado. Si el chunk no llega, el
+              RouteErrorBoundary ofrece reintentar en vez de dejar la pantalla
+              en blanco. */}
+          <RouteErrorBoundary>
+            <Suspense fallback={<Spinner />}>
+              <AppContent {...auth} />
+            </Suspense>
+          </RouteErrorBoundary>
         </NavPreferencesProvider>
       </OrganizationProvider>
     </MotionConfig>
