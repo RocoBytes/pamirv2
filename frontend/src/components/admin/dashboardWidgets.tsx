@@ -23,6 +23,16 @@ import type { AdminDashboard, DashboardWidgetLayout } from '../../lib/api'
 import { STATUS_LABELS } from '../../types/salida'
 
 /*
+ * Tamaño con el que arranca cada ResponsiveContainer ANTES de medir su
+ * contenedor. Recharts lo inicia en -1×-1 y, en ese primer render, avisa por
+ * consola ("The width(-1) and height(-1) of chart should be greater than 0");
+ * mide el contenedor justo después de montarlo y el tamaño medido reemplaza a
+ * este de inmediato. Es 1×1 a propósito: positivo basta para evitar el aviso y
+ * un cuadro de 1×1 no dibuja nada visible en ese primer instante.
+ */
+const CHART_INITIAL_DIMENSION = { width: 1, height: 1 }
+
+/*
  * Paleta categórica de datos. Recharts necesita strings concretos, no clases,
  * así que estos valores no pueden salir de los tokens de index.css en tiempo de
  * ejecución — conviene tratarlos como una paleta propia y no como un espejo de
@@ -39,16 +49,6 @@ import { STATUS_LABELS } from '../../types/salida'
  * y contraste ≥3:1 contra la superficie clara): los seis checks en PASS.
  * El orden es FIJO — nunca se cicla ni se reasigna según cuántas series haya.
  */
-/*
- * Recharts arranca cada ResponsiveContainer con un tamaño inicial de -1×-1 y, en
- * su primer render, avisa por consola ("The width(-1) and height(-1) of chart
- * should be greater than 0") antes de medir el contenedor, lo que hace justo
- * después de montarlo. Un tamaño inicial positivo evita el aviso; el medido lo
- * reemplaza de inmediato y es 1×1 a propósito, para que ese primer cuadro no
- * dibuje nada visible.
- */
-const CHART_INITIAL_DIMENSION = { width: 1, height: 1 }
-
 const CHART_COLORS = [
   '#3366d6', // azul
   '#e85400', // naranja

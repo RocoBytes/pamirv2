@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures'
 import type { Page, Route } from '@playwright/test'
 import { setAuth, mockHasIntegrante, mockSalidas, MOCK_ADMIN } from './helpers'
+import { PRELOAD_RELOAD_KEY } from '../src/lib/preload-recovery'
 
 // El panel de administración es una pantalla lazy (ver App.tsx): su código viaja
 // en un chunk aparte. En el servidor de desarrollo ese chunk es el módulo
@@ -134,9 +135,20 @@ test.describe('Pantalla lazy que no carga', () => {
     await page.getByLabel('Abrir panel de administración').click()
     await expect(page.getByRole('alert')).toContainText('No se pudo cargar esta pantalla')
     await expect(page.getByRole('button', { name: 'Recargar la app' })).toBeVisible()
+    // El aviso aparece porque este segundo fallo NO volvió a recargar. Se comprueba
+    // sin esperar a ver si "pasa algo": la recarga quedó registrada y, dentro de su
+    // ventana, un nuevo fallo ya no la pide (el handler deja el evento sin cancelar).
+    expect(await page.evaluate((key) => sessionStorage.getItem(key), PRELOAD_RELOAD_KEY)).not.toBeNull()
+    const volveriaARecargar = await page.evaluate(() => {
+      const evento = new Event('vite:preloadError', { cancelable: true })
+      window.dispatchEvent(evento)
+      return evento.defaultPrevented
+    })
+    expect(volveriaARecargar).toBe(false)
+    expect(counter.loads).toBe(2) // sin bucle de recargas
+
     await page.getByRole('button', { name: 'Volver al inicio' }).click()
     await expect(page.getByText('Mis Salidas')).toBeVisible()
-    await page.waitForTimeout(2000)
-    expect(counter.loads).toBe(2) // sin bucle de recargas
+    expect(counter.loads).toBe(2)
   })
 })

@@ -529,7 +529,7 @@ test.describe('QR directo — landing pública (registro en el acto)', () => {
       })
     })
     const peticiones: string[] = []
-    // route.fallback() (no route.fallback()): las rutas de Playwright se
+    // route.fallback() (no route.continue()): las rutas de Playwright se
     // prueban en orden LIFO, así que este handler amplio se evalúa ANTES que
     // el de '**/api/qr/consultar' de arriba — fallback() le cede el paso a
     // ese handler más específico en vez de mandar la petición directo a la
