@@ -16,14 +16,7 @@ const DOCUMENTO_DOWNLOAD_SECONDS = 600;
 
 // Set conocido de categorías de la biblioteca. Debe mantenerse en sync con
 // CATEGORIA_LABELS del frontend (frontend/src/lib/documentos.ts).
-const DOCUMENTO_CATEGORIAS = [
-  'AVISO_EXPEDICION',
-  'MATRIZ_RIESGO',
-  'CHECKLIST',
-  'GLOSARIO',
-  'LIBROS',
-  'OTRO',
-];
+const DOCUMENTO_CATEGORIAS = ['AVISO_EXPEDICION', 'MATRIZ_RIESGO', 'CHECKLIST', 'GLOSARIO', 'LIBROS', 'OTRO'];
 
 // GET /api/documentos — biblioteca del club, solo socios ACP y admin.
 // El gate de membresía vive acá: ocultar el recuadro en el frontend es
@@ -161,9 +154,7 @@ export async function createDocumento(req: Request, res: Response): Promise<void
         safeRespond(400, { error: 'El nombre es obligatorio' });
         return;
       }
-      const orden = ordenRaw !== '' && Number.isFinite(Number(ordenRaw))
-        ? parseInt(ordenRaw, 10)
-        : 0;
+      const orden = ordenRaw !== '' && Number.isFinite(Number(ordenRaw)) ? parseInt(ordenRaw, 10) : 0;
 
       fileStream.on('limit', () => {
         fileStream.resume();

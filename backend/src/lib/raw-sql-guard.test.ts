@@ -80,11 +80,7 @@ function scan(): Violation[] {
 describe('raw-sql-guard', () => {
   it('toda ocurrencia de $queryRaw/$executeRaw está permitida y filtra por club', () => {
     const violations = scan();
-    assert.deepEqual(
-      violations,
-      [],
-      violations.map((v) => `${v.file}:${v.line} — ${v.reason}`).join('\n'),
-    );
+    assert.deepEqual(violations, [], violations.map((v) => `${v.file}:${v.line} — ${v.reason}`).join('\n'));
   });
 
   it('el escaneo sigue encontrando las ocurrencias reales conocidas (no se rompió en silencio)', () => {
@@ -94,6 +90,9 @@ describe('raw-sql-guard', () => {
       RAW_SQL_PATTERN.lastIndex = 0;
       occurrences += content.match(RAW_SQL_PATTERN)?.length ?? 0;
     }
-    assert.ok(occurrences >= RAW_SQL_ALLOWED_FILES.size, 'el escaneo no encontró las ocurrencias esperadas de SQL crudo');
+    assert.ok(
+      occurrences >= RAW_SQL_ALLOWED_FILES.size,
+      'el escaneo no encontró las ocurrencias esperadas de SQL crudo',
+    );
   });
 });

@@ -6,7 +6,8 @@ import { z } from 'zod';
 export const SALT_ROUNDS = 12;
 
 export const emailField = z.string().trim().email('Formato de email inválido').max(254);
-export const passwordField = z.string()
+export const passwordField = z
+  .string()
   .min(8, 'Mínimo 8 caracteres')
   .refine((s) => Buffer.byteLength(s, 'utf8') <= 72, 'La contraseña es demasiado larga');
 export const nameField = z.string().trim().min(1, 'El nombre es requerido').max(100, 'Máximo 100 caracteres');

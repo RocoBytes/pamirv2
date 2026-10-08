@@ -1,13 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import {
-  scopeArgs,
-  TENANT_MODELS,
-  GLOBAL_MODELS,
-  ORGANIZATION_MODEL,
-  TenantContextError,
-} from './scope-args.js';
+import { scopeArgs, TENANT_MODELS, GLOBAL_MODELS, ORGANIZATION_MODEL, TenantContextError } from './scope-args.js';
 import type { TenantStore } from './tenant-context.js';
 
 const ORG_A = 'org-a';
@@ -21,10 +15,7 @@ const asA: TenantStore = { kind: 'org', organizationId: ORG_A };
 describe('scopeArgs — sin contexto (store undefined)', () => {
   for (const model of [...TENANT_MODELS, ...GLOBAL_MODELS, ORGANIZATION_MODEL, 'ModeloInventado']) {
     it(`lanza para ${model}.findMany sin contexto`, () => {
-      assert.throws(
-        () => scopeArgs({ model, operation: 'findMany', args: {}, store: undefined }),
-        TenantContextError,
-      );
+      assert.throws(() => scopeArgs({ model, operation: 'findMany', args: {}, store: undefined }), TenantContextError);
     });
   }
 });

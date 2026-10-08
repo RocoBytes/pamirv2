@@ -88,7 +88,9 @@ export async function login(req: Request, res: Response): Promise<void> {
     }
 
     if (!user.emailVerified) {
-      res.status(403).json({ error: 'Debes verificar tu email antes de iniciar sesión. Revisa tu bandeja de entrada.' });
+      res
+        .status(403)
+        .json({ error: 'Debes verificar tu email antes de iniciar sesión. Revisa tu bandeja de entrada.' });
       return;
     }
 
@@ -185,7 +187,16 @@ export async function getMe(req: Request, res: Response): Promise<void> {
     );
 
     res.json({
-      user: { id, organizationId, email, name, rol, gestorCategorias, organization: toPublicOrganization(organization), clubes },
+      user: {
+        id,
+        organizationId,
+        email,
+        name,
+        rol,
+        gestorCategorias,
+        organization: toPublicOrganization(organization),
+        clubes,
+      },
     });
   } catch (error) {
     console.error('[getMe]', error);

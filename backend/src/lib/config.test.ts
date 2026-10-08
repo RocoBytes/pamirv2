@@ -162,11 +162,17 @@ describe('resolveFrontendUrl', () => {
   });
 
   it('conserva un prefijo de ruta, recortando solo la barra final', () => {
-    assert.equal(resolveFrontendUrl({ FRONTEND_URL: 'https://andinoclubpamir.app/app/' }), 'https://andinoclubpamir.app/app');
+    assert.equal(
+      resolveFrontendUrl({ FRONTEND_URL: 'https://andinoclubpamir.app/app/' }),
+      'https://andinoclubpamir.app/app',
+    );
   });
 
   it('recorta los espacios alrededor del valor', () => {
-    assert.equal(resolveFrontendUrl({ FRONTEND_URL: '  https://andinoclubpamir.app  ' }), 'https://andinoclubpamir.app');
+    assert.equal(
+      resolveFrontendUrl({ FRONTEND_URL: '  https://andinoclubpamir.app  ' }),
+      'https://andinoclubpamir.app',
+    );
   });
 
   it('rechaza un esquema que no sea http/https', () => {

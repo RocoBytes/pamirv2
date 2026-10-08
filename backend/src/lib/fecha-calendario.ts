@@ -16,7 +16,10 @@ export function esFechaCalendarioValida(value: string): boolean {
 export const fechaCalendarioField = z
   .string()
   .regex(FORMATO_FECHA, 'Formato de fecha inválido (se espera YYYY-MM-DD)')
-  .refine(esFechaCalendarioValida, `Fecha inválida: revisa el día, el mes y el año (entre ${ANIO_MINIMO} y ${ANIO_MAXIMO})`);
+  .refine(
+    esFechaCalendarioValida,
+    `Fecha inválida: revisa el día, el mes y el año (entre ${ANIO_MINIMO} y ${ANIO_MAXIMO})`,
+  );
 
 /**
  * User-facing validation for a date coming from a request body. Accepts a

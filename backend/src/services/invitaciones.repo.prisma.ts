@@ -4,10 +4,7 @@
 import { prisma } from '../lib/prisma.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { runAsPlatform } from '../lib/tenant-context.js';
-import type {
-  InvitacionesRepo,
-  InvitacionConInvitador,
-} from './invitaciones.service.js';
+import type { InvitacionesRepo, InvitacionConInvitador } from './invitaciones.service.js';
 
 export const invitacionesRepoPrisma: InvitacionesRepo = {
   async findUserById(id) {
@@ -71,10 +68,12 @@ export const invitacionesRepoPrisma: InvitacionesRepo = {
       orderBy: { createdAt: 'desc' },
       include: { invitadoPor: { select: { name: true } } },
     });
-    return rows.map(({ invitadoPor, ...row }): InvitacionConInvitador => ({
-      ...row,
-      invitadoPorNombre: invitadoPor?.name ?? null,
-    }));
+    return rows.map(
+      ({ invitadoPor, ...row }): InvitacionConInvitador => ({
+        ...row,
+        invitadoPorNombre: invitadoPor?.name ?? null,
+      }),
+    );
   },
 
   async markRevoked(id, now) {

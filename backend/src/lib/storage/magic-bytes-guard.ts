@@ -81,9 +81,7 @@ export class MagicBytesGuard extends Transform {
 
   private matches(buffer: Buffer): boolean {
     const offset = this.contentStart(buffer);
-    return this.signatures.some((signature) =>
-      buffer.subarray(offset, offset + signature.length).equals(signature),
-    );
+    return this.signatures.some((signature) => buffer.subarray(offset, offset + signature.length).equals(signature));
   }
 
   _transform(chunk: Buffer, _encoding: string, callback: TransformCallback): void {

@@ -24,10 +24,7 @@ describe('buildClubSender', () => {
   });
 
   it('elimina CR/LF y comillas del nombre para evitar inyección de cabeceras', () => {
-    const result = buildClubSender(
-      { name: 'Club\r\nBcc: atacante@evil.com "raro"' },
-      'notificaciones@riala.cl',
-    );
+    const result = buildClubSender({ name: 'Club\r\nBcc: atacante@evil.com "raro"' }, 'notificaciones@riala.cl');
     assert.equal(result.from.includes('\r'), false);
     assert.equal(result.from.includes('\n'), false);
     assert.equal(result.from.includes('"raro"'), false);

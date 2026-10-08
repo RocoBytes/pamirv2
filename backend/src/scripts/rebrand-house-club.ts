@@ -25,7 +25,6 @@ import {
   type RebrandPlan,
 } from './rebrand-house-club-plan.js';
 
-
 // Defensa en profundidad: npm run oneoff:rebrand-house-club ya ejecuta el
 // guard como pre-hook, pero este script también puede invocarse directamente
 // con tsx. Mismo patrón que create-user.ts/tenant.ts.

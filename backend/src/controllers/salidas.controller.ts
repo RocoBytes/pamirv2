@@ -39,9 +39,7 @@ async function sendSalidaParticipantEmails(
   const recipients: { email: string; nombre: string }[] = [];
 
   // Registered integrantes: resolve their email by RUT (express entries excluded).
-  const ruts = participants
-    .filter((p) => p && !p.esExpress && p.rut)
-    .map((p) => p.rut as string);
+  const ruts = participants.filter((p) => p && !p.esExpress && p.rut).map((p) => p.rut as string);
   if (ruts.length > 0) {
     const integrantes = await prisma.integrante.findMany({
       where: { rut: { in: ruts } },
@@ -298,11 +296,9 @@ export async function createSalida(req: Request, res: Response): Promise<void> {
 
     // Los registros históricos del admin no notifican a los integrantes.
     if (!esRegistroHistorico) {
-      sendSalidaParticipantEmails(
-        participantesNormalizados as unknown[],
-        salida,
-        req.user!.organization,
-      ).catch((err) => console.error('[salida-email]', err));
+      sendSalidaParticipantEmails(participantesNormalizados as unknown[], salida, req.user!.organization).catch((err) =>
+        console.error('[salida-email]', err),
+      );
     }
   } catch (error) {
     console.error('[createSalida]', error);
@@ -341,14 +337,11 @@ export async function getSalidas(req: Request, res: Response): Promise<void> {
     // Históricos: el desplegable del Dashboard pide ?historico=true para ver
     // las salidas ya cerradas (COMPLETADA) en las que el usuario participó.
     // Sin el flag se mantiene el comportamiento actual: solo salidas EN_CURSO.
-    const historico =
-      req.query['historico'] === 'true' || req.query['historico'] === '1';
+    const historico = req.query['historico'] === 'true' || req.query['historico'] === '1';
 
     const whereClause: Prisma.SalidaWhereInput = {
       status: historico ? 'COMPLETADA' : 'EN_CURSO',
-      OR: [
-        { userId: userId },
-      ],
+      OR: [{ userId: userId }],
     };
 
     if (userRut) {
@@ -608,9 +601,7 @@ export async function updateSalidaIntegrantes(req: Request, res: Response): Prom
     const nextParticipantes = normalizeParticipantes(body.participantes, addedBy);
 
     const auditEntries = diffIntegrantesAudit(prevParticipantes, nextParticipantes, addedBy);
-    const prevLog = Array.isArray(existing.integrantesAuditLog)
-      ? (existing.integrantesAuditLog as unknown[])
-      : [];
+    const prevLog = Array.isArray(existing.integrantesAuditLog) ? (existing.integrantesAuditLog as unknown[]) : [];
     const nextLog = [...prevLog, ...auditEntries];
 
     const salida = await prisma.salida.update({
@@ -627,9 +618,7 @@ export async function updateSalidaIntegrantes(req: Request, res: Response): Prom
     res.json(serializeSalida(salida));
 
     // Notificar solo a los recién agregados (no re-enviar a los ya existentes).
-    const prevRuts = new Set(
-      prevParticipantes.filter((p) => p?.rut).map((p) => p.rut as string),
-    );
+    const prevRuts = new Set(prevParticipantes.filter((p) => p?.rut).map((p) => p.rut as string));
     const added = nextParticipantes.filter((p) => p?.rut && !prevRuts.has(p.rut as string));
     if (added.length > 0) {
       sendSalidaParticipantEmails(added as unknown[], salida, req.user!.organization).catch((err) =>

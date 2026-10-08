@@ -21,10 +21,7 @@ describe('estadoCodigoQr', () => {
 
   it('REVOCADO tiene la máxima precedencia (aunque también esté expirado y agotado)', () => {
     assert.equal(
-      estadoCodigoQr(
-        { revocadoAt: NOW, expiresAt: new Date('2025-01-01T00:00:00.000Z'), usosRestantes: 0 },
-        NOW,
-      ),
+      estadoCodigoQr({ revocadoAt: NOW, expiresAt: new Date('2025-01-01T00:00:00.000Z'), usosRestantes: 0 }, NOW),
       'REVOCADO',
     );
   });

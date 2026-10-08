@@ -44,9 +44,7 @@ export interface NavPreferences {
 /** Quita desconocidos y repetidos conservando el orden pedido. */
 function keepKnown(requested: string[], allowed: readonly string[]): string[] {
   const seen = new Set<string>();
-  return requested.filter(
-    (key) => allowed.includes(key) && !seen.has(key) && (seen.add(key), true),
-  );
+  return requested.filter((key) => allowed.includes(key) && !seen.has(key) && (seen.add(key), true));
 }
 
 /**

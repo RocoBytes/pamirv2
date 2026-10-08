@@ -17,10 +17,12 @@ export const codigosQrRepoPrisma: CodigosQrRepo = {
       orderBy: { createdAt: 'desc' },
       include: { creadoPor: { select: { name: true } } },
     });
-    return rows.map(({ creadoPor, ...row }): CodigoQrConCreador => ({
-      ...row,
-      creadoPorNombre: creadoPor?.name ?? null,
-    }));
+    return rows.map(
+      ({ creadoPor, ...row }): CodigoQrConCreador => ({
+        ...row,
+        creadoPorNombre: creadoPor?.name ?? null,
+      }),
+    );
   },
 
   async findById(id) {

@@ -170,9 +170,30 @@ function createFakeRepo(seedUsers: FakeUser[] = []): {
 // (findUserById), no la que tenía en el momento de invitar.
 function createDeps(overrides: Partial<InvitacionesDeps> = {}, extraUsers: FakeUser[] = []) {
   const seedUsers: FakeUser[] = [
-    { id: ADMIN.id, organizationId: ADMIN.organizationId, email: 'admin@club.cl', name: ADMIN.name, rol: 'ADMIN', emailVerified: true },
-    { id: LIDER.id, organizationId: LIDER.organizationId, email: 'lider@club.cl', name: LIDER.name, rol: 'LIDER', emailVerified: true },
-    { id: SOCIO.id, organizationId: SOCIO.organizationId, email: 'socio@club.cl', name: SOCIO.name, rol: 'SOCIO', emailVerified: true },
+    {
+      id: ADMIN.id,
+      organizationId: ADMIN.organizationId,
+      email: 'admin@club.cl',
+      name: ADMIN.name,
+      rol: 'ADMIN',
+      emailVerified: true,
+    },
+    {
+      id: LIDER.id,
+      organizationId: LIDER.organizationId,
+      email: 'lider@club.cl',
+      name: LIDER.name,
+      rol: 'LIDER',
+      emailVerified: true,
+    },
+    {
+      id: SOCIO.id,
+      organizationId: SOCIO.organizationId,
+      email: 'socio@club.cl',
+      name: SOCIO.name,
+      rol: 'SOCIO',
+      emailVerified: true,
+    },
     ...extraUsers,
   ];
   const { repo, users, invitaciones, membresias } = createFakeRepo(seedUsers);
@@ -254,7 +275,14 @@ describe('crearInvitacion', () => {
 
   it('rechaza con 409 "Ya es socio de este club" si la cuenta YA es socia del club que invita', async () => {
     const { deps } = createDeps({}, [
-      { id: 'u1', organizationId: ADMIN.organizationId, email: 'ya@club.cl', name: 'Ya', rol: 'SOCIO', emailVerified: true },
+      {
+        id: 'u1',
+        organizationId: ADMIN.organizationId,
+        email: 'ya@club.cl',
+        name: 'Ya',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
     ]);
     const result = await crearInvitacion(deps, ADMIN, { email: 'ya@club.cl' });
     assert.equal(result.ok, false);
@@ -267,7 +295,14 @@ describe('crearInvitacion', () => {
   it('la respuesta (ok/status/forma del body) es IDÉNTICA para un email sin cuenta y un email con cuenta en otro club — nunca revela cuál fue (enumeración, Review Focus #2)', async () => {
     const { deps: depsNuevo } = createDeps();
     const { deps: depsOtroClub } = createDeps({}, [
-      { id: 'u2', organizationId: 'otro-club', email: 'otro-club@club.cl', name: 'Otro', rol: 'SOCIO', emailVerified: true },
+      {
+        id: 'u2',
+        organizationId: 'otro-club',
+        email: 'otro-club@club.cl',
+        name: 'Otro',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
     ]);
     const nuevo = await crearInvitacion(depsNuevo, ADMIN, { email: 'nunca-existio@club.cl' });
     const existente = await crearInvitacion(depsOtroClub, ADMIN, { email: 'otro-club@club.cl' });
@@ -285,7 +320,14 @@ describe('crearInvitacion', () => {
     assert.equal((emailsNuevo[0] as { existingAccount: boolean }).existingAccount, false);
 
     const { deps: depsExistente, sentEmails: emailsExistente } = createDeps({}, [
-      { id: 'u3', organizationId: 'otro-club', email: 'con-cuenta@club.cl', name: 'Con Cuenta', rol: 'SOCIO', emailVerified: true },
+      {
+        id: 'u3',
+        organizationId: 'otro-club',
+        email: 'con-cuenta@club.cl',
+        name: 'Con Cuenta',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
     ]);
     await crearInvitacion(depsExistente, ADMIN, { email: 'con-cuenta@club.cl' });
     assert.equal((emailsExistente[0] as { existingAccount: boolean }).existingAccount, true);
@@ -468,11 +510,24 @@ describe('revocarInvitacion', () => {
 describe('reenviarInvitacion', () => {
   it('un email con cuenta en OTRO club ya no se rechaza al reenviar', async () => {
     const { deps, users, invitaciones } = createDeps({}, [
-      { id: 'u4', organizationId: 'otro-club', email: 'reenvio-otro@club.cl', name: 'Reenvío', rol: 'SOCIO', emailVerified: true },
+      {
+        id: 'u4',
+        organizationId: 'otro-club',
+        email: 'reenvio-otro@club.cl',
+        name: 'Reenvío',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
     ]);
     void users;
     const primera = await crearInvitacion(
-      { ...deps, repo: { ...deps.repo, findAccountMembershipStatus: async () => ({ cuentaExiste: false, esSocioDeEsteClub: false }) } },
+      {
+        ...deps,
+        repo: {
+          ...deps.repo,
+          findAccountMembershipStatus: async () => ({ cuentaExiste: false, esSocioDeEsteClub: false }),
+        },
+      },
       ADMIN,
       { email: 'reenvio-otro@club.cl' },
     );
@@ -496,7 +551,14 @@ describe('reenviarInvitacion', () => {
     if (!creadaSinCuenta.ok) return;
 
     const { deps: depsOtroClub } = createDeps({}, [
-      { id: 'u-reenvio-simetria', organizationId: 'otro-club', email: emailSimetria, name: 'Otro', rol: 'SOCIO', emailVerified: true },
+      {
+        id: 'u-reenvio-simetria',
+        organizationId: 'otro-club',
+        email: emailSimetria,
+        name: 'Otro',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
     ]);
     const creadaOtroClub = await crearInvitacion(depsOtroClub, ADMIN, { email: emailSimetria });
     assert.equal(creadaOtroClub.ok, true);
@@ -573,7 +635,12 @@ describe('reenviarInvitacion', () => {
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-    const aceptada = await aceptarInvitacion(deps, token, { name: 'Nuevo', password: 'password123' }, { verifiedEmail: null });
+    const aceptada = await aceptarInvitacion(
+      deps,
+      token,
+      { name: 'Nuevo', password: 'password123' },
+      { verifiedEmail: null },
+    );
     assert.equal(aceptada.ok, true);
 
     const result = await reenviarInvitacion(deps, ADMIN, creada.body.invitacion.id);
@@ -616,7 +683,14 @@ describe('consultarInvitacion', () => {
 
   it('consultarInvitacion informa cuentaExistente:true cuando el email invitado ya tiene cuenta', async () => {
     const { deps } = createDeps({}, [
-      { id: 'existente-consulta', organizationId: 'otro-club', email: 'existente@example.com', name: 'X', rol: 'SOCIO', emailVerified: true },
+      {
+        id: 'existente-consulta',
+        organizationId: 'otro-club',
+        email: 'existente@example.com',
+        name: 'X',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
     ]);
     const creada = await crearInvitacion(deps, ADMIN, { email: 'existente@example.com' });
     assert.equal(creada.ok, true);
@@ -724,7 +798,10 @@ describe('consultarInvitacion', () => {
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
     // Simula que el admin invitador fue eliminado.
-    users.splice(users.findIndex((u) => u.id === ADMIN.id), 1);
+    users.splice(
+      users.findIndex((u) => u.id === ADMIN.id),
+      1,
+    );
 
     const result = await consultarInvitacion(deps, token);
     assert.equal(result.ok, false);
@@ -761,7 +838,12 @@ describe('aceptarInvitacion', () => {
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-    const result = await aceptarInvitacion(deps, token, { name: 'Nueva Persona', password: 'password123' }, { verifiedEmail: null });
+    const result = await aceptarInvitacion(
+      deps,
+      token,
+      { name: 'Nueva Persona', password: 'password123' },
+      { verifiedEmail: null },
+    );
     assert.equal(result.ok, true);
     if (result.ok) {
       assert.equal(result.status, 201);
@@ -782,17 +864,25 @@ describe('aceptarInvitacion', () => {
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-    const result = await aceptarInvitacion(deps, token, {
-      name: 'Nombre Real',
-      password: 'password123',
-      // Estos dos campos no forman parte del contrato de entrada y deben ignorarse.
-      email: 'otro@evil.cl',
-      rol: 'ADMIN',
-    } as unknown as { name: unknown; password: unknown }, { verifiedEmail: null });
+    const result = await aceptarInvitacion(
+      deps,
+      token,
+      {
+        name: 'Nombre Real',
+        password: 'password123',
+        // Estos dos campos no forman parte del contrato de entrada y deben ignorarse.
+        email: 'otro@evil.cl',
+        rol: 'ADMIN',
+      } as unknown as { name: unknown; password: unknown },
+      { verifiedEmail: null },
+    );
     assert.equal(result.ok, true);
     if (result.ok) assert.equal(result.body.email, 'real@club.cl');
 
-    assert.equal(users.some((u) => u.email === 'otro@evil.cl'), false);
+    assert.equal(
+      users.some((u) => u.email === 'otro@evil.cl'),
+      false,
+    );
     const creado = users.find((u) => u.email === 'real@club.cl');
     assert.equal(creado?.rol, 'SOCIO');
   });
@@ -804,12 +894,17 @@ describe('aceptarInvitacion', () => {
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-    const result = await aceptarInvitacion(deps, token, {
-      name: 'Alguien',
-      password: 'password123',
-      // No forma parte del contrato de entrada: debe ignorarse igual que email/rol.
-      organizationId: 'org-intrusa',
-    } as unknown as { name: unknown; password: unknown }, { verifiedEmail: null });
+    const result = await aceptarInvitacion(
+      deps,
+      token,
+      {
+        name: 'Alguien',
+        password: 'password123',
+        // No forma parte del contrato de entrada: debe ignorarse igual que email/rol.
+        organizationId: 'org-intrusa',
+      } as unknown as { name: unknown; password: unknown },
+      { verifiedEmail: null },
+    );
     assert.equal(result.ok, true);
 
     const creado = users.find((u) => u.email === 'club@club.cl');
@@ -823,10 +918,20 @@ describe('aceptarInvitacion', () => {
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-    const primero = await aceptarInvitacion(deps, token, { name: 'Uno', password: 'password123' }, { verifiedEmail: null });
+    const primero = await aceptarInvitacion(
+      deps,
+      token,
+      { name: 'Uno', password: 'password123' },
+      { verifiedEmail: null },
+    );
     assert.equal(primero.ok, true);
 
-    const segundo = await aceptarInvitacion(deps, token, { name: 'Dos', password: 'password123' }, { verifiedEmail: null });
+    const segundo = await aceptarInvitacion(
+      deps,
+      token,
+      { name: 'Dos', password: 'password123' },
+      { verifiedEmail: null },
+    );
     assert.equal(segundo.ok, false);
     if (!segundo.ok) {
       assert.equal(segundo.status, 410);
@@ -872,14 +977,26 @@ describe('aceptarInvitacion', () => {
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
     const usersAntes = users.length;
-    users.push({ id: 'raced', organizationId: 'org-1', email: 'x@club.cl', name: 'Otro', rol: 'SOCIO', emailVerified: true });
+    users.push({
+      id: 'raced',
+      organizationId: 'org-1',
+      email: 'x@club.cl',
+      name: 'Otro',
+      rol: 'SOCIO',
+      emailVerified: true,
+    });
 
     // El fake's findAccountForOwnershipProof modela el passwordHash real de
     // 'raced' como `hashed:x@club.cl-password` (ver createFakeRepo) — la
     // contraseña enviada acá ('password123') no calza, así que la prueba de
     // titularidad falla exactamente como si alguien más estuviera probando
     // suerte con la cuenta ajena.
-    const result = await aceptarInvitacion(deps, token, { name: 'Alguien', password: 'password123' }, { verifiedEmail: null });
+    const result = await aceptarInvitacion(
+      deps,
+      token,
+      { name: 'Alguien', password: 'password123' },
+      { verifiedEmail: null },
+    );
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.status, 401);
@@ -897,13 +1014,18 @@ describe('aceptarInvitacion', () => {
     if (!creada.ok) return;
     const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-    const result = await aceptarInvitacion(deps, token, {
-      name: 'Alguien',
-      password: 'password123',
-      // No forman parte del contrato de entrada de aceptarInvitacion: deben ignorarse.
-      emitidaPorPlataforma: true,
-      organizationId: 'org-intrusa',
-    } as unknown as { name: unknown; password: unknown }, { verifiedEmail: null });
+    const result = await aceptarInvitacion(
+      deps,
+      token,
+      {
+        name: 'Alguien',
+        password: 'password123',
+        // No forman parte del contrato de entrada de aceptarInvitacion: deben ignorarse.
+        emitidaPorPlataforma: true,
+        organizationId: 'org-intrusa',
+      } as unknown as { name: unknown; password: unknown },
+      { verifiedEmail: null },
+    );
     assert.equal(result.ok, true);
 
     const creado = users.find((u) => u.email === 'segura@club.cl');
@@ -917,7 +1039,14 @@ describe('aceptarInvitacion', () => {
 describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
   it('con la contraseña correcta, crea SOLO la Membresia (nunca un User nuevo, nunca toca el nombre)', async () => {
     const { deps, users } = createDeps({}, [
-      { id: 'existente-1', organizationId: 'otro-club', email: 'existe@club.cl', name: 'Nombre Original', rol: 'SOCIO', emailVerified: true },
+      {
+        id: 'existente-1',
+        organizationId: 'otro-club',
+        email: 'existe@club.cl',
+        name: 'Nombre Original',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
     ]);
     const crear = await crearInvitacion(deps, ADMIN, { email: 'existe@club.cl', rol: 'LIDER' });
     assert.equal(crear.ok, true);
@@ -941,7 +1070,14 @@ describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
 
   it('con un rol/organizationId/email en conflicto en el body, la Membresia usa los de la INVITACIÓN (nunca los del body) y no toca el perfil', async () => {
     const { deps, users, membresias } = createDeps({}, [
-      { id: 'existente-5', organizationId: 'otro-club', email: 'existe5@club.cl', name: 'Nombre Original', rol: 'SOCIO', emailVerified: true },
+      {
+        id: 'existente-5',
+        organizationId: 'otro-club',
+        email: 'existe5@club.cl',
+        name: 'Nombre Original',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
     ]);
     // La invitación otorga LIDER en el club de ADMIN — el body de abajo
     // intentará "colarse" con otro rol, otro club y hasta otro email.
@@ -988,14 +1124,26 @@ describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
 
   it('con la contraseña incorrecta, responde 401 y no crea nada', async () => {
     const { deps, invitaciones } = createDeps({}, [
-      { id: 'existente-2', organizationId: 'otro-club', email: 'existe2@club.cl', name: 'X', rol: 'SOCIO', emailVerified: true },
+      {
+        id: 'existente-2',
+        organizationId: 'otro-club',
+        email: 'existe2@club.cl',
+        name: 'X',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
     ]);
     const crear = await crearInvitacion(deps, ADMIN, { email: 'existe2@club.cl' });
     assert.equal(crear.ok, true);
     if (!crear.ok) return;
     const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
 
-    const result = await aceptarInvitacion(deps, token, { name: 'X', password: 'contraseña-incorrecta' }, { verifiedEmail: null });
+    const result = await aceptarInvitacion(
+      deps,
+      token,
+      { name: 'X', password: 'contraseña-incorrecta' },
+      { verifiedEmail: null },
+    );
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.status, 401);
     const invitacion = invitaciones.find((i) => i.id === crear.body.invitacion.id);
@@ -1004,7 +1152,14 @@ describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
 
   it('con un Bearer del MISMO email (sin password), crea la Membresia igual', async () => {
     const { deps, users } = createDeps({}, [
-      { id: 'existente-3', organizationId: 'otro-club', email: 'existe3@club.cl', name: 'X', rol: 'SOCIO', emailVerified: true },
+      {
+        id: 'existente-3',
+        organizationId: 'otro-club',
+        email: 'existe3@club.cl',
+        name: 'X',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
     ]);
     const crear = await crearInvitacion(deps, ADMIN, { email: 'existe3@club.cl' });
     assert.equal(crear.ok, true);
@@ -1012,7 +1167,12 @@ describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
     const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
 
     const usersAntes = users.length;
-    const result = await aceptarInvitacion(deps, token, { name: undefined, password: undefined }, { verifiedEmail: 'existe3@club.cl' });
+    const result = await aceptarInvitacion(
+      deps,
+      token,
+      { name: undefined, password: undefined },
+      { verifiedEmail: 'existe3@club.cl' },
+    );
     assert.equal(result.ok, true);
     // Igual que la rama por contraseña: ningún User nuevo se crea (ver
     // createFakeRepo.acceptInvitacionExistente, que nunca empuja a `users`).
@@ -1021,14 +1181,26 @@ describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
 
   it('con un Bearer de OTRO email, responde 403 "Esta invitación es para otro correo"', async () => {
     const { deps } = createDeps({}, [
-      { id: 'existente-4', organizationId: 'otro-club', email: 'existe4@club.cl', name: 'X', rol: 'SOCIO', emailVerified: true },
+      {
+        id: 'existente-4',
+        organizationId: 'otro-club',
+        email: 'existe4@club.cl',
+        name: 'X',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
     ]);
     const crear = await crearInvitacion(deps, ADMIN, { email: 'existe4@club.cl' });
     assert.equal(crear.ok, true);
     if (!crear.ok) return;
     const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
 
-    const result = await aceptarInvitacion(deps, token, { name: undefined, password: undefined }, { verifiedEmail: 'alguien-mas@club.cl' });
+    const result = await aceptarInvitacion(
+      deps,
+      token,
+      { name: undefined, password: undefined },
+      { verifiedEmail: 'alguien-mas@club.cl' },
+    );
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.status, 403);
@@ -1043,7 +1215,12 @@ describe('aceptarInvitacion — cuenta existente (PR "Joining")', () => {
     if (!crear.ok) return;
     const token = extractTokenFromInviteUrl(crear.body.inviteUrl);
 
-    const result = await aceptarInvitacion(deps, token, { name: 'Nuevo', password: 'password123' }, { verifiedEmail: null });
+    const result = await aceptarInvitacion(
+      deps,
+      token,
+      { name: 'Nuevo', password: 'password123' },
+      { verifiedEmail: null },
+    );
     assert.equal(result.ok, true);
     if (result.ok) assert.equal(result.body.message, 'Cuenta creada. Ya puedes iniciar sesión.');
   });
@@ -1085,7 +1262,11 @@ describe('crearInvitacionPlataforma', () => {
     const { deps } = createDeps({}, [
       { id: 'u1', organizationId: 'org-nuevo', email: 'ya@club.cl', name: 'Ya', rol: 'SOCIO', emailVerified: true },
     ]);
-    const result = await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'ya@club.cl', rol: 'ADMIN' });
+    const result = await crearInvitacionPlataforma(deps, {
+      organizationId: 'org-nuevo',
+      email: 'ya@club.cl',
+      rol: 'ADMIN',
+    });
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.status, 409);
@@ -1120,7 +1301,14 @@ describe('crearInvitacionPlataforma', () => {
     });
 
     const { deps: depsOtroClub } = createDeps({}, [
-      { id: 'u-plataforma-simetria', organizationId: 'otro-club', email: emailSimetria, name: 'Otro', rol: 'SOCIO', emailVerified: true },
+      {
+        id: 'u-plataforma-simetria',
+        organizationId: 'otro-club',
+        email: emailSimetria,
+        name: 'Otro',
+        rol: 'SOCIO',
+        emailVerified: true,
+      },
     ]);
     const otroClub = await crearInvitacionPlataforma(depsOtroClub, {
       organizationId: 'org-nuevo-simetria',
@@ -1131,22 +1319,27 @@ describe('crearInvitacionPlataforma', () => {
     assert.equal(sinCuenta.ok, otroClub.ok);
     if (!sinCuenta.ok || !otroClub.ok) return;
     assert.equal(sinCuenta.status, otroClub.status);
-    assert.deepEqual(
-      normalizarCrearInvitacionBody(sinCuenta.body),
-      normalizarCrearInvitacionBody(otroClub.body),
-    );
+    assert.deepEqual(normalizarCrearInvitacionBody(sinCuenta.body), normalizarCrearInvitacionBody(otroClub.body));
   });
 
   it('rechaza un rol desconocido', async () => {
     const { deps } = createDeps();
-    const result = await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'x@club-nuevo.cl', rol: 'SUPERADMIN' });
+    const result = await crearInvitacionPlataforma(deps, {
+      organizationId: 'org-nuevo',
+      email: 'x@club-nuevo.cl',
+      rol: 'SUPERADMIN',
+    });
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.status, 400);
   });
 
   it('rechaza un email inválido', async () => {
     const { deps } = createDeps();
-    const result = await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'no-es-un-email', rol: 'ADMIN' });
+    const result = await crearInvitacionPlataforma(deps, {
+      organizationId: 'org-nuevo',
+      email: 'no-es-un-email',
+      rol: 'ADMIN',
+    });
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.status, 400);
   });
@@ -1164,7 +1357,11 @@ describe('crearInvitacionPlataforma', () => {
   describe('exención de la regla de autoridad vigente', () => {
     it('consultarInvitacion es válida y devuelve la etiqueta de la plataforma, sin invitador', async () => {
       const { deps } = createDeps();
-      const creada = await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'x@club-nuevo.cl', rol: 'ADMIN' });
+      const creada = await crearInvitacionPlataforma(deps, {
+        organizationId: 'org-nuevo',
+        email: 'x@club-nuevo.cl',
+        rol: 'ADMIN',
+      });
       assert.equal(creada.ok, true);
       if (!creada.ok) return;
       const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
@@ -1179,12 +1376,21 @@ describe('crearInvitacionPlataforma', () => {
 
     it('aceptarInvitacion crea un ADMIN del club indicado, sin depender de ningún invitador', async () => {
       const { deps, users } = createDeps();
-      const creada = await crearInvitacionPlataforma(deps, { organizationId: 'org-nuevo', email: 'nuevo-admin@club-nuevo.cl', rol: 'ADMIN' });
+      const creada = await crearInvitacionPlataforma(deps, {
+        organizationId: 'org-nuevo',
+        email: 'nuevo-admin@club-nuevo.cl',
+        rol: 'ADMIN',
+      });
       assert.equal(creada.ok, true);
       if (!creada.ok) return;
       const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-      const result = await aceptarInvitacion(deps, token, { name: 'Nuevo Admin', password: 'password123' }, { verifiedEmail: null });
+      const result = await aceptarInvitacion(
+        deps,
+        token,
+        { name: 'Nuevo Admin', password: 'password123' },
+        { verifiedEmail: null },
+      );
       assert.equal(result.ok, true);
 
       const creado = users.find((u) => u.email === 'nuevo-admin@club-nuevo.cl');
@@ -1199,7 +1405,10 @@ describe('crearInvitacionPlataforma', () => {
       if (!creada.ok) return;
       const token = creada.body.inviteUrl.split('#invite=')[1] ?? '';
 
-      users.splice(users.findIndex((u) => u.id === ADMIN.id), 1);
+      users.splice(
+        users.findIndex((u) => u.id === ADMIN.id),
+        1,
+      );
 
       const result = await consultarInvitacion(deps, token);
       assert.equal(result.ok, false);
@@ -1255,7 +1464,10 @@ describe('crearInvitacionPlataforma', () => {
       const listado = await listarInvitaciones(deps, LIDER);
       assert.equal(listado.ok, true);
       if (listado.ok) {
-        assert.equal(listado.body.invitaciones.some((i) => i.id === creada.body.invitacion.id), false);
+        assert.equal(
+          listado.body.invitaciones.some((i) => i.id === creada.body.invitacion.id),
+          false,
+        );
       }
 
       const revocar = await revocarInvitacion(deps, LIDER, creada.body.invitacion.id);

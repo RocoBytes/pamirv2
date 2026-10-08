@@ -48,10 +48,7 @@ export async function checkAlertas(req: Request, res: Response): Promise<void> {
           cierres: { none: {} },
           // Los registros históricos del admin nunca disparan alarma.
           esRegistroHistorico: false,
-          OR: [
-            { alertaEnviadaAt: null },
-            { recordatorioCierreEnviadoAt: null },
-          ],
+          OR: [{ alertaEnviadaAt: null }, { recordatorioCierreEnviadoAt: null }],
         },
         include: {
           organization: {

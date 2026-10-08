@@ -183,7 +183,13 @@ describe('email-templates — branding por club en cada builder', () => {
   });
 
   it('buildCierreNotificationEmail (con evaluación)', () => {
-    const html = buildCierreNotificationEmail('Juan Soto', salida, cierre, branding, 'https://app.elmontanista.cl?evaluacion=tok');
+    const html = buildCierreNotificationEmail(
+      'Juan Soto',
+      salida,
+      cierre,
+      branding,
+      'https://app.elmontanista.cl?evaluacion=tok',
+    );
     assertMentionsClub(html);
     assertHasSupportLine(html);
     assertCierreFeedbackPointsToClub(html);
@@ -252,10 +258,7 @@ describe('email-templates — branding por club en cada builder', () => {
   });
 
   it('buildInvitationEmail sin viaQr es byte a byte igual que sin ese parámetro', () => {
-    assert.equal(
-      buildInvitationEmail(invitationData, branding),
-      buildInvitationEmail(invitationData, branding, {}),
-    );
+    assert.equal(buildInvitationEmail(invitationData, branding), buildInvitationEmail(invitationData, branding, {}));
     assert.equal(
       buildInvitationEmail(invitationData, branding),
       buildInvitationEmail(invitationData, branding, { viaQr: false }),

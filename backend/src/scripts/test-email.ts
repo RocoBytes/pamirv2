@@ -74,9 +74,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const organization = await runAsPlatform(() =>
-    prisma.organization.findUniqueOrThrow({ where: { slug } }),
-  );
+  const organization = await runAsPlatform(() => prisma.organization.findUniqueOrThrow({ where: { slug } }));
 
   const results: CheckResult[] = [];
   for (const kind of KINDS) {

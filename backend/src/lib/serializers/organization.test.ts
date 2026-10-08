@@ -13,10 +13,15 @@ describe('toPublicOrganization', () => {
       membresiaPropia: 'SOCIO_ANDINO_PAMIR',
       logoObjectKey: null,
     });
-    assert.deepEqual(
-      Object.keys(result).sort(),
-      ['hasLogo', 'id', 'logoVersion', 'membresiaPropia', 'name', 'shortName', 'slug'],
-    );
+    assert.deepEqual(Object.keys(result).sort(), [
+      'hasLogo',
+      'id',
+      'logoVersion',
+      'membresiaPropia',
+      'name',
+      'shortName',
+      'slug',
+    ]);
     assert.equal(result.slug, 'pamir');
     assert.equal(result.membresiaPropia, 'SOCIO_ANDINO_PAMIR');
   });
@@ -128,10 +133,7 @@ describe('logoVersionOf', () => {
   });
 
   it('cambia si la clave cambia (cada subida genera un uuid nuevo)', () => {
-    assert.notEqual(
-      logoVersionOf('orgs/org-1/logo/uno.png'),
-      logoVersionOf('orgs/org-1/logo/dos.png'),
-    );
+    assert.notEqual(logoVersionOf('orgs/org-1/logo/uno.png'), logoVersionOf('orgs/org-1/logo/dos.png'));
   });
 
   it('es determinístico para la misma clave', () => {

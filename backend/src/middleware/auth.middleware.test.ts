@@ -62,7 +62,16 @@ const FAKE_ORG = {
 describe('requireAdmin', () => {
   it('calls next() for a user with rol ADMIN', async () => {
     const requireAdmin = await loadRequireAdmin();
-    const req = { user: { id: '1', organizationId: 'org-1', email: 'admin@club.cl', name: 'Admin', rol: 'ADMIN', organization: FAKE_ORG } } as unknown as Request;
+    const req = {
+      user: {
+        id: '1',
+        organizationId: 'org-1',
+        email: 'admin@club.cl',
+        name: 'Admin',
+        rol: 'ADMIN',
+        organization: FAKE_ORG,
+      },
+    } as unknown as Request;
     const res = fakeResponse();
     const { next, state } = fakeNext();
 
@@ -74,7 +83,16 @@ describe('requireAdmin', () => {
 
   it('responds 403 and does not call next() for a user with rol SOCIO', async () => {
     const requireAdmin = await loadRequireAdmin();
-    const req = { user: { id: '2', organizationId: 'org-1', email: 'socio@club.cl', name: 'Socio', rol: 'SOCIO', organization: FAKE_ORG } } as unknown as Request;
+    const req = {
+      user: {
+        id: '2',
+        organizationId: 'org-1',
+        email: 'socio@club.cl',
+        name: 'Socio',
+        rol: 'SOCIO',
+        organization: FAKE_ORG,
+      },
+    } as unknown as Request;
     const res = fakeResponse();
     const { next, state } = fakeNext();
 
@@ -100,7 +118,14 @@ describe('requireAdmin', () => {
   it('responds 403 for the legacy admin mailbox with rol SOCIO', async () => {
     const requireAdmin = await loadRequireAdmin();
     const req = {
-      user: { id: '3', organizationId: 'org-1', email: 'seguridad.acp.cl@gmail.com', name: 'Legacy', rol: 'SOCIO', organization: FAKE_ORG },
+      user: {
+        id: '3',
+        organizationId: 'org-1',
+        email: 'seguridad.acp.cl@gmail.com',
+        name: 'Legacy',
+        rol: 'SOCIO',
+        organization: FAKE_ORG,
+      },
     } as unknown as Request;
     const res = fakeResponse();
     const { next, state } = fakeNext();
@@ -115,7 +140,16 @@ describe('requireAdmin', () => {
 describe('requireCanInvite', () => {
   it('calls next() for a user with rol ADMIN', async () => {
     const requireCanInvite = await loadRequireCanInvite();
-    const req = { user: { id: '1', organizationId: 'org-1', email: 'admin@club.cl', name: 'Admin', rol: 'ADMIN', organization: FAKE_ORG } } as unknown as Request;
+    const req = {
+      user: {
+        id: '1',
+        organizationId: 'org-1',
+        email: 'admin@club.cl',
+        name: 'Admin',
+        rol: 'ADMIN',
+        organization: FAKE_ORG,
+      },
+    } as unknown as Request;
     const res = fakeResponse();
     const { next, state } = fakeNext();
 
@@ -127,7 +161,16 @@ describe('requireCanInvite', () => {
 
   it('calls next() for a user with rol LIDER', async () => {
     const requireCanInvite = await loadRequireCanInvite();
-    const req = { user: { id: '2', organizationId: 'org-1', email: 'lider@club.cl', name: 'Lider', rol: 'LIDER', organization: FAKE_ORG } } as unknown as Request;
+    const req = {
+      user: {
+        id: '2',
+        organizationId: 'org-1',
+        email: 'lider@club.cl',
+        name: 'Lider',
+        rol: 'LIDER',
+        organization: FAKE_ORG,
+      },
+    } as unknown as Request;
     const res = fakeResponse();
     const { next, state } = fakeNext();
 
@@ -139,7 +182,16 @@ describe('requireCanInvite', () => {
 
   it('responds 403 and does not call next() for a user with rol SOCIO', async () => {
     const requireCanInvite = await loadRequireCanInvite();
-    const req = { user: { id: '3', organizationId: 'org-1', email: 'socio@club.cl', name: 'Socio', rol: 'SOCIO', organization: FAKE_ORG } } as unknown as Request;
+    const req = {
+      user: {
+        id: '3',
+        organizationId: 'org-1',
+        email: 'socio@club.cl',
+        name: 'Socio',
+        rol: 'SOCIO',
+        organization: FAKE_ORG,
+      },
+    } as unknown as Request;
     const res = fakeResponse();
     const { next, state } = fakeNext();
 

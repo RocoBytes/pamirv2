@@ -16,9 +16,7 @@ export interface CreateUserArgs {
   org: string;
 }
 
-export type ParseCreateUserArgsResult =
-  | { success: true; data: CreateUserArgs }
-  | { success: false; errors: string[] };
+export type ParseCreateUserArgsResult = { success: true; data: CreateUserArgs } | { success: false; errors: string[] };
 
 const USAGE_ERROR =
   'Argumentos inválidos. Flags permitidos: --email <email>, --name "<nombre>", --rol <SOCIO|LIDER|ADMIN>, ' +

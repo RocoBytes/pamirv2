@@ -6,10 +6,7 @@ import { instanteSantiago } from '../lib/santiago-time.js';
 import { prisma } from '../lib/prisma.js';
 import { Evento, Prisma } from '../generated/prisma/client.js';
 import { isAdmin } from '../lib/authz.js';
-import {
-  despacharNotificacionesPendientes,
-  DispatchEnCursoError,
-} from '../lib/notificaciones.js';
+import { despacharNotificacionesPendientes, DispatchEnCursoError } from '../lib/notificaciones.js';
 import { getFileStorage } from '../lib/storage/get-file-storage.js';
 import { buildObjectKey } from '../lib/storage/object-key.js';
 import { deleteStoredFileBestEffort } from '../lib/storage/delete-best-effort.js';
@@ -56,15 +53,9 @@ function fechaSantiagoDe(instante: Date): string {
 
 // ─── Validación ───────────────────────────────────────────────────────────────
 
-const horaField = z
-  .string()
-  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Formato de hora inválido (se espera HH:MM)');
+const horaField = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Formato de hora inválido (se espera HH:MM)');
 
-const tituloField = z
-  .string()
-  .trim()
-  .min(2, 'El título es muy corto')
-  .max(150, 'El título supera los 150 caracteres');
+const tituloField = z.string().trim().min(2, 'El título es muy corto').max(150, 'El título supera los 150 caracteres');
 
 const texto300 = z.string().trim().max(300, 'El campo supera los 300 caracteres');
 const texto5000 = z.string().trim().max(5000, 'El campo supera los 5000 caracteres');
@@ -687,9 +678,7 @@ export async function cancelarEvento(req: Request, res: Response): Promise<void>
     res.json(serializeEvento(cancelado));
 
     if (hayAvisos) {
-      despacharNotificacionesPendientes(id).catch((err) =>
-        console.error('[cancelarEvento] dispatch:', err),
-      );
+      despacharNotificacionesPendientes(id).catch((err) => console.error('[cancelarEvento] dispatch:', err));
     }
   } catch (error) {
     console.error('[cancelarEvento]', error);
@@ -864,9 +853,7 @@ export async function finalizarEvento(req: Request, res: Response): Promise<void
 
     res.json(resultado);
 
-    despacharNotificacionesPendientes(id).catch((err) =>
-      console.error('[finalizarEvento] dispatch:', err),
-    );
+    despacharNotificacionesPendientes(id).catch((err) => console.error('[finalizarEvento] dispatch:', err));
   } catch (error) {
     if (error instanceof HttpError) {
       res.status(error.status).json({ error: error.message });

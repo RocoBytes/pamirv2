@@ -1,10 +1,5 @@
 import { Router } from 'express';
-import {
-  verifyEmail,
-  login,
-  forgotPassword,
-  resetPassword,
-} from '../controllers/auth.controller.js';
+import { verifyEmail, login, forgotPassword, resetPassword } from '../controllers/auth.controller.js';
 import { consultarInvitacion, aceptarInvitacion } from '../controllers/invitaciones.controller.js';
 
 const router = Router();

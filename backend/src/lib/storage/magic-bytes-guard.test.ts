@@ -19,10 +19,7 @@ const PRONOSTICO: MagicBytesGuardOptions = {
 };
 
 /** Pasa los chunks por el guard y devuelve lo que sale, o el error que aborta. */
-async function run(
-  chunks: (Buffer | string)[],
-  options: MagicBytesGuardOptions = PDF_ONLY,
-): Promise<Buffer> {
+async function run(chunks: (Buffer | string)[], options: MagicBytesGuardOptions = PDF_ONLY): Promise<Buffer> {
   const salida: Buffer[] = [];
   const guard = new MagicBytesGuard(options);
   guard.on('data', (c: Buffer) => salida.push(c));
@@ -30,10 +27,7 @@ async function run(
   return Buffer.concat(salida);
 }
 
-async function expectRejects(
-  chunks: (Buffer | string)[],
-  options: MagicBytesGuardOptions = PDF_ONLY,
-): Promise<void> {
+async function expectRejects(chunks: (Buffer | string)[], options: MagicBytesGuardOptions = PDF_ONLY): Promise<void> {
   await assert.rejects(
     () => run(chunks, options),
     (err: NodeJS.ErrnoException) => {
@@ -99,10 +93,10 @@ describe('MagicBytesGuard — GPX (tolerante, formato de texto)', () => {
 
   it('acepta un BOM UTF-8 delante, que anteponen varios exportadores', async () => {
     const bom = Buffer.from([0xef, 0xbb, 0xbf]);
-    const salida = await run([Buffer.concat([bom, Buffer.from(TRACK)])], GPX)
-    assert.ok(salida.toString().includes('<gpx'))
+    const salida = await run([Buffer.concat([bom, Buffer.from(TRACK)])], GPX);
+    assert.ok(salida.toString().includes('<gpx'));
     // El BOM se conserva: el guard valida, no reescribe el archivo.
-    assert.deepEqual(salida.subarray(0, 3), bom)
+    assert.deepEqual(salida.subarray(0, 3), bom);
   });
 
   it('acepta saltos de línea antes de la declaración', async () => {

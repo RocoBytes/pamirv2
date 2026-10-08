@@ -22,7 +22,7 @@ describe('resolveResetBrandingOrganizationId', () => {
     assert.equal(resolveResetBrandingOrganizationId([], null), null);
   });
 
-  it('reduces to today\'s only membership when nobody sends X-Club yet (single-membership world, Global Constraint)', () => {
+  it("reduces to today's only membership when nobody sends X-Club yet (single-membership world, Global Constraint)", () => {
     const memberships = [{ organizationId: 'org-solo' }];
     assert.equal(resolveResetBrandingOrganizationId(memberships, null), 'org-solo');
   });

@@ -7,7 +7,13 @@ import type { RolUsuario, ModoCodigoQr } from '../generated/prisma/client.js';
 import { emailField, nameField, passwordField } from '../lib/auth-fields.js';
 import { canInvite, isAdmin } from '../lib/authz.js';
 import type { PublicOrganizationBrand } from '../lib/serializers/organization.js';
-import { generateInviteToken, hashInviteToken, puedeInvitarRol, INVITE_TTL_MS, ROL_LABELS } from '../lib/invitaciones.js';
+import {
+  generateInviteToken,
+  hashInviteToken,
+  puedeInvitarRol,
+  INVITE_TTL_MS,
+  ROL_LABELS,
+} from '../lib/invitaciones.js';
 import {
   QR_DURACIONES,
   QR_DURACION_DEFAULT,

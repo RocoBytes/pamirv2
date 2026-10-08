@@ -77,12 +77,9 @@ export function cifrarTokenQr(token: string, secret: string): string {
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   const ciphertext = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
-  return [
-    PAYLOAD_VERSION,
-    iv.toString('base64url'),
-    tag.toString('base64url'),
-    ciphertext.toString('base64url'),
-  ].join('.');
+  return [PAYLOAD_VERSION, iv.toString('base64url'), tag.toString('base64url'), ciphertext.toString('base64url')].join(
+    '.',
+  );
 }
 
 // Devuelve null ante CUALQUIER fallo (clave equivocada, payload alterado,

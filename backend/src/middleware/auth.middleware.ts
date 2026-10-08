@@ -23,11 +23,7 @@ const ORGANIZATION_SELECT = {
   logoObjectKey: true,
 } as const;
 
-export async function authMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
+export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith('Bearer ')) {
@@ -130,11 +126,7 @@ export async function authMiddleware(
   }
 }
 
-export function requireAuth(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
+export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   if (!req.user) {
     res.status(401).json({ error: 'Autenticación requerida' });
     return;
@@ -145,11 +137,7 @@ export function requireAuth(
 // Autorización por columna rol: promover o degradar a un administrador es un
 // UPDATE en la base de datos (o `npm run db:create-user -- ... --rol ADMIN
 // --force`), sin redeploy.
-export function requireAdmin(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   if (!isAdmin(req.user)) {
     res.status(403).json({ error: 'Acceso restringido al administrador' });
     return;
@@ -159,11 +147,7 @@ export function requireAdmin(
 
 // Sistema cerrado: solo ADMIN y LIDER pueden invitar cuentas nuevas (un LIDER
 // solo puede invitar SOCIOS — ver lib/invitaciones.ts).
-export function requireCanInvite(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
+export function requireCanInvite(req: Request, res: Response, next: NextFunction): void {
   if (!canInvite(req.user)) {
     res.status(403).json({ error: 'No tienes permiso para invitar' });
     return;
@@ -176,11 +160,7 @@ export function requireCanInvite(
 // cualquier otro gestor pasa con sus categorías asignadas en
 // req.gestorCategoriaIds. Asignar un gestor no-LIDER es un INSERT en
 // gestores_categoria (ver lib/gestores-eventos.ts).
-export async function requireGestorEventos(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
+export async function requireGestorEventos(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (!req.user) {
     res.status(403).json({ error: 'Acceso restringido a gestores de eventos' });
     return;

@@ -1,5 +1,9 @@
 import { Router } from 'express';
-import { consultarCodigoQr, solicitarInvitacionQr, registrarConQrDirecto } from '../controllers/codigos-qr.controller.js';
+import {
+  consultarCodigoQr,
+  solicitarInvitacionQr,
+  registrarConQrDirecto,
+} from '../controllers/codigos-qr.controller.js';
 
 const router = Router();
 

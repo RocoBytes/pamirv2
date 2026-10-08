@@ -19,52 +19,43 @@ interface MesRow {
 // GET /api/admin/stats
 export async function getStats(_req: Request, res: Response): Promise<void> {
   try {
-    const [
-      totalSalidas,
-      porStatus,
-      totalCierres,
-      incidentes,
-      accidentes,
-      porMesRaw,
-      topDisciplinasRaw,
-    ] = await prisma.$transaction([
-      prisma.salida.count(),
-      prisma.salida.groupBy({ by: ['status'], _count: { _all: true } }),
-      prisma.cierre.count(),
-      prisma.cierre.count({ where: { ocurrioIncidente: 'SI' } }),
-      prisma.cierre.count({ where: { ocurrioAccidente: 'SI' } }),
-      // Salidas per month over the last 12 months (table mapped as "salidas").
-      // Timezone contract: fecha_inicio is stored as midnight UTC of the
-      // user's intended calendar date, so UTC DATE_TRUNC yields the intended
-      // month directly — converting with AT TIME ZONE would shift it wrong.
-      // El SQL crudo es invisible para la extensión de aislamiento de
-      // lib/prisma.ts (no pasa por $allOperations), así que el filtro por
-      // club se agrega acá a mano, parametrizado.
-      prisma.$queryRaw<MesRow[]>`
+    const [totalSalidas, porStatus, totalCierres, incidentes, accidentes, porMesRaw, topDisciplinasRaw] =
+      await prisma.$transaction([
+        prisma.salida.count(),
+        prisma.salida.groupBy({ by: ['status'], _count: { _all: true } }),
+        prisma.cierre.count(),
+        prisma.cierre.count({ where: { ocurrioIncidente: 'SI' } }),
+        prisma.cierre.count({ where: { ocurrioAccidente: 'SI' } }),
+        // Salidas per month over the last 12 months (table mapped as "salidas").
+        // Timezone contract: fecha_inicio is stored as midnight UTC of the
+        // user's intended calendar date, so UTC DATE_TRUNC yields the intended
+        // month directly — converting with AT TIME ZONE would shift it wrong.
+        // El SQL crudo es invisible para la extensión de aislamiento de
+        // lib/prisma.ts (no pasa por $allOperations), así que el filtro por
+        // club se agrega acá a mano, parametrizado.
+        prisma.$queryRaw<MesRow[]>`
         SELECT DATE_TRUNC('month', fecha_inicio) AS mes, COUNT(*) AS total
         FROM "salidas"
         WHERE fecha_inicio >= NOW() - INTERVAL '12 months' AND organization_id = ${requireOrganizationId()}
         GROUP BY mes
         ORDER BY mes DESC
       `,
-      prisma.salida.groupBy({
-        by: ['disciplina'],
-        _count: { _all: true },
-        // Prisma's aggregate orderBy only accepts field names (no _all);
-        // disciplina is non-nullable so its count equals the row count.
-        orderBy: { _count: { disciplina: 'desc' } },
-        take: 5,
-      }),
-    ]);
+        prisma.salida.groupBy({
+          by: ['disciplina'],
+          _count: { _all: true },
+          // Prisma's aggregate orderBy only accepts field names (no _all);
+          // disciplina is non-nullable so its count equals the row count.
+          orderBy: { _count: { disciplina: 'desc' } },
+          take: 5,
+        }),
+      ]);
 
-    const countFor = (status: string): number =>
-      porStatus.find((s) => s.status === status)?._count._all ?? 0;
+    const countFor = (status: string): number => porStatus.find((s) => s.status === status)?._count._all ?? 0;
 
     const salidasAbiertas = countFor('EN_CURSO');
     const salidasCompletadas = countFor('COMPLETADA');
     // Salida-form vs cierre-form relation: how many salidas have a cierre filed
-    const pctConCierre =
-      totalSalidas > 0 ? Math.round((totalCierres / totalSalidas) * 100) : 0;
+    const pctConCierre = totalSalidas > 0 ? Math.round((totalCierres / totalSalidas) * 100) : 0;
 
     // $queryRaw COUNT returns BigInt — convert before JSON serialization
     const porMes = porMesRaw.map((r) => ({
@@ -96,14 +87,7 @@ export async function getStats(_req: Request, res: Response): Promise<void> {
 
 // ─── Analytics dashboard ────────────────────────────────────────────────────────
 
-const SALIDA_STATUSES: SalidaStatus[] = [
-  'BORRADOR',
-  'CONFIRMADA',
-  'EN_CURSO',
-  'COMPLETADA',
-  'CANCELADA',
-  'INCIDENTE',
-];
+const SALIDA_STATUSES: SalidaStatus[] = ['BORRADOR', 'CONFIRMADA', 'EN_CURSO', 'COMPLETADA', 'CANCELADA', 'INCIDENTE'];
 
 // Statuses that are expected to eventually file a cierre. BORRADOR/CANCELADA
 // salidas without a cierre are NOT "pending closure".
@@ -148,9 +132,7 @@ function parseStringArray(v: unknown): string[] {
 }
 
 function distinctSorted(values: (string | null)[]): string[] {
-  const set = new Set(
-    values.filter((x): x is string => typeof x === 'string' && x.trim() !== ''),
-  );
+  const set = new Set(values.filter((x): x is string => typeof x === 'string' && x.trim() !== ''));
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
 }
 
@@ -173,8 +155,7 @@ export async function getDashboard(req: Request, res: Response): Promise<void> {
     const conAccidente = pickBool(req.query['conAccidente']);
     const conExpress = pickBool(req.query['conExpress']);
     const clubRaw = pickString(req.query['club']);
-    const club =
-      clubRaw && (MEMBRESIA_CLUBS as readonly string[]).includes(clubRaw) ? clubRaw : undefined;
+    const club = clubRaw && (MEMBRESIA_CLUBS as readonly string[]).includes(clubRaw) ? clubRaw : undefined;
     const calidadMinRaw = pickString(req.query['calidadMin']);
     const calidadMinParsed = calidadMinRaw ? Number(calidadMinRaw) : NaN;
     const calidadMin = Number.isFinite(calidadMinParsed) ? calidadMinParsed : undefined;
@@ -239,9 +220,7 @@ export async function getDashboard(req: Request, res: Response): Promise<void> {
     // Club filter: keep salidas with at least one participant in the selected
     // club (express participants carry no membresiaClub, so they never match).
     if (club !== undefined) {
-      filtered = filtered.filter((s) =>
-        parseParticipantes(s.participantes).some((p) => p?.membresiaClub === club),
-      );
+      filtered = filtered.filter((s) => parseParticipantes(s.participantes).some((p) => p?.membresiaClub === club));
     }
     if (conIncidente !== undefined) {
       filtered = filtered.filter((s) => {
@@ -386,9 +365,7 @@ export async function getDashboard(req: Request, res: Response): Promise<void> {
       }
     }
     const promedioCalidad =
-      finalEvaluaciones.length > 0
-        ? Math.round((calidadSum / finalEvaluaciones.length) * 100) / 100
-        : null;
+      finalEvaluaciones.length > 0 ? Math.round((calidadSum / finalEvaluaciones.length) * 100) / 100 : null;
 
     const sortMonthsAsc = (a: string, b: string): number => a.localeCompare(b);
 
@@ -426,10 +403,8 @@ export async function getDashboard(req: Request, res: Response): Promise<void> {
       .sort(([a], [b]) => a - b)
       .map(([nota, total]) => ({ nota, total }));
 
-    const promedioParticipantes =
-      totalSalidas > 0 ? Math.round((totalParticipantes / totalSalidas) * 10) / 10 : 0;
-    const pctConCierre =
-      totalSalidas > 0 ? Math.round((conCierreCount / totalSalidas) * 100) : 0;
+    const promedioParticipantes = totalSalidas > 0 ? Math.round((totalParticipantes / totalSalidas) * 10) / 10 : 0;
+    const pctConCierre = totalSalidas > 0 ? Math.round((conCierreCount / totalSalidas) * 100) : 0;
 
     res.json({
       metrics: {
@@ -513,13 +488,17 @@ const ACTIVE_SALUD_STATUSES = ['EN_CURSO', 'CONFIRMADA'];
  * Names come from the salida.participantes JSON (source of truth for the trip),
  * health records from the Integrante model keyed by RUT.
  */
-async function buildParticipantesSalud(
-  salidaId: string,
-): Promise<
+async function buildParticipantesSalud(salidaId: string): Promise<
   | { notFound: true }
   | { notActive: true }
   | {
-      salida: { id: string; nombreActividad: string; liderCordada: string; creatorEmail: string | null; userId: string | null };
+      salida: {
+        id: string;
+        nombreActividad: string;
+        liderCordada: string;
+        creatorEmail: string | null;
+        userId: string | null;
+      };
       participantes: ParticipanteSaludEmailData[];
     }
 > {
@@ -539,14 +518,11 @@ async function buildParticipantesSalud(
   if (!salida) return { notFound: true };
   if (!ACTIVE_SALUD_STATUSES.includes(salida.status)) return { notActive: true };
 
-  const participantesJson = (Array.isArray(salida.participantes)
-    ? (salida.participantes as SalidaParticipanteJson[])
-    : []
+  const participantesJson = (
+    Array.isArray(salida.participantes) ? (salida.participantes as SalidaParticipanteJson[]) : []
   ).filter((p) => Boolean(p.rut) || Boolean(p.nombre));
 
-  const ruts = participantesJson
-    .map((p) => p.rut)
-    .filter((r): r is string => typeof r === 'string' && r.length > 0);
+  const ruts = participantesJson.map((p) => p.rut).filter((r): r is string => typeof r === 'string' && r.length > 0);
 
   const integrantes = await prisma.integrante.findMany({
     where: { rut: { in: ruts } },
