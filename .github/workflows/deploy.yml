@@ -31,6 +31,7 @@ jobs:
       - run: npx prisma generate
 
       - run: npm run lint
+      - run: npm run format:check
       # Includes the *.test.ts files, which `npm run build` (tsc → dist)
       # deliberately leaves out.
       - run: npm run typecheck
@@ -53,6 +54,7 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
+      - run: npm run format:check
       # The Playwright specs and playwright.config.ts are not part of `tsc -b`
       # (and so of `npm run build`): the Docker build context excludes them.
       - run: npm run typecheck:e2e
