@@ -51,12 +51,7 @@ export function QrCode({ value, size = 160, alt, className }: QrCodeProps) {
 
   if (!current) {
     return (
-      <div
-        role="status"
-        aria-label="Generando código QR"
-        className={className}
-        style={{ width: size, height: size }}
-      >
+      <div role="status" aria-label="Generando código QR" className={className} style={{ width: size, height: size }}>
         <div className="flex h-full w-full items-center justify-center rounded-lg bg-surface-container-low">
           <Loader2 size={20} className="animate-spin text-on-surface-variant" />
         </div>

@@ -1,23 +1,14 @@
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowRight, ChevronLeft } from 'lucide-react'
 import { Button } from '../ui/Button'
 import type { MedioComunicacion, EquipoColectivoSeguridad } from '../../types/salida'
-import {
-  MEDIO_COMUNICACION_LABELS,
-  EQUIPO_COLECTIVO_LABELS,
-} from '../../types/salida'
+import { MEDIO_COMUNICACION_LABELS, EQUIPO_COLECTIVO_LABELS } from '../../types/salida'
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
-const MEDIOS = [
-  'RADIO_VHF_UHF',
-  'TELEFONO_SATELITAL',
-  'INREACH_SPOT',
-  'CELULAR',
-  'NINGUNO',
-] as const
+const MEDIOS = ['RADIO_VHF_UHF', 'TELEFONO_SATELITAL', 'INREACH_SPOT', 'CELULAR', 'NINGUNO'] as const
 
 const EQUIPOS = [
   'CUERDAS',
@@ -31,13 +22,9 @@ const EQUIPOS = [
 ] as const
 
 const step4Schema = z.object({
-  mediosComunicacion: z
-    .array(z.enum(MEDIOS))
-    .min(1, 'Selecciona al menos un medio de comunicación'),
+  mediosComunicacion: z.array(z.enum(MEDIOS)).min(1, 'Selecciona al menos un medio de comunicación'),
   idDispositivoFrecuencia: z.string().max(100, 'Máximo 100 caracteres'),
-  equipoColectivo: z
-    .array(z.enum(EQUIPOS))
-    .min(1, 'Selecciona al menos una opción'),
+  equipoColectivo: z.array(z.enum(EQUIPOS)).min(1, 'Selecciona al menos una opción'),
   equipoColectivoOtro: z.string().max(100, 'Máximo 100 caracteres'),
 })
 
@@ -99,28 +86,17 @@ function CheckboxGroup<T extends string>({
                   : 'bg-white border-secondary/25 text-slate-700 hover:border-primary/40 hover:bg-surface-container-low',
               ].join(' ')}
             >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => toggle(opt)}
-                className="sr-only"
-              />
+              <input type="checkbox" checked={checked} onChange={() => toggle(opt)} className="sr-only" />
               {/* Custom checkbox indicator */}
               <span
                 className={[
                   'flex items-center justify-center w-4 h-4 rounded border shrink-0 transition-colors',
-                  checked
-                    ? 'bg-primary border-primary'
-                    : 'bg-white border-secondary/50',
+                  checked ? 'bg-primary border-primary' : 'bg-white border-secondary/50',
                 ].join(' ')}
                 aria-hidden="true"
               >
                 {checked && (
-                  <svg
-                    viewBox="0 0 12 10"
-                    fill="none"
-                    className="w-2.5 h-2.5"
-                  >
+                  <svg viewBox="0 0 12 10" fill="none" className="w-2.5 h-2.5">
                     <path
                       d="M1 5l3.5 3.5L11 1"
                       stroke="white"
@@ -155,23 +131,18 @@ interface Step4CommunicationsProps {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function Step4Communications({
-  defaultValues,
-  onSubmit,
-  onBack,
-}: Step4CommunicationsProps) {
+export function Step4Communications({ defaultValues, onSubmit, onBack }: Step4CommunicationsProps) {
   const {
     control,
     register,
     handleSubmit,
-    watch,
     formState: { errors },
   } = useForm<Step4Data>({
     resolver: zodResolver(step4Schema),
     defaultValues,
   })
 
-  const equipoColectivo = watch('equipoColectivo')
+  const equipoColectivo = useWatch({ control, name: 'equipoColectivo' })
   const showOtroInput = equipoColectivo?.includes('OTRO')
 
   return (
@@ -195,12 +166,8 @@ export function Step4Communications({
 
       {/* ID Dispositivo / Frecuencia Radial */}
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="idDispositivoFrecuencia"
-          className="text-sm font-semibold text-primary"
-        >
-          ID de Dispositivo / Frecuencia Radial{' '}
-          <span className="text-on-surface-variant font-normal">(opcional)</span>
+        <label htmlFor="idDispositivoFrecuencia" className="text-sm font-semibold text-primary">
+          ID de Dispositivo / Frecuencia Radial <span className="text-on-surface-variant font-normal">(opcional)</span>
         </label>
         <input
           id="idDispositivoFrecuencia"
@@ -211,9 +178,7 @@ export function Step4Communications({
           className={[
             'w-full px-3 py-2.5 rounded-xl border bg-white text-sm text-slate-800',
             'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
-            errors.idDispositivoFrecuencia
-              ? 'border-error'
-              : 'border-secondary/30',
+            errors.idDispositivoFrecuencia ? 'border-error' : 'border-secondary/30',
           ].join(' ')}
         />
         {errors.idDispositivoFrecuencia && (
@@ -244,10 +209,7 @@ export function Step4Communications({
         {/* "Otro" free-text field — shown only when OTRO is checked */}
         {showOtroInput && (
           <div className="flex flex-col gap-1.5 pl-7">
-            <label
-              htmlFor="equipoColectivoOtro"
-              className="text-xs font-semibold text-primary"
-            >
+            <label htmlFor="equipoColectivoOtro" className="text-xs font-semibold text-primary">
               Especifica el equipo adicional
             </label>
             <input
@@ -259,9 +221,7 @@ export function Step4Communications({
               className={[
                 'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800',
                 'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
-                errors.equipoColectivoOtro
-                  ? 'border-error'
-                  : 'border-secondary/30',
+                errors.equipoColectivoOtro ? 'border-error' : 'border-secondary/30',
               ].join(' ')}
             />
             {errors.equipoColectivoOtro && (

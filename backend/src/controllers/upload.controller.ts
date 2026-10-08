@@ -91,7 +91,7 @@ export async function uploadGpx(req: Request, res: Response): Promise<void> {
   const busboy = Busboy({
     headers: req.headers,
     limits: {
-      files: 1,             // solo un archivo por request
+      files: 1, // solo un archivo por request
       fileSize: MAX_FILE_SIZE,
     },
   });

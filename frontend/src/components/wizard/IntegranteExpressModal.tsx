@@ -41,11 +41,10 @@ export function ExpressResponsibilityModal({ onCancel, onConfirm }: ExpressRespo
 
         <div className="px-5 py-4">
           <p className="text-sm text-slate-700 leading-relaxed">
-            Si estás agregando personas que aún no han creado su ficha en el sistema, como responsable
-            de la salida debes conocer y tener a mano su información de salud relevante: enfermedades
-            preexistentes, medicación habitual y alergias. Esta información es fundamental para actuar
-            correctamente ante una emergencia en terreno. Al confirmar su participación, estás asumiendo
-            esta responsabilidad.
+            Si estás agregando personas que aún no han creado su ficha en el sistema, como responsable de la salida
+            debes conocer y tener a mano su información de salud relevante: enfermedades preexistentes, medicación
+            habitual y alergias. Esta información es fundamental para actuar correctamente ante una emergencia en
+            terreno. Al confirmar su participación, estás asumiendo esta responsabilidad.
           </p>
         </div>
 

@@ -24,10 +24,7 @@ describe('buildClubSender', () => {
   });
 
   it('elimina CR/LF y comillas del nombre para evitar inyección de cabeceras', () => {
-    const result = buildClubSender(
-      { name: 'Club\r\nBcc: atacante@evil.com "raro"' },
-      'notificaciones@riala.cl',
-    );
+    const result = buildClubSender({ name: 'Club\r\nBcc: atacante@evil.com "raro"' }, 'notificaciones@riala.cl');
     assert.equal(result.from.includes('\r'), false);
     assert.equal(result.from.includes('\n'), false);
     assert.equal(result.from.includes('"raro"'), false);
@@ -56,7 +53,7 @@ describe('buildClubSender', () => {
 
 describe('sendClubEmail', () => {
   it('kind="notificacion" envía desde la dirección de notificaciones, con el nombre del club y el reply-to del soporte de RIALA', async () => {
-    const send = mock.fn(() => Promise.resolve({ id: 'sent-1' }));
+    const send = mock.fn<EmailProvider['send']>(() => Promise.resolve({ id: 'sent-1' }));
     const provider: EmailProvider = { send };
 
     const id = await sendClubEmail(
@@ -83,7 +80,7 @@ describe('sendClubEmail', () => {
   });
 
   it('kind="alerta" envía desde la dirección de alertas de seguridad', async () => {
-    const send = mock.fn(() => Promise.resolve({ id: 'sent-alerta' }));
+    const send = mock.fn<EmailProvider['send']>(() => Promise.resolve({ id: 'sent-alerta' }));
     const provider: EmailProvider = { send };
 
     await sendClubEmail(
@@ -97,7 +94,7 @@ describe('sendClubEmail', () => {
   });
 
   it('usa el soporte de RIALA como reply-to aunque el contacto del club no sea un email válido', async () => {
-    const send = mock.fn(() => Promise.resolve({ id: 'sent-2' }));
+    const send = mock.fn<EmailProvider['send']>(() => Promise.resolve({ id: 'sent-2' }));
     const provider: EmailProvider = { send };
 
     await sendClubEmail(

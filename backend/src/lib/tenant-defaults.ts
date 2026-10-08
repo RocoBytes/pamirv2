@@ -41,16 +41,14 @@ export const DEFAULT_CATEGORIAS_EVENTO: readonly DefaultCategoriaEvento[] = [
 
 export const DEFAULT_DECLARACION_VERSION = '2026-08';
 
-export const DEFAULT_DECLARACION_TITULO =
-  'DECLARACIÓN JURADA DEL PARTICIPANTE — Declaro bajo mi responsabilidad que:';
+export const DEFAULT_DECLARACION_TITULO = 'DECLARACIÓN JURADA DEL PARTICIPANTE — Declaro bajo mi responsabilidad que:';
 
 export const DEFAULT_DECLARACION_ITEMS: readonly string[] = [
   'Me encuentro en condiciones físicas aptas para la actividad descrita. No tengo lesiones activas, ' +
     'enfermedades agudas ni condiciones de salud que comprometan mi seguridad o la del grupo.',
   'He informado al líder de la actividad sobre mis condiciones de salud, medicamentos y alergias ' +
     'relevantes, a través de mi ficha de socio.',
-  'Cuento con el equipamiento mínimo exigido en la ficha técnica de esta actividad y sé utilizarlo ' +
-    'correctamente.',
+  'Cuento con el equipamiento mínimo exigido en la ficha técnica de esta actividad y sé utilizarlo ' + 'correctamente.',
   'Tengo la experiencia señalada en el protocolo correspondiente al nivel de esta actividad, y la he ' +
     'declarado con veracidad en mi ficha de experiencia.',
   'Acepto y me comprometo a respetar las instrucciones del líder de la actividad en terreno, incluyendo ' +
@@ -65,7 +63,9 @@ export const DEFAULT_DECLARACION_ITEMS: readonly string[] = [
 // hash_sha256 = sha256(titulo + '\n' + items.join('\n')). Ver
 // tenant-defaults.test.ts para la prueba que reproduce el literal ahí grabado.
 export function computeDeclaracionHash(titulo: string, items: readonly string[]): string {
-  return createHash('sha256').update(titulo + '\n' + items.join('\n')).digest('hex');
+  return createHash('sha256')
+    .update(titulo + '\n' + items.join('\n'))
+    .digest('hex');
 }
 
 export interface DefaultDeclaracion {

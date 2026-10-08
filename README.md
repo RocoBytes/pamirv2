@@ -5,13 +5,17 @@ Sistema de registro de salidas de montaña — stack PERN.
 **Frontend**: React 19 + Vite 8 + TypeScript + Tailwind CSS (Fase 4)
 **Backend**: Express 4 + TypeScript
 **Base de datos**: PostgreSQL en Neon.tech (Fase 2)
-**Despliegue**: Docker Compose en VPS (Contabo) detrás de Cloudflare — `https://andinoclubpamir.app`
+**Despliegue**: Docker Compose en un servidor compartido, detrás de su Traefik — `https://riala.cl`
+(dominio de la plataforma). El dominio anterior, `andinoclubpamir.app`, no está configurado en este
+repositorio: el nginx de la imagen solo atiende `riala.cl` y `www.riala.cl` y responde `444` a cualquier otro
+`Host`. Si ese dominio sigue respondiendo, lo hace por el enrutamiento del Traefik del servidor, que no
+está versionado aquí. Ver [Despliegue](#despliegue).
 
 ---
 
 ## Requisitos
 
-- Node.js 18+
+- Node.js 24 (ver `.nvmrc`; las imágenes Docker usan `node:24`)
 - npm 10+
 
 ---
@@ -25,7 +29,10 @@ cd frontend
 npm install
 npm run dev        # servidor Vite en http://localhost:5173
 npm run build      # type-check + build → frontend/dist/
-npm run lint       # ESLint + Prettier rules
+npm run lint        # ESLint
+npm run format:check  # Prettier (npm run format lo aplica)
+npm run typecheck:e2e # tipos de los specs de Playwright
+npm test           # vitest
 npm run preview    # previsualizar build de producción
 ```
 
@@ -34,11 +41,13 @@ npm run preview    # previsualizar build de producción
 ```bash
 cd backend
 npm install
-npm run dev        # ts-node-dev con hot reload en http://localhost:3001
+npm run dev        # tsx watch con hot reload en http://localhost:3001
 npm run build      # tsc → compila a backend/dist/
-npm run start      # node dist/index.js  (comando de producción en Render.com)
+npm run start      # node dist/index.js  (lo que corre el contenedor en producción)
 npm run lint       # ESLint
-npm run format     # Prettier
+npm run format:check  # Prettier (npm run format lo aplica)
+npm run typecheck  # tsc sobre src completo, tests incluidos
+npm test           # node --test
 ```
 
 ### Ambos workspaces desde la raíz
@@ -468,13 +477,13 @@ sin cierre" de sus salidas ya abiertas **siguen enviándose** — la suspensión
 no es una desconexión de emergencia de la seguridad de montaña.
 `tenant:activate` revierte todo lo anterior.
 
-**Producción (VPS)**: el contenedor `backend` de `deploy/docker-compose.yml`
+**Producción**: el contenedor `backend` de `deploy/docker-compose.yml`
 no tiene `backend/db-target.json` ni `tsx` — ahí un script solo corre
 compilado, con `ALLOW_ANY_DB_TARGET=1` (ver `backend/.env.example`) para
 saltarse una guardia pensada para el entorno local:
 
 ```bash
-cd /opt/pamir
+cd <DEPLOY_DIR>   # el directorio del servidor donde vive el docker-compose.yml (ver "Despliegue")
 docker compose exec -e ALLOW_ANY_DB_TARGET=1 backend node dist/scripts/tenant.js list
 docker compose exec -e ALLOW_ANY_DB_TARGET=1 backend node dist/scripts/create-user.js --email ... --name "..." --rol ADMIN --org el-montanista
 ```
@@ -683,12 +692,15 @@ mitad de camino).
 
 ## Despliegue
 
-Arquitectura: un stack de Docker Compose en el VPS. El contenedor `nginx`
-(imagen del frontend) termina TLS con el certificado de origen de Cloudflare,
-sirve el SPA y proxea `/api` al contenedor `backend` (same-origin, sin CORS).
-La base de datos permanece en Neon.tech; los archivos van a un bucket privado
-de Google Cloud Storage (ver "Archivos en Google Cloud Storage" más abajo).
-Los contenedores son 100% stateless.
+Arquitectura: un stack de Docker Compose (`deploy/docker-compose.yml`, proyecto `riala`) en un
+servidor compartido con otros proyectos. El Traefik de ese servidor es dueño de los puertos 80/443 y
+termina TLS (Let's Encrypt); este stack no publica ningún puerto público ni monta certificados. El
+contenedor `nginx` (imagen del frontend) se une a la red compartida del proxy bajo el alias `riala-web`,
+sirve el SPA y proxea `/api` al contenedor `backend` (same-origin, sin CORS) por la red interna del stack.
+El DNS de `riala.cl` ya no pasa por el proxy de Cloudflare. La base de datos permanece en Neon.tech; los
+archivos van a un bucket privado de Google Cloud Storage (ver "Archivos en Google Cloud Storage" más
+abajo). Los contenedores son 100% stateless y el backend corre siempre en una sola réplica (el rate
+limiting es en memoria).
 
 ### CI/CD (GitHub Actions)
 
@@ -697,27 +709,33 @@ push a `main` despliega por sí solo: publica imágenes nuevas, pero el desplieg
 en espera hasta que una persona lo aprueba.
 
 1. **Cada push y cada pull request** corren los jobs `verify-backend` y
-   `verify-frontend` (lint, tests y build de ambos paquetes).
+   `verify-frontend`: lint, `format:check`, chequeo de tipos (`typecheck` en el backend, `typecheck:e2e`
+   en el frontend), tests y build de ambos paquetes.
 2. **Solo los push a `main`** además construyen y publican
-   `ghcr.io/rocobytes/pamir-backend` y `ghcr.io/rocobytes/pamir-frontend` en GHCR,
+   `ghcr.io/rocobytes/riala-backend` y `ghcr.io/rocobytes/riala-frontend` en GHCR,
    con los tags `latest` y `sha-<commit>`. Los pull requests nunca publican; un
    `workflow_dispatch` manual solo publica si se ejecuta sobre `main`.
 3. El job de despliegue espera entonces la aprobación del entorno `production` de
-   GitHub y no toca el VPS hasta que un revisor la concede. Con esa aprobación:
-   - escribe el `PAMIR_TAG` de esta imagen en `/opt/pamir/.env`,
+   GitHub y no toca el servidor hasta que un revisor la concede. Con esa aprobación:
+   - se une a la red WireGuard del servidor (el puerto 22 no está abierto a internet),
+   - sincroniza `docker-compose.yml` y `bin/check-alertas.sh` en `DEPLOY_DIR`,
+   - escribe el `RIALA_TAG` de esta imagen en `DEPLOY_DIR/.env`,
    - hace `docker compose pull` de las imágenes nuevas,
+   - comprueba que la imagen nueva arranca con el entorno real de producción (un contenedor
+     descartable del backend durante 15 segundos, sin tocar lo que está sirviendo),
    - imprime las migraciones pendientes (`prisma migrate status`),
-   - las aplica,
-   - levanta los contenedores (`docker compose up -d --remove-orphans`),
-   - y verifica `/api/health` antes de darse por terminado.
+   - las aplica (`docker compose run --rm migrate`),
+   - levanta los contenedores (`docker compose up -d --remove-orphans`) y poda solo las imágenes
+     con la etiqueta `cl.riala.stack=riala` (el servidor es compartido),
+   - y verifica `https://riala.cl/api/health` antes de darse por terminado.
 
 La aprobación se dispara antes de que el job arranque, así que quien aprueba **no** ve
 todavía ese listado de `prisma migrate status`: se imprime recién después, dentro del
 job. Para aprobar con conocimiento real de qué migraciones se van a aplicar, antes de
-aprobar hay que conectarse por SSH al VPS y correr:
+aprobar hay que conectarse al servidor (por la red WireGuard) y correr:
 
 ```bash
-cd /opt/pamir && docker compose run --rm migrate npx prisma migrate status
+cd <DEPLOY_DIR> && docker compose run --rm migrate npx prisma migrate status
 ```
 
 El frontend se construye **sin** `VITE_API_URL`: el SPA usa `/api` relativo
@@ -725,43 +743,42 @@ El frontend se construye **sin** `VITE_API_URL`: el SPA usa `/api` relativo
 
 Configuración que el pipeline no puede crear por sí mismo:
 
-- Secrets del entorno `production`: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`.
+- Secrets del entorno `production`: `VPS_HOST` (la dirección del servidor dentro de la red
+  WireGuard), `VPS_USER`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`, `DEPLOY_DIR` (ruta absoluta en el
+  servidor), `WG_PRIVATE_KEY`, `WG_ADDRESS`, `WG_SERVER_PUBLIC_KEY` y `WG_ENDPOINT`.
 - Un entorno `production` en GitHub con un revisor obligatorio.
-- `/opt/pamir/.env` debe existir de antemano con los secrets reales; el paso de
+- `DEPLOY_DIR/.env` debe existir de antemano con los secrets reales; el paso de
   despliegue se niega a continuar si no lo encuentra, para no arriesgarse a
   sobrescribirlo.
 
-**Rollback**: por SSH al VPS, fija `PAMIR_TAG` en `/opt/pamir/.env` a un tag
+**Rollback**: por SSH al servidor, fija `RIALA_TAG` en `DEPLOY_DIR/.env` a un tag
 `sha-` anterior y corre `docker compose up -d`.
 
-### Layout en el VPS
+### Layout en el servidor
 
 ```
-/opt/pamir/
+<DEPLOY_DIR>/
 ├── docker-compose.yml      # sincronizado por el workflow en cada deploy
 ├── .env                    # secrets de producción (chmod 600, nunca en git)
-├── certs/
-│   ├── origin.pem          # certificado de origen de Cloudflare
-│   └── origin.key
 └── bin/
     └── check-alertas.sh    # cron de alarmas (bajo flock, cada 10 min)
 ```
 
-El backend publica su puerto solo en `127.0.0.1:3001` (para el crontab);
-públicamente solo se exponen 80/443 vía nginx.
+El backend publica su puerto solo en `127.0.0.1:3101` (para el crontab; el 3001 del servidor es de
+otro proyecto) y nunca se une a la red del proxy: Traefik solo ve al contenedor `nginx`.
 
 ### Cron de alarmas
 
-`GET /api/cron/check-alertas` corre desde el crontab del VPS (no desde un
+`GET /api/cron/check-alertas` corre desde el crontab del servidor (no desde un
 proveedor externo). El ping anti-cold-start de la era Render quedó obsoleto:
 
 ```cron
-*/10 * * * * flock -n /opt/pamir/check-alertas.lock /opt/pamir/bin/check-alertas.sh >> /opt/pamir/cron.log 2>&1
+*/10 * * * * flock -n <DEPLOY_DIR>/check-alertas.lock <DEPLOY_DIR>/bin/check-alertas.sh >> <DEPLOY_DIR>/cron.log 2>&1
 ```
 
 ### Neon.tech (Base de datos)
 
-Sin cambios: `DATABASE_URL` (pooled) en `/opt/pamir/.env`. Las migraciones las
+Sin cambios: `DATABASE_URL` (pooled) en `DEPLOY_DIR/.env`. Las migraciones las
 aplica el servicio `migrate` del compose en cada deploy.
 
 ---

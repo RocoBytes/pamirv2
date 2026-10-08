@@ -133,7 +133,9 @@ function printTable(rows: ClubListRow[]): void {
     return;
   }
 
-  const widths = COLUMNAS_LISTADO.map((col) => Math.max(col.header.length, ...rows.map((row) => col.value(row).length)));
+  const widths = COLUMNAS_LISTADO.map((col) =>
+    Math.max(col.header.length, ...rows.map((row) => col.value(row).length)),
+  );
   const printRow = (cells: string[]): void => {
     console.log(cells.map((cell, i) => cell.padEnd(widths[i] ?? 0)).join('  '));
   };
@@ -273,7 +275,9 @@ async function runUpdate(deps: TenantsDeps, data: UpdateTenantArgs): Promise<voi
 
   console.log(`[tenant] Club "${data.slug}" actualizado:`);
   for (const cambio of cambios) {
-    console.log(`  ${ETIQUETAS_CAMPO[cambio.campo]}: ${formatValorCampo(cambio.antes)} → ${formatValorCampo(cambio.despues)}`);
+    console.log(
+      `  ${ETIQUETAS_CAMPO[cambio.campo]}: ${formatValorCampo(cambio.antes)} → ${formatValorCampo(cambio.despues)}`,
+    );
   }
 
   // El email de alerta es el destino de la alarma de seguridad "salida sin

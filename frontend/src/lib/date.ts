@@ -20,9 +20,7 @@ export function santiagoOffsetFor(dateStr: string): string {
  * is "HH:MM". Legacy salidas without `horaInicio` fall back to 23:59 (editable
  * through the start day).
  */
-export function departureMoment(
-  salida: Pick<SalidaRecord, 'fechaInicio' | 'horaInicio'>,
-): Date {
+export function departureMoment(salida: Pick<SalidaRecord, 'fechaInicio' | 'horaInicio'>): Date {
   const dateStr = salida.fechaInicio.slice(0, 10)
   const hora = salida.horaInicio || '23:59'
   return new Date(`${dateStr}T${hora}:00${santiagoOffsetFor(dateStr)}`)

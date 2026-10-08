@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import type { Route } from '@playwright/test'
 import {
   setAuth,
@@ -75,9 +75,7 @@ test.describe('Dashboard – estado bloqueado (sin integrante)', () => {
   test('muestra card de Formulario de Salida bloqueado con ícono de candado', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByLabel('Formulario de salida bloqueado')).toBeVisible()
-    await expect(
-      page.getByText('Completa tu ficha de integrante para desbloquear'),
-    ).toBeVisible()
+    await expect(page.getByText('Completa tu ficha de integrante para desbloquear')).toBeVisible()
   })
 
   test('muestra botón de acción rápida para completar ficha', async ({ page }) => {
@@ -150,9 +148,7 @@ test.describe('Dashboard – estado administrador', () => {
   test('muestra botón Registrar Integrante (admin con ficha propia)', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByText('Mis Salidas')).toBeVisible()
-    await expect(
-      page.getByText('Crear ficha sin necesidad de asociar una salida'),
-    ).toBeVisible()
+    await expect(page.getByText('Crear ficha sin necesidad de asociar una salida')).toBeVisible()
   })
 })
 
@@ -160,7 +156,9 @@ test.describe('Dashboard – sesión no autenticada', () => {
   test('muestra pantalla de login sin auth en localStorage', async ({ page }) => {
     await page.goto('/')
     // No auth state set — should show the AuthPage
-    await expect(page.getByRole('button', { name: /Iniciar sesión|Ingresar|Login/i }).first()).toBeVisible({ timeout: 5000 })
+    await expect(page.getByRole('button', { name: /Iniciar sesión|Ingresar|Login/i }).first()).toBeVisible({
+      timeout: 5000,
+    })
   })
 
   test('el nombre del usuario aparece en el header', async ({ page }) => {

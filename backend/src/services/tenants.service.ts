@@ -209,8 +209,7 @@ export async function crearClub(deps: TenantsDeps, input: CrearClubInput): Promi
   if ('error' in validado) {
     return { ok: false, status: 400, error: validado.error };
   }
-  const { slug, name, shortName, membresiaPropia, alertEmail, contactName, contactEmail, adminEmail } =
-    validado.data;
+  const { slug, name, shortName, membresiaPropia, alertEmail, contactName, contactEmail, adminEmail } = validado.data;
 
   const existingSlug = await deps.repo.findOrganizationBySlug(slug);
   if (existingSlug) {
@@ -254,7 +253,11 @@ export async function crearClub(deps: TenantsDeps, input: CrearClubInput): Promi
       categoriasCreadas,
       declaracion: { version: declaracion.version, titulo: declaracion.titulo },
       invitacion: invitacionResult.ok
-        ? { emitida: true, inviteUrl: invitacionResult.body.inviteUrl, emailEnviado: invitacionResult.body.emailEnviado }
+        ? {
+            emitida: true,
+            inviteUrl: invitacionResult.body.inviteUrl,
+            emailEnviado: invitacionResult.body.emailEnviado,
+          }
         : {
             emitida: false,
             error: invitacionResult.error,

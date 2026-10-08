@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import type { Page, Route } from '@playwright/test'
 import { setAuth, mockHasIntegrante, mockSalidas, MOCK_ADMIN, MOCK_SALIDA, PAMIR_ORG } from './helpers'
 
@@ -16,7 +16,7 @@ function mockGetEvaluacion(page: Page, info: unknown = MOCK_EVALUACION_INFO, sta
     if (route.request().method() === 'GET') {
       void route.fulfill({ status, json: info })
     } else {
-      void route.continue()
+      void route.fallback()
     }
   })
 }

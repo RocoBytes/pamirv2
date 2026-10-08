@@ -12,15 +12,7 @@ interface TimeInput24Props {
   id?: string
 }
 
-export function TimeInput24({
-  label,
-  required,
-  error,
-  value = '',
-  onChange,
-  onBlur,
-  id: idProp,
-}: TimeInput24Props) {
+export function TimeInput24({ label, required, error, value = '', onChange, onBlur, id: idProp }: TimeInput24Props) {
   const autoId = useId()
   const inputId = idProp ?? autoId
   const minutesRef = useRef<HTMLInputElement>(null)
@@ -54,12 +46,7 @@ export function TimeInput24({
   function emitComplete(h: string, m: string) {
     const hNum = parseInt(h, 10)
     const mNum = parseInt(m, 10)
-    if (
-      h !== '' && m !== '' &&
-      !isNaN(hNum) && !isNaN(mNum) &&
-      hNum >= 0 && hNum <= 23 &&
-      mNum >= 0 && mNum <= 59
-    ) {
+    if (h !== '' && m !== '' && !isNaN(hNum) && !isNaN(mNum) && hNum >= 0 && hNum <= 23 && mNum >= 0 && mNum <= 59) {
       onChange?.(`${String(hNum).padStart(2, '0')}:${String(mNum).padStart(2, '0')}`)
     } else {
       onChange?.('')
@@ -97,10 +84,7 @@ export function TimeInput24({
   }
 
   function isInternalFocus(relatedTarget: EventTarget | null): boolean {
-    return (
-      relatedTarget === hoursRef.current ||
-      relatedTarget === minutesRef.current
-    )
+    return relatedTarget === hoursRef.current || relatedTarget === minutesRef.current
   }
 
   function handleHoursBlur(e: React.FocusEvent<HTMLInputElement>) {

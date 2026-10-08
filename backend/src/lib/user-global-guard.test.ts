@@ -61,7 +61,8 @@ function scan(): Violation[] {
         violations.push({
           file: relative,
           line: index + 1,
-          reason: 'usa prisma.user.findMany/count/groupBy/aggregate pero el archivo no está en ' +
+          reason:
+            'usa prisma.user.findMany/count/groupBy/aggregate pero el archivo no está en ' +
             'USER_LISTING_ALLOWED_FILES — lee por Membresia en su lugar',
         });
         return;
@@ -84,11 +85,7 @@ function scan(): Violation[] {
 describe('user-global-guard', () => {
   it('toda ocurrencia de prisma.user.findMany/count/groupBy/aggregate está permitida y es deliberadamente cross-club', () => {
     const violations = scan();
-    assert.deepEqual(
-      violations,
-      [],
-      violations.map((v) => `${v.file}:${v.line} — ${v.reason}`).join('\n'),
-    );
+    assert.deepEqual(violations, [], violations.map((v) => `${v.file}:${v.line} — ${v.reason}`).join('\n'));
   });
 
   it('el escaneo sigue encontrando la ocurrencia real conocida (no se rompió en silencio)', () => {

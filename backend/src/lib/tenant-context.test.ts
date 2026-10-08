@@ -187,7 +187,10 @@ describe('promesas perezosas (como las de Prisma)', () => {
   });
 
   it('no altera el valor de retorno de una función síncrona', () => {
-    assert.equal(runAsPlatform(() => 42), 42);
+    assert.equal(
+      runAsPlatform(() => 42),
+      42,
+    );
   });
 
   it('dentro de una función async, un await posterior sigue en contexto', async () => {

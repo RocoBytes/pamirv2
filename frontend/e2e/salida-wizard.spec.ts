@@ -1,10 +1,6 @@
-import { test, expect, type Page } from '@playwright/test'
-import {
-  setAuth,
-  mockHasIntegrante,
-  mockSalidas,
-  mockIntegranteByRut,
-} from './helpers'
+import { test, expect } from './fixtures'
+import type { Page } from '@playwright/test'
+import { setAuth, mockHasIntegrante, mockSalidas, mockIntegranteByRut } from './helpers'
 
 // Draft válido para los pasos 1-4: permite entrar directo al paso guardado
 // vía el banner "Continuar borrador" sin completar todo el wizard.
@@ -23,9 +19,7 @@ const DRAFT_BASE = {
   nombreFamiliar: '',
   telefonoFamiliar: '',
   liderCordada: 'Test Alpinista',
-  participantes: [
-    { rut: '12.345.678-9', nombre: 'Test Alpinista', membresiaClub: 'SOCIO_ANDINO_PAMIR' },
-  ],
+  participantes: [{ rut: '12.345.678-9', nombre: 'Test Alpinista', membresiaClub: 'SOCIO_ANDINO_PAMIR' }],
   coordinacionGrupal: true,
   matrizRiesgos: true,
   mediosComunicacion: ['CELULAR'],
@@ -76,11 +70,7 @@ test.describe('Wizard de Salida – badge de club en participantes', () => {
   })
 
   test('participante de draft legacy sin club se muestra sin badge', async ({ page }) => {
-    await seedDraft(
-      page,
-      { ...DRAFT_BASE, participantes: [{ rut: '12.345.678-9', nombre: 'Test Alpinista' }] },
-      3,
-    )
+    await seedDraft(page, { ...DRAFT_BASE, participantes: [{ rut: '12.345.678-9', nombre: 'Test Alpinista' }] }, 3)
     await openWizardAtDraft(page)
 
     await expect(page.getByText('Test Alpinista').first()).toBeVisible()
@@ -175,9 +165,7 @@ test.describe('Wizard de Salida – salvavidas de la confirmación', () => {
       const w = window as unknown as { __escapeVisto: boolean }
       w.__escapeVisto = false
       const hayBoton = () =>
-        [...document.querySelectorAll('button')].some((b) =>
-          b.textContent?.includes('Volver al inicio'),
-        )
+        [...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Volver al inicio'))
       new MutationObserver(() => {
         if (hayBoton()) w.__escapeVisto = true
       }).observe(document.body, { childList: true, subtree: true, characterData: true })
@@ -188,9 +176,7 @@ test.describe('Wizard de Salida – salvavidas de la confirmación', () => {
     // Más allá del retardo del salvavidas: para entonces ya se fue solo.
     await page.waitForTimeout(3000)
 
-    const visto = await page.evaluate(
-      () => (window as unknown as { __escapeVisto: boolean }).__escapeVisto,
-    )
+    const visto = await page.evaluate(() => (window as unknown as { __escapeVisto: boolean }).__escapeVisto)
     expect(visto).toBe(false)
   })
 

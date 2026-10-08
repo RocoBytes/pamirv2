@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import type { Page, Route } from '@playwright/test'
 import {
   setAuth,
@@ -56,7 +56,7 @@ async function mockMontanistaScreens(page: Page) {
     if (route.request().method() === 'GET') {
       void route.fulfill({ status: 200, json: { invitaciones: [] } })
     } else {
-      void route.continue()
+      void route.fallback()
     }
   })
   await page.route('**/api/admin/dashboard-layout', (route: Route) => {
@@ -261,7 +261,9 @@ test.describe('Branding por club — sin logo propio ni estático: cadena de fal
   // (subido → estático → neutral) y termina en el emblema de RIALA. El
   // nombre y la insignia del club siguen siendo datos propios del club —no
   // dependen del logo— y no deben verse afectados por esa caída.
-  test('el logo cae de /logos/pamir.png (ya no existe) al emblema de RIALA; el nombre e insignia del club son los suyos', async ({ page }) => {
+  test('el logo cae de /logos/pamir.png (ya no existe) al emblema de RIALA; el nombre e insignia del club son los suyos', async ({
+    page,
+  }) => {
     await page.goto('/')
     const logo = page.locator('header img').first()
     await expect(logo).toHaveAttribute('src', /riala-emblem\.png$/)
@@ -273,7 +275,9 @@ test.describe('Branding por club — sin logo propio ni estático: cadena de fal
 })
 
 test.describe('Branding por club — semántica "socio de ESTE club", no "es Pamir"', () => {
-  test('un socio de El Montañista con ficha SOCIO_ANDINO_PAMIR no ve la tarjeta de Documentación del Club', async ({ page }) => {
+  test('un socio de El Montañista con ficha SOCIO_ANDINO_PAMIR no ve la tarjeta de Documentación del Club', async ({
+    page,
+  }) => {
     await setAuth(page, MOCK_USER_MONTANISTA)
     await mockMe(page, MOCK_USER_MONTANISTA)
     // Ficha "de otro club" a propósito: prueba que el gate depende de la
@@ -287,7 +291,9 @@ test.describe('Branding por club — semántica "socio de ESTE club", no "es Pam
 })
 
 test.describe('Branding por club — pantallas sin sesión', () => {
-  test('login: sin nombre ni logo de ningún club, título genérico, y el lockup de RIALA en vez del tile de un club', async ({ page }) => {
+  test('login: sin nombre ni logo de ningún club, título genérico, y el lockup de RIALA en vez del tile de un club', async ({
+    page,
+  }) => {
     await page.goto('/')
     await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
     await expect(page.getByText('© 2026 RIALA · Seguridad en Montaña')).toBeVisible()
@@ -340,10 +346,12 @@ test.describe('Branding por club — pantallas sin sesión', () => {
 test.describe('Ownership del borrador — un mismo navegador, más de un usuario', () => {
   test('un usuario de OTRO club que inicia sesión en el mismo navegador purga el borrador previo', async ({ page }) => {
     let currentUser: unknown = MOCK_USER // Pamir
+    // setAuth también registra un /api/me por defecto: este, que cambia de
+    // usuario a mitad del test, va DESPUÉS para que sea el que gana.
+    await setAuth(page, MOCK_USER)
     await page.route('**/api/me', (route: Route) => {
       void route.fulfill({ status: 200, json: { user: currentUser } })
     })
-    await setAuth(page, MOCK_USER)
     await mockHasIntegrante(page)
     await mockSalidas(page, [])
     await page.goto('/')
@@ -362,10 +370,10 @@ test.describe('Ownership del borrador — un mismo navegador, más de un usuario
     // arriba fulfilla primero) — no importa para este test: solo interesa
     // pamir_draft, que decide establishSession antes de que nada de ficha entre en juego.
     currentUser = MOCK_ADMIN_MONTANISTA
-    await page.evaluate(
-      ({ user, token }) => localStorage.setItem('pamir_auth', JSON.stringify({ user, token })),
-      { user: MOCK_ADMIN_MONTANISTA, token: 'mock-jwt-montanista' },
-    )
+    await page.evaluate(({ user, token }) => localStorage.setItem('pamir_auth', JSON.stringify({ user, token })), {
+      user: MOCK_ADMIN_MONTANISTA,
+      token: 'mock-jwt-montanista',
+    })
     await page.reload()
     await expect(page.getByText('Mis Salidas')).toBeVisible()
 
@@ -388,10 +396,10 @@ test.describe('Ownership del borrador — un mismo navegador, más de un usuario
     await expect(page.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible()
 
     // El mismo usuario vuelve a entrar en el mismo navegador
-    await page.evaluate(
-      ({ user, token }) => localStorage.setItem('pamir_auth', JSON.stringify({ user, token })),
-      { user: MOCK_USER, token: 'mock-jwt-otra-vez' },
-    )
+    await page.evaluate(({ user, token }) => localStorage.setItem('pamir_auth', JSON.stringify({ user, token })), {
+      user: MOCK_USER,
+      token: 'mock-jwt-otra-vez',
+    })
     await page.reload()
     await expect(page.getByText('Mis Salidas')).toBeVisible()
 
@@ -406,7 +414,9 @@ test.describe('Ownership del borrador — un mismo navegador, más de un usuario
 // cualquier otro path sin sesión — ver multi-club-routing.spec.ts para el
 // resto de la matriz de "signed out fuera de la raíz".
 test.describe('Branding por club — login único, siempre marca RIALA', () => {
-  test('login con ?club=<slug>: sin sesión, sin llamar a /api/clubes y sin pintar ningún logo de club', async ({ page }) => {
+  test('login con ?club=<slug>: sin sesión, sin llamar a /api/clubes y sin pintar ningún logo de club', async ({
+    page,
+  }) => {
     let marcaCalled = false
     await page.route('**/api/clubes/**/marca', (route: Route) => {
       marcaCalled = true

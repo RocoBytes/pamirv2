@@ -43,8 +43,9 @@ export async function getEventos(req: Request, res: Response): Promise<void> {
     }
 
     const rawCategoria = req.query['categoria'];
-    const slugs = (Array.isArray(rawCategoria) ? rawCategoria : rawCategoria ? [rawCategoria] : [])
-      .filter((s): s is string => typeof s === 'string');
+    const slugs = (Array.isArray(rawCategoria) ? rawCategoria : rawCategoria ? [rawCategoria] : []).filter(
+      (s): s is string => typeof s === 'string',
+    );
 
     const incluirPasados = req.query['incluirPasados'] === 'true';
 
@@ -121,9 +122,7 @@ export async function getEventos(req: Request, res: Response): Promise<void> {
       eventos.map(({ _count, ...evento }) => ({
         ...serializeEvento(evento),
         totalPostulantes: _count.inscripciones,
-        miInscripcion: miEstadoPorEvento.has(evento.id)
-          ? { estado: miEstadoPorEvento.get(evento.id) }
-          : null,
+        miInscripcion: miEstadoPorEvento.has(evento.id) ? { estado: miEstadoPorEvento.get(evento.id) } : null,
       })),
     );
   } catch (error) {
@@ -383,9 +382,7 @@ export async function inscribirse(req: Request, res: Response): Promise<void> {
 
     res.status(201).json({ inscripcion });
 
-    despacharNotificacionesPendientes(id).catch((err) =>
-      console.error('[inscribirse] dispatch:', err),
-    );
+    despacharNotificacionesPendientes(id).catch((err) => console.error('[inscribirse] dispatch:', err));
   } catch (error) {
     console.error('[inscribirse]', error);
     res.status(500).json({ error: 'Error al procesar la inscripción' });

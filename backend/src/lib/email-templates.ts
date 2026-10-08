@@ -313,13 +313,15 @@ function safeStringArray(v: unknown): string[] {
 
 function safeParticipantNames(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
-  return v.map((item) => {
-    if (typeof item === 'string') return item;
-    if (typeof item === 'object' && item !== null && 'nombre' in item) {
-      return String((item as { nombre: unknown }).nombre);
-    }
-    return '';
-  }).filter(Boolean);
+  return v
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      if (typeof item === 'object' && item !== null && 'nombre' in item) {
+        return String((item as { nombre: unknown }).nombre);
+      }
+      return '';
+    })
+    .filter(Boolean);
 }
 
 function listRow(label: string, items: string[]): string {
@@ -438,7 +440,11 @@ function feedbackCierreBlock(branding: OrgBranding): string {
 
 // ─── Salida notification ──────────────────────────────────────────────────────
 
-export function buildSalidaNotificationEmail(nombreCompleto: string, salida: SalidaEmailData, branding: OrgBranding): string {
+export function buildSalidaNotificationEmail(
+  nombreCompleto: string,
+  salida: SalidaEmailData,
+  branding: OrgBranding,
+): string {
   const avisosArr = safeStringArray(salida.avisosExternos);
   const participantesArr = safeParticipantNames(salida.participantes);
   const mediosArr = safeStringArray(salida.mediosComunicacion);
@@ -462,7 +468,10 @@ export function buildSalidaNotificationEmail(nombreCompleto: string, salida: Sal
     ${row('Fecha de retorno estimada', formatDate(String(salida.fechaRetornoEstimada)))}
     ${row('Hora de retorno estimada', salida.horaRetornoEstimada)}
     ${row('Hora de alerta', salida.horaAlerta)}
-    ${listRow('Avisos externos', avisosArr.map((a) => AVISO_MAP[a] ?? a))}
+    ${listRow(
+      'Avisos externos',
+      avisosArr.map((a) => AVISO_MAP[a] ?? a),
+    )}
     ${avisosArr.includes('CARABINEROS') ? row('Retén de Carabineros', opt(salida.retenCarabineros)) : ''}
     ${avisosArr.includes('FAMILIAR_OTRO') ? row('Nombre del familiar/contacto', opt(salida.nombreFamiliar)) : ''}
     ${avisosArr.includes('FAMILIAR_OTRO') ? row('Teléfono del familiar/contacto', opt(salida.telefonoFamiliar)) : ''}
@@ -474,14 +483,23 @@ export function buildSalidaNotificationEmail(nombreCompleto: string, salida: Sal
     ${row('Matriz de riesgos completada', salida.matrizRiesgos ? 'Sí' : 'No')}
 
     ${sectionHeader('IV. Comunicaciones y Equipo Crítico')}
-    ${listRow('Medios de comunicación', mediosArr.map((m) => MEDIO_COM_MAP[m] ?? m))}
+    ${listRow(
+      'Medios de comunicación',
+      mediosArr.map((m) => MEDIO_COM_MAP[m] ?? m),
+    )}
     ${row('ID dispositivo / frecuencia', opt(salida.idDispositivoFrecuencia))}
-    ${listRow('Equipo colectivo de seguridad', equipoArr.map((e) => EQUIPO_MAP[e] ?? e))}
+    ${listRow(
+      'Equipo colectivo de seguridad',
+      equipoArr.map((e) => EQUIPO_MAP[e] ?? e),
+    )}
     ${row('Otro equipo', opt(salida.equipoColectivoOtro))}
 
     ${sectionHeader('V. Planificación Técnica')}
     ${row('Pronóstico meteorológico', opt(salida.pronosticoMeteorologico))}
-    ${listRow('Riesgos identificados', riesgosArr.map((r) => RIESGO_MAP[r] ?? r))}
+    ${listRow(
+      'Riesgos identificados',
+      riesgosArr.map((r) => RIESGO_MAP[r] ?? r),
+    )}
     ${row('Otros riesgos', opt(salida.riesgosOtro))}
     ${row('Plan de evacuación', opt(salida.planEvacuacion))}
   `;
@@ -534,15 +552,36 @@ export function buildCierreNotificationEmail(
 
     ${sectionHeader('III. Evaluación de la Planificación')}
     ${row('¿Hubo cambios significativos?', huboCambios ? 'Sí' : 'No')}
-    ${huboCambios ? listRow('Motivos de los cambios', motivosCambiosArr.map((m) => MOTIVO_CAMBIO_MAP[m] ?? m)) : ''}
+    ${
+      huboCambios
+        ? listRow(
+            'Motivos de los cambios',
+            motivosCambiosArr.map((m) => MOTIVO_CAMBIO_MAP[m] ?? m),
+          )
+        : ''
+    }
     ${huboCambios ? row('Otros motivos', opt(cierre.motivosCambiosOtro)) : ''}
 
     ${sectionHeader('IV. Gestión de Incidentes y Accidentes')}
     ${row('¿Hubo un incidente?', SI_NO_MAP[cierre.ocurrioIncidente] ?? cierre.ocurrioIncidente)}
-    ${hayIncidente ? listRow('Tipos de incidente', tiposIncidenteArr.map((t) => TIPO_INCIDENTE_MAP[t] ?? t)) : ''}
+    ${
+      hayIncidente
+        ? listRow(
+            'Tipos de incidente',
+            tiposIncidenteArr.map((t) => TIPO_INCIDENTE_MAP[t] ?? t),
+          )
+        : ''
+    }
     ${hayIncidente && tiposIncidenteArr.includes('OTRO') ? row('Descripción del incidente', opt(cierre.incidenteOtroDescripcion)) : ''}
     ${row('¿Hubo un accidente?', SI_NO_MAP[cierre.ocurrioAccidente] ?? cierre.ocurrioAccidente)}
-    ${hayAccidente ? listRow('Tipos de accidente', tiposAccidenteArr.map((t) => TIPO_ACCIDENTE_MAP[t] ?? t)) : ''}
+    ${
+      hayAccidente
+        ? listRow(
+            'Tipos de accidente',
+            tiposAccidenteArr.map((t) => TIPO_ACCIDENTE_MAP[t] ?? t),
+          )
+        : ''
+    }
     ${hayAccidente && tiposAccidenteArr.includes('OTRO') ? row('Descripción del accidente', opt(cierre.accidenteOtroDescripcion)) : ''}
 
     ${sectionHeader('V. Análisis Técnico y de Equipamiento')}
@@ -626,24 +665,28 @@ export function buildConfirmationEmail(data: IntegranteEmailData, branding: OrgB
 
               ${sectionHeader('IV. Cláusulas Legales y Consentimiento Informado')}
               ${clausulaBlock(
-                '1', 'Declaración de Salud y Aptitud Física',
+                '1',
+                'Declaración de Salud y Aptitud Física',
                 'El firmante declara que se encuentra en condiciones físicas y psíquicas aptas para la práctica de deportes de montaña (senderismo, escalada, montañismo y otras actividades relacionadas). Declara que la información proporcionada en este formulario es veraz y completa, asumiendo que la ocultación de antecedentes médicos puede comprometer su seguridad y la del grupo.',
-                data.declaracionSalud
+                data.declaracionSalud,
               )}
               ${clausulaBlock(
-                '2', 'Aceptación de Riesgo y Exención de Responsabilidad',
+                '2',
+                'Aceptación de Riesgo y Exención de Responsabilidad',
                 'Reconozco que las actividades de montaña son intrínsecamente riesgosas y pueden implicar peligros derivados del terreno, clima extremo, caída de rocas, fallas de equipo y otros factores objetivos y subjetivos que pueden resultar en lesiones graves o la muerte. <strong>Exención:</strong> Libero de toda responsabilidad civil y criminal al Club, a sus directivos, guías, instructores y miembros, por cualquier accidente o incidente derivado de los riesgos propios de la actividad o de mi propia negligencia, siempre que el club haya actuado bajo los protocolos de seguridad estándar. El Club no se hace responsable por accidentes derivados de la omisión de información o negligencia de los participantes.',
-                data.aceptacionRiesgo
+                data.aceptacionRiesgo,
               )}
               ${clausulaBlock(
-                '3', 'Consentimiento de Uso de Datos Personales (Ley 19.628)',
+                '3',
+                'Consentimiento de Uso de Datos Personales (Ley 19.628)',
                 'En cumplimiento con la Ley N° 19.628 sobre Protección de la Vida Privada, autorizo expresamente al Club para: (a) Tratar mis datos personales y sensibles (salud) con el fin exclusivo de gestionar mi participación en actividades y responder ante emergencias médicas. (b) Almacenar de forma segura esta información, la cual solo será accesible por el cuerpo técnico o servicios de emergencia en caso de ser necesario. (c) Comunicar estos datos a centros de salud o cuerpos de socorro en caso de rescate o atención urgente. Los datos serán utilizados exclusivamente para la gestión de seguridad en montaña, coordinación de rescates, registro estadístico de incidentes y cumplimiento de protocolos internos del club.',
-                data.consentimientoDatos
+                data.consentimientoDatos,
               )}
               ${clausulaBlock(
-                '4', 'Derecho de Imagen',
+                '4',
+                'Derecho de Imagen',
                 'Autorizo el uso de fotografías o videos capturados durante las salidas para fines promocionales o educativos del club, sin derecho a compensación económica.',
-                data.derechoImagen
+                data.derechoImagen,
               )}
 
             </table>
@@ -694,8 +737,9 @@ export function buildAlertaSalidaEmail(salida: AlertaSalidaEmailData, branding: 
 
   const participantRows = participantesArr.length
     ? participantesArr
-        .map((p) =>
-          `<li style="margin-bottom:2px;">${escapeHtml(p.nombre ?? '')}${p.rut ? ` <span style="color:${GRAY};font-size:12px;">(${escapeHtml(p.rut)})</span>` : ''}</li>`,
+        .map(
+          (p) =>
+            `<li style="margin-bottom:2px;">${escapeHtml(p.nombre ?? '')}${p.rut ? ` <span style="color:${GRAY};font-size:12px;">(${escapeHtml(p.rut)})</span>` : ''}</li>`,
         )
         .join('')
     : `<li style="color:${GRAY};">Sin participantes registrados</li>`;
@@ -757,8 +801,9 @@ export function buildRecordatorioCierreEmail(salida: AlertaSalidaEmailData, bran
 
   const participantRows = participantesArr.length
     ? participantesArr
-        .map((p) =>
-          `<li style="margin-bottom:2px;">${escapeHtml(p.nombre ?? '')}${p.rut ? ` <span style="color:${GRAY};font-size:12px;">(${escapeHtml(p.rut)})</span>` : ''}</li>`,
+        .map(
+          (p) =>
+            `<li style="margin-bottom:2px;">${escapeHtml(p.nombre ?? '')}${p.rut ? ` <span style="color:${GRAY};font-size:12px;">(${escapeHtml(p.rut)})</span>` : ''}</li>`,
         )
         .join('')
     : `<li style="color:${GRAY};">Sin participantes registrados</li>`;
@@ -845,9 +890,10 @@ export function buildSaludSalidaEmail(
   const conFicha = participantes.filter((p) => p.fichaEncontrada);
   const sinFicha = participantes.filter((p) => !p.fichaEncontrada);
 
-  const participantBlocks = conFicha.map((p) => {
-    const s = p.salud!;
-    return `
+  const participantBlocks = conFicha
+    .map((p) => {
+      const s = p.salud!;
+      return `
     ${sectionHeader(`${p.nombre} — RUT: ${p.rut}`)}
     ${row('Grupo sanguíneo', s.grupoSanguineo)}
     ${boolRow('Alergias', s.alergiasTiene, s.alergiasDetalle ?? undefined)}
@@ -862,18 +908,23 @@ export function buildSaludSalidaEmail(
       <td style="padding:8px 12px;color:#1f2937;font-size:13px;border-bottom:1px solid ${BORDER};">${escapeHtml(s.nombreContacto)} (${escapeHtml(s.parentesco)}) — ${escapeHtml(s.telefonoContacto)}</td>
     </tr>
     `;
-  }).join('');
+    })
+    .join('');
 
   const sinFichaRows = sinFicha.length
     ? `
     ${sectionHeader('Participantes sin ficha de salud registrada en este club')}
-    ${sinFicha.map((p) => `
+    ${sinFicha
+      .map(
+        (p) => `
     <tr>
       <td colspan="2" style="padding:8px 12px;color:#1f2937;font-size:13px;border-bottom:1px solid ${BORDER};">
         ${escapeHtml(p.nombre)} <span style="color:${GRAY};font-size:12px;">(RUT: ${escapeHtml(p.rut)})</span>
         <span style="margin-left:8px;display:inline-block;background:#fef2f2;border:1px solid #fca5a5;border-radius:4px;padding:2px 8px;font-size:11px;color:#991b1b;font-weight:600;">Sin ficha en este club</span>
       </td>
-    </tr>`).join('')}
+    </tr>`,
+      )
+      .join('')}
     `
     : '';
 
@@ -1155,15 +1206,17 @@ export function buildEventoInscripcionConfirmadaEmail(
   );
 }
 
-export function buildEventoSeleccionadoEmail(nombre: string, evento: EventoLifecycleEmailData, branding: OrgBranding): string {
+export function buildEventoSeleccionadoEmail(
+  nombre: string,
+  evento: EventoLifecycleEmailData,
+  branding: OrgBranding,
+): string {
   const intro = `<p style="margin:0;color:#1f2937;font-size:15px;">
     Hola <strong>${escapeHtml(nombre)}</strong>, ¡buenas noticias!
     Quedaste <strong>seleccionado/a</strong> para participar en la siguiente actividad del club.
   </p>`;
 
-  const fecha = evento.horaInicio
-    ? `${rangoFechasEvento(evento)} · ${evento.horaInicio} h`
-    : rangoFechasEvento(evento);
+  const fecha = evento.horaInicio ? `${rangoFechasEvento(evento)} · ${evento.horaInicio} h` : rangoFechasEvento(evento);
 
   const tabla = `
     ${row('Evento', evento.titulo)}
@@ -1236,7 +1289,11 @@ export function buildEventoNoSeleccionadoEmail(
   );
 }
 
-export function buildEventoCanceladoEmail(nombre: string, evento: EventoLifecycleEmailData, branding: OrgBranding): string {
+export function buildEventoCanceladoEmail(
+  nombre: string,
+  evento: EventoLifecycleEmailData,
+  branding: OrgBranding,
+): string {
   const intro = `<p style="margin:0;color:#1f2937;font-size:15px;">
     Hola <strong>${escapeHtml(nombre)}</strong>, lamentamos informarte que la siguiente
     actividad fue <strong>cancelada</strong>.

@@ -189,11 +189,7 @@ export function DashboardGrid({ data }: { data: AdminDashboard | null }) {
             .map((item) => (
               <div
                 key={item.widgetId}
-                className={
-                  editMode
-                    ? 'cursor-move rounded-2xl ring-2 ring-primary/30 ring-offset-1'
-                    : undefined
-                }
+                className={editMode ? 'cursor-move rounded-2xl ring-2 ring-primary/30 ring-offset-1' : undefined}
               >
                 {WIDGET_MAP[item.widgetId].render(data)}
               </div>

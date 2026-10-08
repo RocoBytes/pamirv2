@@ -1,11 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, requireAuth } from '../middleware/auth.middleware.js';
 import { getMe } from '../controllers/auth.controller.js';
-import {
-  getNavPreferences,
-  saveNavPreferences,
-  deleteNavPreferences,
-} from '../controllers/nav-prefs.controller.js';
+import { getNavPreferences, saveNavPreferences, deleteNavPreferences } from '../controllers/nav-prefs.controller.js';
 
 const router = Router();
 

@@ -8,10 +8,7 @@ import { isObjectKey } from './object-key.js';
  * (isObjectKey === false, Drive ya no existe) se ignora en silencio; una
  * falla real del storage solo se registra, nunca bloquea al llamador.
  */
-export async function deleteStoredFileBestEffort(
-  fileId: string | null | undefined,
-  context: string,
-): Promise<void> {
+export async function deleteStoredFileBestEffort(fileId: string | null | undefined, context: string): Promise<void> {
   if (!isObjectKey(fileId)) return;
 
   try {

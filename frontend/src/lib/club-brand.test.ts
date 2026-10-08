@@ -83,9 +83,7 @@ describe('clubLogoSrc', () => {
   })
 
   it('prefiere el logo subido cuando hasLogo es true', () => {
-    expect(clubLogoSrc({ ...PAMIR, hasLogo: true, logoVersion: 'abcd1234' })).toBe(
-      '/api/clubes/pamir/logo?v=abcd1234',
-    )
+    expect(clubLogoSrc({ ...PAMIR, hasLogo: true, logoVersion: 'abcd1234' })).toBe('/api/clubes/pamir/logo?v=abcd1234')
   })
 
   it('cae al logo por defecto sin organización', () => {

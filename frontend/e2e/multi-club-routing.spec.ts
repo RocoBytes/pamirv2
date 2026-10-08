@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import {
   setAuth,
   mockMe,
@@ -16,8 +16,13 @@ import {
 // clubes", sin importar cuántos clubes tenga la cuenta. El viejo efecto de
 // redirección transparente se eliminó de App.tsx.
 test.describe('Mis clubes — siempre en la raíz, incluso con una sola membresía', () => {
-  test('riala.cl sin slug muestra Mis clubes con una sola membresía; al elegirlo entra a /<slug>, sin pedir X-Club en la raíz', async ({ page }) => {
-    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+  test('riala.cl sin slug muestra Mis clubes con una sola membresía; al elegirlo entra a /<slug>, sin pedir X-Club en la raíz', async ({
+    page,
+  }) => {
+    const userConUnClub = {
+      ...MOCK_USER,
+      clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }],
+    }
     let integranteLlamado = false
     await page.route('**/api/integrantes/me', (route) => {
       integranteLlamado = true
@@ -46,7 +51,9 @@ test.describe('Mis clubes — siempre en la raíz, incluso con una sola membres�
   // redirect ya no existe, la regresión real a cubrir es que la raíz muestre
   // el picker (no un intento de auto-navegar) y que elegir riala entre sin
   // rebotar de vuelta.
-  test('una cuenta cuyo único club es riala (el club casa): picker en la raíz, entra a /riala sin bucle de redirección', async ({ page }) => {
+  test('una cuenta cuyo único club es riala (el club casa): picker en la raíz, entra a /riala sin bucle de redirección', async ({
+    page,
+  }) => {
     const rialaOrg = { ...PAMIR_ORG, slug: 'riala', name: 'RIALA', shortName: 'RIALA' }
     const userRiala = {
       ...MOCK_USER,
@@ -59,7 +66,9 @@ test.describe('Mis clubes — siempre en la raíz, incluso con una sola membres�
     await mockSalidas(page)
 
     let navegaciones = 0
-    page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) navegaciones++ })
+    page.on('framenavigated', (frame) => {
+      if (frame === page.mainFrame()) navegaciones++
+    })
     await page.goto('/')
     await expect(page.getByRole('heading', { name: 'Mis clubes' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'RIALA' })).toBeVisible()
@@ -92,7 +101,9 @@ test.describe('Mis clubes — varias membresías', () => {
     await expect(page.getByRole('link', { name: EL_MONTANISTA_ORG.name })).toHaveCount(0)
   })
 
-  test('con 2+ membresías y sin slug en el path, ninguna llamada que requiera X-Club sale antes de elegir club (Ruling 2)', async ({ page }) => {
+  test('con 2+ membresías y sin slug en el path, ninguna llamada que requiera X-Club sale antes de elegir club (Ruling 2)', async ({
+    page,
+  }) => {
     const userConDosClubes = {
       ...MOCK_ADMIN_MONTANISTA,
       clubes: [
@@ -117,7 +128,9 @@ test.describe('Mis clubes — varias membresías', () => {
 })
 
 test.describe('No perteneces a este club / club no encontrado', () => {
-  test('un club del que no soy socio muestra el mensaje del backend, no el dashboard de la sesión previa', async ({ page }) => {
+  test('un club del que no soy socio muestra el mensaje del backend, no el dashboard de la sesión previa', async ({
+    page,
+  }) => {
     await setAuth(page, MOCK_USER)
     await page.route('**/api/me', (route) => {
       void route.fulfill({ status: 403, json: { error: 'No perteneces a este club' } })
@@ -182,7 +195,9 @@ test.describe('Signed out fuera de la raíz — vuelve a / con login único (Dec
     await expect(page.getByText('Club no encontrado')).toHaveCount(0)
   })
 
-  test('/<slug>#invite=<token> sin sesión NO redirige: la pantalla de invitación sigue mostrándose', async ({ page }) => {
+  test('/<slug>#invite=<token> sin sesión NO redirige: la pantalla de invitación sigue mostrándose', async ({
+    page,
+  }) => {
     await page.route('**/api/auth/invitaciones/consultar', (route) => {
       void route.fulfill({
         status: 200,
@@ -224,7 +239,9 @@ test.describe('Legacy ?club= — sin sesión también vuelve a / (Decisión del 
 })
 
 test.describe('Invitación en el dominio raíz (sin slug) sigue funcionando', () => {
-  test('riala.cl/#invite=<token> sin sesión llega a la pantalla de invitación, sin slug en el path', async ({ page }) => {
+  test('riala.cl/#invite=<token> sin sesión llega a la pantalla de invitación, sin slug en el path', async ({
+    page,
+  }) => {
     await page.route('**/api/auth/invitaciones/consultar', (route) => {
       void route.fulfill({
         status: 200,
@@ -244,8 +261,13 @@ test.describe('Invitación en el dominio raíz (sin slug) sigue funcionando', ()
     await expect(page.getByText('nuevo@example.com')).toBeVisible()
   })
 
-  test('con sesión ya iniciada (un solo club) el #invite= de OTRO club muestra el interstitial, no Mis clubes', async ({ page }) => {
-    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+  test('con sesión ya iniciada (un solo club) el #invite= de OTRO club muestra el interstitial, no Mis clubes', async ({
+    page,
+  }) => {
+    const userConUnClub = {
+      ...MOCK_USER,
+      clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }],
+    }
     await setAuth(page, userConUnClub)
     await mockMe(page, userConUnClub)
     await mockHasIntegrante(page)
@@ -272,8 +294,13 @@ test.describe('Invitación en el dominio raíz (sin slug) sigue funcionando', ()
 // automático que pueda hacer un loop de vuelta a esta misma pantalla,
 // "Mis clubes" deja de ser un callejón sin salida y se ofrece siempre.
 test.describe('Club suspendido/rechazado — visitando /<slug> directamente', () => {
-  test('cuenta con una sola membresía y está suspendida: "Mis clubes" y "Cerrar sesión" como salidas', async ({ page }) => {
-    const userClubSuspendido = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: true }] }
+  test('cuenta con una sola membresía y está suspendida: "Mis clubes" y "Cerrar sesión" como salidas', async ({
+    page,
+  }) => {
+    const userClubSuspendido = {
+      ...MOCK_USER,
+      clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: true }],
+    }
     await setAuth(page, userClubSuspendido)
     await page.route('**/api/me', (route) => {
       void route.fulfill({
@@ -292,12 +319,17 @@ test.describe('Club suspendido/rechazado — visitando /<slug> directamente', ()
     await expect(page.getByRole('heading', { name: 'Mis clubes' })).toBeVisible()
   })
 
-  test('caché dice suspendido:false pero el servidor rechazó la única membresía (revocada/suspendida desde el login): también ofrece "Mis clubes"', async ({ page }) => {
+  test('caché dice suspendido:false pero el servidor rechazó la única membresía (revocada/suspendida desde el login): también ofrece "Mis clubes"', async ({
+    page,
+  }) => {
     // El caché miente a propósito en este test (suspendido: false): lo que
     // importa es que clubAccessError diga que el /me de montaje para este
     // path YA falló — el caché nunca es la fuente de verdad una vez hay un
     // error de acceso confirmado por el servidor (Ruling del round 2).
-    const userClubCacheDesactualizado = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    const userClubCacheDesactualizado = {
+      ...MOCK_USER,
+      clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }],
+    }
     await setAuth(page, userClubCacheDesactualizado)
     await page.route('**/api/me', (route) => {
       void route.fulfill({ status: 403, json: { error: 'No perteneces a este club' } })
@@ -311,8 +343,13 @@ test.describe('Club suspendido/rechazado — visitando /<slug> directamente', ()
 })
 
 test.describe('Migración del draft sin club — solo si la cuenta puede abrir ESE club', () => {
-  test('visitar un club del que no soy socio NO migra el draft sin club (queda accesible, no se esconde)', async ({ page }) => {
-    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+  test('visitar un club del que no soy socio NO migra el draft sin club (queda accesible, no se esconde)', async ({
+    page,
+  }) => {
+    const userConUnClub = {
+      ...MOCK_USER,
+      clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }],
+    }
     await setAuth(page, userConUnClub)
     await page.addInitScript(() => {
       localStorage.setItem('pamir_draft', JSON.stringify({ nombreActividad: 'Borrador previo' }))
@@ -332,7 +369,10 @@ test.describe('Migración del draft sin club — solo si la cuenta puede abrir E
   })
 
   test('visitar el club propio (no suspendido) SÍ migra el draft sin club a la clave de ese club', async ({ page }) => {
-    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    const userConUnClub = {
+      ...MOCK_USER,
+      clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }],
+    }
     await setAuth(page, userConUnClub)
     await page.addInitScript(() => {
       localStorage.setItem('pamir_draft', JSON.stringify({ nombreActividad: 'Borrador previo' }))
@@ -348,11 +388,16 @@ test.describe('Migración del draft sin club — solo si la cuenta puede abrir E
     expect(await page.evaluate(() => localStorage.getItem('pamir_draft:pamir'))).not.toBeNull()
   })
 
-  test('el caché dice que puedo abrir el club, pero el servidor rechaza /me: NO migra (la membresía pudo revocarse/suspenderse desde el login)', async ({ page }) => {
+  test('el caché dice que puedo abrir el club, pero el servidor rechaza /me: NO migra (la membresía pudo revocarse/suspenderse desde el login)', async ({
+    page,
+  }) => {
     // Caché "abierto" a propósito (slug del path presente, sin suspender):
     // bajo el gate viejo (solo caché) esto migraría de inmediato, antes de
     // que /me confirmara nada. El gate correcto espera la verificación.
-    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    const userConUnClub = {
+      ...MOCK_USER,
+      clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }],
+    }
     await setAuth(page, userConUnClub)
     await page.addInitScript(() => {
       localStorage.setItem('pamir_draft', JSON.stringify({ nombreActividad: 'Borrador previo' }))
@@ -391,9 +436,7 @@ const DRAFT_PARA_PASO_3 = {
   nombreFamiliar: '',
   telefonoFamiliar: '',
   liderCordada: 'Alpinista Migrado',
-  participantes: [
-    { rut: '12.345.678-9', nombre: 'Alpinista Migrado', membresiaClub: 'SOCIO_ANDINO_PAMIR' },
-  ],
+  participantes: [{ rut: '12.345.678-9', nombre: 'Alpinista Migrado', membresiaClub: 'SOCIO_ANDINO_PAMIR' }],
   coordinacionGrupal: true,
   matrizRiesgos: true,
   mediosComunicacion: ['CELULAR'],
@@ -409,12 +452,17 @@ const DRAFT_PARA_PASO_3 = {
 }
 
 test.describe('El wizard nunca monta antes de que la migración del draft haya corrido', () => {
-  test('con /api/integrantes/me rápido y /api/me demorado, el wizard igual muestra el borrador migrado', async ({ page }) => {
+  test('con /api/integrantes/me rápido y /api/me demorado, el wizard igual muestra el borrador migrado', async ({
+    page,
+  }) => {
     // /api/integrantes/me contesta casi de inmediato (mockHasIntegrante) —
     // sin el gate de draftMigrationDone, integranteChecked se asentaría
     // solo y el dashboard (y desde ahí el wizard) quedarían accesibles
     // antes de que /me (y con él, la migración) hubiera corrido.
-    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    const userConUnClub = {
+      ...MOCK_USER,
+      clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }],
+    }
     await setAuth(page, userConUnClub)
     await page.addInitScript((draft) => {
       localStorage.setItem('pamir_draft', JSON.stringify(draft))
@@ -439,8 +487,13 @@ test.describe('El wizard nunca monta antes de que la migración del draft haya c
     await expect(page.getByText('Alpinista Migrado').first()).toBeVisible()
   })
 
-  test('sin conexión (/api/me aborta): la sesión cacheada sigue siendo usable, wizard y borrador incluidos', async ({ page }) => {
-    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+  test('sin conexión (/api/me aborta): la sesión cacheada sigue siendo usable, wizard y borrador incluidos', async ({
+    page,
+  }) => {
+    const userConUnClub = {
+      ...MOCK_USER,
+      clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }],
+    }
     await setAuth(page, userConUnClub)
     await page.addInitScript((draft) => {
       localStorage.setItem('pamir_draft', JSON.stringify(draft))
@@ -466,7 +519,9 @@ test.describe('El wizard nunca monta antes de que la migración del draft haya c
 })
 
 test.describe('La migración también corre en un login fresco, no solo en una sesión ya guardada', () => {
-  test('sin pamir_auth guardado, con un pamir_draft sin club: iniciar sesión por el formulario migra el borrador y lo muestra en el wizard', async ({ page }) => {
+  test('sin pamir_auth guardado, con un pamir_draft sin club: iniciar sesión por el formulario migra el borrador y lo muestra en el wizard', async ({
+    page,
+  }) => {
     // Reproduce el finding A del round 4 de review: draftMigrationSessionKey
     // (antes, un booleano llamado draftMigrationDone) se decidía apenas
     // sessionChecked fuera true — y sessionChecked arranca en true en
@@ -474,24 +529,32 @@ test.describe('La migración también corre en un login fresco, no solo en una s
     // fix, ese primer render (sin sesión, antes de loguearse) ya consumía
     // el latch para siempre, y el login que sigue nunca volvía a evaluar la
     // migración.
-    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    const userConUnClub = {
+      ...MOCK_USER,
+      clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }],
+    }
     // addInitScript corre en el navegador: no puede cerrar sobre
     // userConUnClub (una variable del lado de Node) — se pasa serializado
     // como segundo argumento, igual que draft.
-    await page.addInitScript(({ draft, ownerId }) => {
-      localStorage.setItem('pamir_draft', JSON.stringify(draft))
-      localStorage.setItem('pamir_draft_step', '3')
-      // pamir_owner ya apunta a esta cuenta (p.ej. una sesión anterior cuyo
-      // pamir_auth expiró/se limpió, pero el navegador es el mismo): así
-      // establishSession() decide 'keep', no 'purge', al loguearse — la
-      // política de dueño del borrador es de Task 7/storage.ts, no de este
-      // finding, así que el test la deja en el escenario que NO purga para
-      // aislar exactamente lo que este fix corrige.
-      localStorage.setItem('pamir_owner', ownerId)
-    }, { draft: DRAFT_PARA_PASO_3, ownerId: userConUnClub.id })
+    await page.addInitScript(
+      ({ draft, ownerId }) => {
+        localStorage.setItem('pamir_draft', JSON.stringify(draft))
+        localStorage.setItem('pamir_draft_step', '3')
+        // pamir_owner ya apunta a esta cuenta (p.ej. una sesión anterior cuyo
+        // pamir_auth expiró/se limpió, pero el navegador es el mismo): así
+        // establishSession() decide 'keep', no 'purge', al loguearse — la
+        // política de dueño del borrador es de Task 7/storage.ts, no de este
+        // finding, así que el test la deja en el escenario que NO purga para
+        // aislar exactamente lo que este fix corrige.
+        localStorage.setItem('pamir_owner', ownerId)
+      },
+      { draft: DRAFT_PARA_PASO_3, ownerId: userConUnClub.id },
+    )
     await page.route('**/api/auth/login', (route) => {
       void route.fulfill({ status: 200, json: { user: userConUnClub, token: 'mock-jwt-fresh-login' } })
     })
+    // Tras iniciar sesión la app vuelve a leer su sesión en /api/me.
+    await mockMe(page, userConUnClub)
     await mockHasIntegrante(page)
     await mockSalidas(page)
 
@@ -525,14 +588,19 @@ test.describe('La migración también corre en un login fresco, no solo en una s
     expect(await page.evaluate(() => localStorage.getItem('pamir_draft:pamir'))).not.toBeNull()
   })
 
-  test('/api/me de montaje colgado (nunca responde): la sesión cacheada igual queda usable en ~8s, wizard y borrador incluidos', async ({ page }) => {
+  test('/api/me de montaje colgado (nunca responde): la sesión cacheada igual queda usable en ~8s, wizard y borrador incluidos', async ({
+    page,
+  }) => {
     // Reproduce el finding B del round 4 de review: fetchMe() (el /me de
     // montaje de useAuth.ts) no tenía timeout — un pedido que ni resuelve
     // ni falla (una conexión de montaña que cuelga en silencio, no un error
     // rápido) dejaba sessionChecked sin asentar nunca, y con él el Spinner
     // de App.tsx (que desde el round 3 espera sessionChecked para decidir
     // si mostrar el dashboard) girando para siempre.
-    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    const userConUnClub = {
+      ...MOCK_USER,
+      clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }],
+    }
     await setAuth(page, userConUnClub)
     await page.addInitScript((draft) => {
       localStorage.setItem('pamir_draft', JSON.stringify(draft))
@@ -580,7 +648,10 @@ test.describe('Cambiar de club', () => {
   })
 
   test('con una sola membresía, el header NO ofrece Cambiar de club', async ({ page }) => {
-    const userConUnClub = { ...MOCK_USER, clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }] }
+    const userConUnClub = {
+      ...MOCK_USER,
+      clubes: [{ ...PAMIR_ORG, hasLogo: false, logoVersion: null, rol: 'SOCIO', suspendido: false }],
+    }
     await setAuth(page, userConUnClub)
     await mockMe(page, userConUnClub)
     await mockHasIntegrante(page)
@@ -591,7 +662,9 @@ test.describe('Cambiar de club', () => {
     await expect(page.getByRole('button', { name: 'Cambiar de club' })).toHaveCount(0)
   })
 
-  test('elegir el otro club en Mis clubes navega a su propio slug (recarga completa, no en memoria)', async ({ page }) => {
+  test('elegir el otro club en Mis clubes navega a su propio slug (recarga completa, no en memoria)', async ({
+    page,
+  }) => {
     const userConDosClubes = {
       ...MOCK_ADMIN_MONTANISTA,
       clubes: [

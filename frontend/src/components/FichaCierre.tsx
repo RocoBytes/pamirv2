@@ -44,11 +44,7 @@ import { ClubLogo } from './ClubLogo'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ESTADOS = [
-  'COMPLETADA_SEGUN_PLAN',
-  'COMPLETADA_CON_VARIACIONES',
-  'ABORTADA_INCOMPLETA',
-] as const
+const ESTADOS = ['COMPLETADA_SEGUN_PLAN', 'COMPLETADA_CON_VARIACIONES', 'ABORTADA_INCOMPLETA'] as const
 
 const MOTIVOS_ABANDONO = [
   'METEOROLOGIA',
@@ -128,57 +124,44 @@ const cierreSchema = z
     // Paso 4
     desempenoEquipo: z.enum(DESEMPENO_EQUIPO_OPTIONS, { error: 'Selecciona una opción' }),
     detalleFallaEquipo: z.string().max(1000, 'Máximo 1000 caracteres').optional(),
-    observacionesRuta: z
-      .string()
-      .min(1, 'Las observaciones son obligatorias')
-      .max(1000, 'Máximo 1000 caracteres'),
-    precisionPronostico: z
-      .number({ error: 'Selecciona una calificación' })
-      .int()
-      .min(1)
-      .max(5),
+    observacionesRuta: z.string().min(1, 'Las observaciones son obligatorias').max(1000, 'Máximo 1000 caracteres'),
+    precisionPronostico: z.number({ error: 'Selecciona una calificación' }).int().min(1).max(5),
     // Paso 5
-    leccionesAprendidas: z
-      .string()
-      .min(1, 'Este campo es obligatorio')
-      .max(1000, 'Máximo 1000 caracteres'),
+    leccionesAprendidas: z.string().min(1, 'Este campo es obligatorio').max(1000, 'Máximo 1000 caracteres'),
     recomendacionesFuturos: z.string().max(1000, 'Máximo 1000 caracteres').optional(),
     sugerenciasClub: z.string().max(1000, 'Máximo 1000 caracteres').optional(),
   })
-  .refine(
-    (d) => d.estadoCierre !== 'ABORTADA_INCOMPLETA' || !!d.motivoAbandono,
-    { message: 'Indica el motivo del abandono', path: ['motivoAbandono'] },
-  )
-  .refine(
-    (d) => !!d.huboCambios,
-    { message: 'Selecciona una opción', path: ['huboCambios'] },
-  )
-  .refine(
-    (d) => d.huboCambios !== 'SI' || (d.motivosCambios && d.motivosCambios.length > 0),
-    { message: 'Selecciona al menos un motivo', path: ['motivosCambios'] },
-  )
+  .refine((d) => d.estadoCierre !== 'ABORTADA_INCOMPLETA' || !!d.motivoAbandono, {
+    message: 'Indica el motivo del abandono',
+    path: ['motivoAbandono'],
+  })
+  .refine((d) => !!d.huboCambios, { message: 'Selecciona una opción', path: ['huboCambios'] })
+  .refine((d) => d.huboCambios !== 'SI' || (d.motivosCambios && d.motivosCambios.length > 0), {
+    message: 'Selecciona al menos un motivo',
+    path: ['motivosCambios'],
+  })
   // Paso 3 — Incidente (independiente del accidente). Safe cuando el campo es undefined.
-  .refine(
-    (d) => d.ocurrioIncidente !== 'SI' || (d.tiposIncidente && d.tiposIncidente.length > 0),
-    { message: 'Selecciona al menos un tipo de incidente', path: ['tiposIncidente'] },
-  )
-  .refine(
-    (d) => !d.tiposIncidente?.includes('OTRO') || !!d.incidenteOtroDescripcion?.trim(),
-    { message: 'Describe el incidente', path: ['incidenteOtroDescripcion'] },
-  )
+  .refine((d) => d.ocurrioIncidente !== 'SI' || (d.tiposIncidente && d.tiposIncidente.length > 0), {
+    message: 'Selecciona al menos un tipo de incidente',
+    path: ['tiposIncidente'],
+  })
+  .refine((d) => !d.tiposIncidente?.includes('OTRO') || !!d.incidenteOtroDescripcion?.trim(), {
+    message: 'Describe el incidente',
+    path: ['incidenteOtroDescripcion'],
+  })
   // Paso 3 — Accidente (independiente del incidente).
-  .refine(
-    (d) => d.ocurrioAccidente !== 'SI' || (d.tiposAccidente && d.tiposAccidente.length > 0),
-    { message: 'Selecciona al menos un tipo de accidente', path: ['tiposAccidente'] },
-  )
-  .refine(
-    (d) => !d.tiposAccidente?.includes('OTRO') || !!d.accidenteOtroDescripcion?.trim(),
-    { message: 'Describe el accidente', path: ['accidenteOtroDescripcion'] },
-  )
-  .refine(
-    (d) => d.desempenoEquipo !== 'FALLO_EQUIPO' || !!d.detalleFallaEquipo?.trim(),
-    { message: 'Describe la falla del equipamiento', path: ['detalleFallaEquipo'] },
-  )
+  .refine((d) => d.ocurrioAccidente !== 'SI' || (d.tiposAccidente && d.tiposAccidente.length > 0), {
+    message: 'Selecciona al menos un tipo de accidente',
+    path: ['tiposAccidente'],
+  })
+  .refine((d) => !d.tiposAccidente?.includes('OTRO') || !!d.accidenteOtroDescripcion?.trim(), {
+    message: 'Describe el accidente',
+    path: ['accidenteOtroDescripcion'],
+  })
+  .refine((d) => d.desempenoEquipo !== 'FALLO_EQUIPO' || !!d.detalleFallaEquipo?.trim(), {
+    message: 'Describe la falla del equipamiento',
+    path: ['detalleFallaEquipo'],
+  })
 
 type CierreFormValues = z.infer<typeof cierreSchema>
 
@@ -277,12 +260,7 @@ function RadioGroup<T extends string>({
                   : 'bg-white border-secondary/25 text-slate-700 hover:border-primary/40 hover:bg-surface-container-low',
               ].join(' ')}
             >
-              <input
-                type="radio"
-                checked={checked}
-                onChange={() => onChange(opt)}
-                className="sr-only"
-              />
+              <input type="radio" checked={checked} onChange={() => onChange(opt)} className="sr-only" />
               <span
                 className={[
                   'flex items-center justify-center w-4 h-4 rounded-full border shrink-0 transition-colors',
@@ -359,12 +337,7 @@ function CheckboxGroup<T extends string>({
                   : 'bg-white border-secondary/25 text-slate-700 hover:border-primary/40 hover:bg-surface-container-low',
               ].join(' ')}
             >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => toggle(opt)}
-                className="sr-only"
-              />
+              <input type="checkbox" checked={checked} onChange={() => toggle(opt)} className="sr-only" />
               <span
                 className={[
                   'flex items-center justify-center w-4 h-4 rounded border shrink-0 transition-colors',
@@ -426,8 +399,7 @@ function GpxFilePicker({ value, onChange }: GpxFilePickerProps) {
   return (
     <div className="flex flex-col gap-2">
       <span className="text-sm font-semibold text-primary">
-        Ruta real trazada (GPX){' '}
-        <span className="text-on-surface-variant font-normal">(opcional)</span>
+        Ruta real trazada (GPX) <span className="text-on-surface-variant font-normal">(opcional)</span>
       </span>
       <p className="text-xs text-on-surface-variant">
         Adjunta el archivo .gpx registrado durante la actividad. Se subirá al guardar.
@@ -450,12 +422,7 @@ function GpxFilePicker({ value, onChange }: GpxFilePickerProps) {
         <label className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-secondary/40 bg-white cursor-pointer hover:border-primary/60 hover:bg-surface-container-low transition-colors">
           <Paperclip size={15} className="text-secondary/60" />
           <span className="text-sm text-on-surface-variant">Seleccionar archivo .gpx…</span>
-          <input
-            type="file"
-            accept=".gpx"
-            className="sr-only"
-            onChange={handleFileChange}
-          />
+          <input type="file" accept=".gpx" className="sr-only" onChange={handleFileChange} />
         </label>
       )}
 
@@ -489,7 +456,13 @@ const STEP_LABELS = [
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalidaId, isAdmin = false }: FichaCierreProps) {
+export function FichaCierre({
+  user,
+  onDone,
+  onCancel,
+  salidaId: preselectedSalidaId,
+  isAdmin = false,
+}: FichaCierreProps) {
   const [salidas, setSalidas] = useState<SalidaRecord[]>([])
   const [loadingSalidas, setLoadingSalidas] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -584,12 +557,7 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
   }, [trigger])
 
   const goToStep5 = useCallback(async () => {
-    const valid = await trigger([
-      'desempenoEquipo',
-      'detalleFallaEquipo',
-      'observacionesRuta',
-      'precisionPronostico',
-    ])
+    const valid = await trigger(['desempenoEquipo', 'detalleFallaEquipo', 'observacionesRuta', 'precisionPronostico'])
     if (valid) setCurrentStep(5)
   }, [trigger])
 
@@ -602,32 +570,32 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
       setSubmitError(null)
       try {
         await createCierre({
-            salidaId: values.salidaId,
-            fechaFinalizacionReal: values.fechaFinalizacionReal,
-            estadoCierre: values.estadoCierre,
-            altitudMaxima: values.altitudMaxima,
-            motivoAbandono: values.motivoAbandono,
-            huboCambios: values.huboCambios!,
-            motivosCambios: values.motivosCambios,
-            motivosCambiosOtro: values.motivosCambiosOtro,
-            ocurrioIncidente: values.ocurrioIncidente,
-            ocurrioAccidente: values.ocurrioAccidente,
-            tiposIncidente: values.tiposIncidente,
-            incidenteOtroDescripcion: values.incidenteOtroDescripcion,
-            tiposAccidente: values.tiposAccidente,
-            accidenteOtroDescripcion: values.accidenteOtroDescripcion,
-            desempenoEquipo: values.desempenoEquipo,
-            detalleFallaEquipo: values.detalleFallaEquipo,
-            observacionesRuta: values.observacionesRuta,
-            precisionPronostico: values.precisionPronostico,
-            leccionesAprendidas: values.leccionesAprendidas,
-            recomendacionesFuturos: values.recomendacionesFuturos,
-            sugerenciasClub: values.sugerenciasClub,
-          })
-          // La transición a COMPLETADA la realiza el backend de forma atómica al crear el cierre.
-          if (gpxFile) {
-            await uploadGpx(values.salidaId, gpxFile)
-          }
+          salidaId: values.salidaId,
+          fechaFinalizacionReal: values.fechaFinalizacionReal,
+          estadoCierre: values.estadoCierre,
+          altitudMaxima: values.altitudMaxima,
+          motivoAbandono: values.motivoAbandono,
+          huboCambios: values.huboCambios!,
+          motivosCambios: values.motivosCambios,
+          motivosCambiosOtro: values.motivosCambiosOtro,
+          ocurrioIncidente: values.ocurrioIncidente,
+          ocurrioAccidente: values.ocurrioAccidente,
+          tiposIncidente: values.tiposIncidente,
+          incidenteOtroDescripcion: values.incidenteOtroDescripcion,
+          tiposAccidente: values.tiposAccidente,
+          accidenteOtroDescripcion: values.accidenteOtroDescripcion,
+          desempenoEquipo: values.desempenoEquipo,
+          detalleFallaEquipo: values.detalleFallaEquipo,
+          observacionesRuta: values.observacionesRuta,
+          precisionPronostico: values.precisionPronostico,
+          leccionesAprendidas: values.leccionesAprendidas,
+          recomendacionesFuturos: values.recomendacionesFuturos,
+          sugerenciasClub: values.sugerenciasClub,
+        })
+        // La transición a COMPLETADA la realiza el backend de forma atómica al crear el cierre.
+        if (gpxFile) {
+          await uploadGpx(values.salidaId, gpxFile)
+        }
         setSubmitSuccess(true)
         // El `setTimeout(onDone, 1500)` que había acá se fue: ahora navega
         // cuando SuccessReveal termina de leerse la confirmación, en vez de un
@@ -663,9 +631,7 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
           <div className="flex items-center gap-2 min-w-0">
             <ClubLogo alt="" className="w-9 h-9 object-contain shrink-0" />
             <Mountain size={18} className="text-primary shrink-0" aria-hidden="true" />
-            <span className="font-semibold text-on-surface text-body-medium truncate">
-              Cierre de Actividad
-            </span>
+            <span className="font-semibold text-on-surface text-body-medium truncate">Cierre de Actividad</span>
           </div>
           <span className="text-xs text-on-surface-variant font-medium">{currentStep} / 5</span>
         </div>
@@ -681,11 +647,7 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
                 role="listitem"
                 className={[
                   'flex-1 h-1 rounded-full transition-colors duration-300',
-                  s < currentStep
-                    ? 'bg-primary'
-                    : s === currentStep
-                    ? 'bg-primary/60'
-                    : 'bg-surface-container',
+                  s < currentStep ? 'bg-primary' : s === currentStep ? 'bg-primary/60' : 'bg-surface-container',
                 ].join(' ')}
               />
             ))}
@@ -704,12 +666,12 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
             {currentStep === 1
               ? 'Registra cómo resultó la salida y cierra el expediente de la actividad.'
               : currentStep === 2
-              ? 'Evalúa si la actividad se desarrolló según lo planificado.'
-              : currentStep === 3
-              ? 'Esta sección es el corazón del Catastro de Accidentes.'
-              : currentStep === 4
-              ? 'Evalúa el desempeño del equipamiento y las condiciones de la ruta.'
-              : 'Comparte lo aprendido para mejorar futuras salidas.'}
+                ? 'Evalúa si la actividad se desarrolló según lo planificado.'
+                : currentStep === 3
+                  ? 'Esta sección es el corazón del Catastro de Accidentes.'
+                  : currentStep === 4
+                    ? 'Evalúa el desempeño del equipamiento y las condiciones de la ruta.'
+                    : 'Comparte lo aprendido para mejorar futuras salidas.'}
           </p>
         </div>
 
@@ -740,819 +702,768 @@ export function FichaCierre({ user, onDone, onCancel, salidaId: preselectedSalid
             noValidate
             className="flex flex-col gap-6"
           >
-          <AnimatePresence mode="wait" initial={false} custom={direction}>
-            <motion.div
-              key={currentStep}
-              custom={direction}
-              variants={stepVariants(direction)}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              className="flex flex-col gap-6"
-            >
-
-            {/* ── PASO 1: Cierre de Actividad ─────────────────────────── */}
-            {currentStep === 1 && (
-              <>
-                {/* Selección de Salida */}
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="salidaId" className="text-sm font-semibold text-primary">
-                    Formulario de Salida asociado
-                    <span className="text-error ml-1" aria-hidden="true">*</span>
-                  </label>
-                  {preselectedSalidaId ? (
-                    <>
-                      <p className="text-xs text-on-surface-variant -mt-0.5">
-                        Cerrando la siguiente salida:
-                      </p>
-                      <input type="hidden" {...register('salidaId')} />
-                      <div className="rounded-xl border border-secondary/40 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-900">
-                        {(() => {
-                          const s = salidas.find((x) => x.id === preselectedSalidaId)
-                          return s ? `${s.nombreActividad} (${s.ubicacionGeografica})` : 'Cargando…'
-                        })()}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-xs text-on-surface-variant -mt-0.5">
-                        Selecciona la salida que deseas cerrar.
-                      </p>
-                      <div className="relative">
-                        <select
-                          id="salidaId"
-                          {...register('salidaId')}
-                          aria-invalid={errors.salidaId ? 'true' : undefined}
-                          className={[
-                            'w-full appearance-none rounded-xl border bg-white px-3 py-2 pr-9 text-sm text-slate-900',
-                            'transition-colors duration-150',
-                            'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
-                            errors.salidaId
-                              ? 'border-error focus:ring-error focus:border-error'
-                              : 'border-secondary/40',
-                          ].join(' ')}
-                        >
-                          <option value="">— Selecciona una salida —</option>
-                          {salidas
-                            .filter((s) => (isAdmin ? s.status === 'EN_CURSO' : s.userId === user.id))
-                            .map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.nombreActividad} ({s.ubicacionGeografica})
-                              </option>
-                            ))}
-                        </select>
-                        <ChevronDown
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary/60 pointer-events-none"
-                          size={16}
-                        />
-                      </div>
-                    </>
-                  )}
-                  {errors.salidaId && (
-                    <p className="text-xs text-error" role="alert">
-                      {errors.salidaId.message}
-                    </p>
-                  )}
-                </div>
-
-                {/* Fecha de Finalización Real */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="fechaFinalizacionReal"
-                    className="text-sm font-semibold text-primary"
-                  >
-                    Fecha de Finalización Real
-                    <span className="text-error ml-1" aria-hidden="true">*</span>
-                  </label>
-                  <input
-                    id="fechaFinalizacionReal"
-                    type="date"
-                    {...register('fechaFinalizacionReal')}
-                    aria-invalid={errors.fechaFinalizacionReal ? 'true' : undefined}
-                    className={[
-                      'w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900',
-                      'transition-colors duration-150',
-                      'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
-                      errors.fechaFinalizacionReal
-                        ? 'border-error focus:ring-error focus:border-error'
-                        : 'border-secondary/40',
-                    ].join(' ')}
-                  />
-                  {errors.fechaFinalizacionReal && (
-                    <p className="text-xs text-error" role="alert">
-                      {errors.fechaFinalizacionReal.message}
-                    </p>
-                  )}
-                </div>
-
-                {/* Estado de la Salida */}
-                <Controller
-                  control={control}
-                  name="estadoCierre"
-                  render={({ field }) => (
-                    <RadioGroup<EstadoCierre>
-                      label="Estado de la Salida"
-                      required
-                      options={ESTADOS}
-                      labels={ESTADO_CIERRE_LABELS}
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.estadoCierre?.message}
-                    />
-                  )}
-                />
-
-                {/* Altitud Máxima */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="altitudMaxima" className="text-sm font-semibold text-primary">
-                    Altitud máxima alcanzada (m.s.n.m.)
-                    <span className="text-error ml-1" aria-hidden="true">*</span>
-                  </label>
-                  <p className="text-xs text-on-surface-variant -mt-0.5">
-                    Independiente si lograron o no el objetivo.
-                  </p>
-                  <input
-                    id="altitudMaxima"
-                    type="number"
-                    min="0"
-                    placeholder="Ej: 4500"
-                    {...register('altitudMaxima', { valueAsNumber: true })}
-                    className={[
-                      'w-full md:w-1/2 rounded-xl border px-3 py-2.5 text-sm text-slate-900 bg-white',
-                      'placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors',
-                      errors.altitudMaxima ? 'border-error' : 'border-secondary/40',
-                    ].join(' ')}
-                  />
-                  {errors.altitudMaxima && (
-                    <p className="text-xs text-error" role="alert">
-                      {errors.altitudMaxima.message}
-                    </p>
-                  )}
-                </div>
-
-                {/* Motivo de Abandono (condicional) */}
-                {estadoSeleccionado === 'ABORTADA_INCOMPLETA' && (
-                  <Controller
-                    control={control}
-                    name="motivoAbandono"
-                    render={({ field }) => (
-                      <RadioGroup<MotivoAbandono>
-                        label="Si fue abortada, ¿cuál fue el motivo principal?"
-                        required
-                        options={MOTIVOS_ABANDONO}
-                        labels={MOTIVO_ABANDONO_LABELS}
-                        value={field.value}
-                        onChange={field.onChange}
-                        error={errors.motivoAbandono?.message}
-                      />
-                    )}
-                  />
-                )}
-
-                {/* Navegación */}
-                <div className="flex justify-end pt-2">
-                  <Button type="button" variant="primary" size="lg" onClick={goToStep2}>
-                    Siguiente
-                    <ChevronRight size={18} />
-                  </Button>
-                </div>
-              </>
-            )}
-
-            {/* ── PASO 2: Evaluación de la Planificación ──────────────── */}
-            {currentStep === 2 && (
-              <>
-                {/* Pregunta 5: ¿Hubo cambios? */}
-                <Controller
-                  control={control}
-                  name="huboCambios"
-                  render={({ field }) => (
-                    <RadioGroup<'SI' | 'NO'>
-                      label="¿Hubo cambios significativos respecto a lo planificado?"
-                      required
-                      options={HUBO_CAMBIOS}
-                      labels={{ SI: 'Sí', NO: 'No' }}
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.huboCambios?.message}
-                    />
-                  )}
-                />
-
-                {/* Pregunta 6: Motivos de cambio (condicional si huboCambios === 'SI') */}
-                {huboCambiosVal === 'SI' && (
+            <AnimatePresence mode="wait" initial={false} custom={direction}>
+              <motion.div
+                key={currentStep}
+                custom={direction}
+                variants={stepVariants(direction)}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                className="flex flex-col gap-6"
+              >
+                {/* ── PASO 1: Cierre de Actividad ─────────────────────────── */}
+                {currentStep === 1 && (
                   <>
+                    {/* Selección de Salida */}
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor="salidaId" className="text-sm font-semibold text-primary">
+                        Formulario de Salida asociado
+                        <span className="text-error ml-1" aria-hidden="true">
+                          *
+                        </span>
+                      </label>
+                      {preselectedSalidaId ? (
+                        <>
+                          <p className="text-xs text-on-surface-variant -mt-0.5">Cerrando la siguiente salida:</p>
+                          <input type="hidden" {...register('salidaId')} />
+                          <div className="rounded-xl border border-secondary/40 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-900">
+                            {(() => {
+                              const s = salidas.find((x) => x.id === preselectedSalidaId)
+                              return s ? `${s.nombreActividad} (${s.ubicacionGeografica})` : 'Cargando…'
+                            })()}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs text-on-surface-variant -mt-0.5">
+                            Selecciona la salida que deseas cerrar.
+                          </p>
+                          <div className="relative">
+                            <select
+                              id="salidaId"
+                              {...register('salidaId')}
+                              aria-invalid={errors.salidaId ? 'true' : undefined}
+                              className={[
+                                'w-full appearance-none rounded-xl border bg-white px-3 py-2 pr-9 text-sm text-slate-900',
+                                'transition-colors duration-150',
+                                'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
+                                errors.salidaId
+                                  ? 'border-error focus:ring-error focus:border-error'
+                                  : 'border-secondary/40',
+                              ].join(' ')}
+                            >
+                              <option value="">— Selecciona una salida —</option>
+                              {salidas
+                                .filter((s) => (isAdmin ? s.status === 'EN_CURSO' : s.userId === user.id))
+                                .map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.nombreActividad} ({s.ubicacionGeografica})
+                                  </option>
+                                ))}
+                            </select>
+                            <ChevronDown
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary/60 pointer-events-none"
+                              size={16}
+                            />
+                          </div>
+                        </>
+                      )}
+                      {errors.salidaId && (
+                        <p className="text-xs text-error" role="alert">
+                          {errors.salidaId.message}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Fecha de Finalización Real */}
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor="fechaFinalizacionReal" className="text-sm font-semibold text-primary">
+                        Fecha de Finalización Real
+                        <span className="text-error ml-1" aria-hidden="true">
+                          *
+                        </span>
+                      </label>
+                      <input
+                        id="fechaFinalizacionReal"
+                        type="date"
+                        {...register('fechaFinalizacionReal')}
+                        aria-invalid={errors.fechaFinalizacionReal ? 'true' : undefined}
+                        className={[
+                          'w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900',
+                          'transition-colors duration-150',
+                          'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
+                          errors.fechaFinalizacionReal
+                            ? 'border-error focus:ring-error focus:border-error'
+                            : 'border-secondary/40',
+                        ].join(' ')}
+                      />
+                      {errors.fechaFinalizacionReal && (
+                        <p className="text-xs text-error" role="alert">
+                          {errors.fechaFinalizacionReal.message}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Estado de la Salida */}
                     <Controller
                       control={control}
-                      name="motivosCambios"
+                      name="estadoCierre"
                       render={({ field }) => (
-                        <CheckboxGroup<MotivoCambio>
-                          label="Si hubo cambios, ¿cuáles fueron los motivos?"
+                        <RadioGroup<EstadoCierre>
+                          label="Estado de la Salida"
                           required
-                          options={MOTIVOS_CAMBIO}
-                          labels={MOTIVO_CAMBIO_LABELS}
-                          selected={field.value ?? []}
+                          options={ESTADOS}
+                          labels={ESTADO_CIERRE_LABELS}
+                          value={field.value}
                           onChange={field.onChange}
-                          error={errors.motivosCambios?.message}
+                          error={errors.estadoCierre?.message}
                         />
                       )}
                     />
 
-                    {/* Campo "Otro" condicional */}
-                    {showOtroMotivo && (
-                      <div className="flex flex-col gap-1.5 pl-7">
-                        <label
-                          htmlFor="motivosCambiosOtro"
-                          className="text-xs font-semibold text-primary"
-                        >
-                          Especifica el motivo
-                        </label>
-                        <input
-                          id="motivosCambiosOtro"
-                          type="text"
-                          maxLength={100}
-                          placeholder="Describe el motivo del cambio..."
-                          {...register('motivosCambiosOtro')}
-                          className={[
-                            'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800',
-                            'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
-                            errors.motivosCambiosOtro
-                              ? 'border-error'
-                              : 'border-secondary/30',
-                          ].join(' ')}
-                        />
-                        {errors.motivosCambiosOtro && (
-                          <p className="text-xs text-error" role="alert">
-                            {errors.motivosCambiosOtro.message}
-                          </p>
+                    {/* Altitud Máxima */}
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="altitudMaxima" className="text-sm font-semibold text-primary">
+                        Altitud máxima alcanzada (m.s.n.m.)
+                        <span className="text-error ml-1" aria-hidden="true">
+                          *
+                        </span>
+                      </label>
+                      <p className="text-xs text-on-surface-variant -mt-0.5">
+                        Independiente si lograron o no el objetivo.
+                      </p>
+                      <input
+                        id="altitudMaxima"
+                        type="number"
+                        min="0"
+                        placeholder="Ej: 4500"
+                        {...register('altitudMaxima', { valueAsNumber: true })}
+                        className={[
+                          'w-full md:w-1/2 rounded-xl border px-3 py-2.5 text-sm text-slate-900 bg-white',
+                          'placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors',
+                          errors.altitudMaxima ? 'border-error' : 'border-secondary/40',
+                        ].join(' ')}
+                      />
+                      {errors.altitudMaxima && (
+                        <p className="text-xs text-error" role="alert">
+                          {errors.altitudMaxima.message}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Motivo de Abandono (condicional) */}
+                    {estadoSeleccionado === 'ABORTADA_INCOMPLETA' && (
+                      <Controller
+                        control={control}
+                        name="motivoAbandono"
+                        render={({ field }) => (
+                          <RadioGroup<MotivoAbandono>
+                            label="Si fue abortada, ¿cuál fue el motivo principal?"
+                            required
+                            options={MOTIVOS_ABANDONO}
+                            labels={MOTIVO_ABANDONO_LABELS}
+                            value={field.value}
+                            onChange={field.onChange}
+                            error={errors.motivoAbandono?.message}
+                          />
                         )}
-                      </div>
+                      />
                     )}
+
+                    {/* Navegación */}
+                    <div className="flex justify-end pt-2">
+                      <Button type="button" variant="primary" size="lg" onClick={goToStep2}>
+                        Siguiente
+                        <ChevronRight size={18} />
+                      </Button>
+                    </div>
                   </>
                 )}
 
-                {/* Navegación */}
-                <div className="flex justify-between pt-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setCurrentStep(1)}
-                  >
-                    <ChevronLeft size={18} />
-                    Anterior
-                  </Button>
-                  <Button type="button" variant="primary" size="lg" onClick={goToStep3}>
-                    Siguiente
-                    <ChevronRight size={18} />
-                  </Button>
-                </div>
-              </>
-            )}
-
-            {/* ── PASO 3: Gestión de Incidentes y Accidentes ── */}
-            {currentStep === 3 && (
-              <>
-                {/* Q1: ¿Hubo un incidente? */}
-                <Controller
-                  control={control}
-                  name="ocurrioIncidente"
-                  render={({ field }) => (
-                    <RadioGroup<'SI' | 'NO'>
-                      label="¿Hubo un incidente?"
-                      required
-                      labelExtra={
-                        <InfoTooltip text="Un incidente es un evento no deseado que no provocó lesiones ni daño material, pero que tuvo potencial para hacerlo." />
-                      }
-                      options={SI_NO}
-                      labels={SI_NO_LABELS}
-                      value={field.value}
-                      onChange={(val) => {
-                        field.onChange(val)
-                        if (val === 'NO') {
-                          setValue('tiposIncidente', [])
-                          setValue('incidenteOtroDescripcion', '')
-                        }
-                      }}
-                      error={errors.ocurrioIncidente?.message}
-                    />
-                  )}
-                />
-
-                {/* Q1 detalle — solo si hubo incidente */}
-                {ocurrioIncidenteVal === 'SI' && (
-                  <div className="flex flex-col gap-4 pl-7 border-l-2 border-primary/20">
-                    {/* Tipo de incidente */}
+                {/* ── PASO 2: Evaluación de la Planificación ──────────────── */}
+                {currentStep === 2 && (
+                  <>
+                    {/* Pregunta 5: ¿Hubo cambios? */}
                     <Controller
                       control={control}
-                      name="tiposIncidente"
+                      name="huboCambios"
                       render={({ field }) => (
-                        <CheckboxGroup<TipoIncidente>
-                          label="Tipo de incidente — Puedes marcar más de uno"
+                        <RadioGroup<'SI' | 'NO'>
+                          label="¿Hubo cambios significativos respecto a lo planificado?"
                           required
-                          options={TIPOS_INCIDENTE}
-                          labels={TIPO_INCIDENTE_LABELS}
-                          selected={field.value ?? []}
-                          onChange={(next) => {
-                            field.onChange(next)
-                            if (!next.includes('OTRO')) setValue('incidenteOtroDescripcion', '')
-                          }}
-                          error={errors.tiposIncidente?.message}
+                          options={HUBO_CAMBIOS}
+                          labels={{ SI: 'Sí', NO: 'No' }}
+                          value={field.value}
+                          onChange={field.onChange}
+                          error={errors.huboCambios?.message}
                         />
                       )}
                     />
 
-                    {/* Descripción del incidente (solo si "Otro") */}
-                    {showIncidenteOtro && (
-                      <div className="flex flex-col gap-1.5">
-                        <label
-                          htmlFor="incidenteOtroDescripcion"
-                          className="text-sm font-semibold text-primary"
-                        >
-                          Descripción del incidente
-                          <span className="text-error ml-1" aria-hidden="true">*</span>
-                        </label>
-                        <textarea
-                          id="incidenteOtroDescripcion"
-                          maxLength={1000}
-                          rows={4}
-                          placeholder="Describe brevemente qué ocurrió, cómo se resolvió y si hay lecciones aprendidas."
-                          {...register('incidenteOtroDescripcion')}
-                          aria-invalid={errors.incidenteOtroDescripcion ? 'true' : undefined}
-                          className={[
-                            'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                            'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
-                            errors.incidenteOtroDescripcion ? 'border-error' : 'border-secondary/30',
-                          ].join(' ')}
-                        />
-                        <div className="flex justify-between items-center">
-                          {errors.incidenteOtroDescripcion ? (
-                            <p className="text-xs text-error" role="alert">
-                              {errors.incidenteOtroDescripcion.message}
-                            </p>
-                          ) : (
-                            <span />
+                    {/* Pregunta 6: Motivos de cambio (condicional si huboCambios === 'SI') */}
+                    {huboCambiosVal === 'SI' && (
+                      <>
+                        <Controller
+                          control={control}
+                          name="motivosCambios"
+                          render={({ field }) => (
+                            <CheckboxGroup<MotivoCambio>
+                              label="Si hubo cambios, ¿cuáles fueron los motivos?"
+                              required
+                              options={MOTIVOS_CAMBIO}
+                              labels={MOTIVO_CAMBIO_LABELS}
+                              selected={field.value ?? []}
+                              onChange={field.onChange}
+                              error={errors.motivosCambios?.message}
+                            />
                           )}
-                          <span
-                            className={[
-                              'text-xs tabular-nums',
-                              incidenteOtroDescripcionVal.length > 900
-                                ? 'text-error'
-                                : 'text-on-surface-variant',
-                            ].join(' ')}
-                          >
-                            {incidenteOtroDescripcionVal.length} / 1000
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Q2: ¿Hubo un accidente? */}
-                <Controller
-                  control={control}
-                  name="ocurrioAccidente"
-                  render={({ field }) => (
-                    <RadioGroup<'SI' | 'NO'>
-                      label="¿Hubo un accidente?"
-                      required
-                      labelExtra={
-                        <InfoTooltip text="Un accidente es un evento no deseado que resultó en lesión a persona/s o daño material significativo." />
-                      }
-                      options={SI_NO}
-                      labels={SI_NO_LABELS}
-                      value={field.value}
-                      onChange={(val) => {
-                        field.onChange(val)
-                        if (val === 'NO') {
-                          setValue('tiposAccidente', [])
-                          setValue('accidenteOtroDescripcion', '')
-                        }
-                      }}
-                      error={errors.ocurrioAccidente?.message}
-                    />
-                  )}
-                />
-
-                {/* Q2 detalle — solo si hubo accidente */}
-                {ocurrioAccidenteVal === 'SI' && (
-                  <div className="flex flex-col gap-4 pl-7 border-l-2 border-primary/20">
-                    {/* Tipo de accidente */}
-                    <Controller
-                      control={control}
-                      name="tiposAccidente"
-                      render={({ field }) => (
-                        <CheckboxGroup<TipoAccidente>
-                          label="Tipo de accidente — Puedes marcar más de uno"
-                          required
-                          options={TIPOS_ACCIDENTE}
-                          labels={TIPO_ACCIDENTE_LABELS}
-                          selected={field.value ?? []}
-                          onChange={(next) => {
-                            field.onChange(next)
-                            if (!next.includes('OTRO')) setValue('accidenteOtroDescripcion', '')
-                          }}
-                          error={errors.tiposAccidente?.message}
                         />
-                      )}
-                    />
 
-                    {/* Descripción del accidente (solo si "Otro") */}
-                    {showAccidenteOtro && (
-                      <div className="flex flex-col gap-1.5">
-                        <label
-                          htmlFor="accidenteOtroDescripcion"
-                          className="text-sm font-semibold text-primary"
-                        >
-                          Descripción del accidente
-                          <span className="text-error ml-1" aria-hidden="true">*</span>
-                        </label>
-                        <textarea
-                          id="accidenteOtroDescripcion"
-                          maxLength={1000}
-                          rows={4}
-                          placeholder="Describe brevemente qué ocurrió, qué consecuencias tuvo, cómo se resolvió y si hay medidas preventivas o lecciones aprendidas."
-                          {...register('accidenteOtroDescripcion')}
-                          aria-invalid={errors.accidenteOtroDescripcion ? 'true' : undefined}
-                          className={[
-                            'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                            'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
-                            errors.accidenteOtroDescripcion ? 'border-error' : 'border-secondary/30',
-                          ].join(' ')}
-                        />
-                        <div className="flex justify-between items-center">
-                          {errors.accidenteOtroDescripcion ? (
-                            <p className="text-xs text-error" role="alert">
-                              {errors.accidenteOtroDescripcion.message}
-                            </p>
-                          ) : (
-                            <span />
-                          )}
-                          <span
-                            className={[
-                              'text-xs tabular-nums',
-                              accidenteOtroDescripcionVal.length > 900
-                                ? 'text-error'
-                                : 'text-on-surface-variant',
-                            ].join(' ')}
-                          >
-                            {accidenteOtroDescripcionVal.length} / 1000
-                          </span>
-                        </div>
-                      </div>
+                        {/* Campo "Otro" condicional */}
+                        {showOtroMotivo && (
+                          <div className="flex flex-col gap-1.5 pl-7">
+                            <label htmlFor="motivosCambiosOtro" className="text-xs font-semibold text-primary">
+                              Especifica el motivo
+                            </label>
+                            <input
+                              id="motivosCambiosOtro"
+                              type="text"
+                              maxLength={100}
+                              placeholder="Describe el motivo del cambio..."
+                              {...register('motivosCambiosOtro')}
+                              className={[
+                                'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800',
+                                'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                                errors.motivosCambiosOtro ? 'border-error' : 'border-secondary/30',
+                              ].join(' ')}
+                            />
+                            {errors.motivosCambiosOtro && (
+                              <p className="text-xs text-error" role="alert">
+                                {errors.motivosCambiosOtro.message}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </>
                     )}
-                  </div>
-                )}
 
-                {/* Navegación */}
-                <div className="flex justify-between pt-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setCurrentStep(2)}
-                  >
-                    <ChevronLeft size={18} />
-                    Anterior
-                  </Button>
-                  <Button type="button" variant="primary" size="lg" onClick={goToStep4}>
-                    Siguiente
-                    <ChevronRight size={18} />
-                  </Button>
-                </div>
-              </>
-            )}
-            {/* ── PASO 4: Análisis Técnico y de Equipamiento ─────────────────── */}
-            {currentStep === 4 && (
-              <>
-                {/* Q12: Desempeño del Equipamiento */}
-                <Controller
-                  control={control}
-                  name="desempenoEquipo"
-                  render={({ field }) => (
-                    <RadioGroup<DesempenoEquipo>
-                      label="Desempeño del Equipamiento"
-                      required
-                      options={DESEMPENO_EQUIPO_OPTIONS}
-                      labels={DESEMPENO_EQUIPO_LABELS}
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.desempenoEquipo?.message}
-                    />
-                  )}
-                />
-
-                {/* Q13: Detalle de falla (condicional) */}
-                {showDetalleFalla && (
-                  <div className="flex flex-col gap-1.5 pl-7 border-l-2 border-error/20">
-                    <label
-                      htmlFor="detalleFallaEquipo"
-                      className="text-sm font-semibold text-primary"
-                    >
-                      Detalle de falla de equipamiento
-                      <span className="text-error ml-1" aria-hidden="true">*</span>
-                    </label>
-                    <p className="text-xs text-on-surface-variant -mt-0.5">
-                      Ej: Se rompió un crampón, la radio no tenía alcance, etc.
-                    </p>
-                    <textarea
-                      id="detalleFallaEquipo"
-                      maxLength={1000}
-                      rows={3}
-                      placeholder="Describe la falla o daño ocurrido..."
-                      {...register('detalleFallaEquipo')}
-                      aria-invalid={errors.detalleFallaEquipo ? 'true' : undefined}
-                      className={[
-                        'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                        'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
-                        errors.detalleFallaEquipo
-                          ? 'border-error'
-                          : 'border-secondary/30',
-                      ].join(' ')}
-                    />
-                    <div className="flex justify-between items-center">
-                      {errors.detalleFallaEquipo ? (
-                        <p className="text-xs text-error" role="alert">
-                          {errors.detalleFallaEquipo.message}
-                        </p>
-                      ) : (
-                        <span />
-                      )}
-                      <span
-                        className={[
-                          'text-xs tabular-nums',
-                          detalleFallaEquipoVal.length > 900
-                            ? 'text-error'
-                            : 'text-on-surface-variant',
-                        ].join(' ')}
-                      >
-                        {detalleFallaEquipoVal.length} / 1000
-                      </span>
+                    {/* Navegación */}
+                    <div className="flex justify-between pt-2">
+                      <Button type="button" variant="ghost" onClick={() => setCurrentStep(1)}>
+                        <ChevronLeft size={18} />
+                        Anterior
+                      </Button>
+                      <Button type="button" variant="primary" size="lg" onClick={goToStep3}>
+                        Siguiente
+                        <ChevronRight size={18} />
+                      </Button>
                     </div>
-                  </div>
+                  </>
                 )}
 
-                {/* Q14: Carga GPX */}
-                <GpxFilePicker value={gpxFile} onChange={setGpxFile} />
+                {/* ── PASO 3: Gestión de Incidentes y Accidentes ── */}
+                {currentStep === 3 && (
+                  <>
+                    {/* Q1: ¿Hubo un incidente? */}
+                    <Controller
+                      control={control}
+                      name="ocurrioIncidente"
+                      render={({ field }) => (
+                        <RadioGroup<'SI' | 'NO'>
+                          label="¿Hubo un incidente?"
+                          required
+                          labelExtra={
+                            <InfoTooltip text="Un incidente es un evento no deseado que no provocó lesiones ni daño material, pero que tuvo potencial para hacerlo." />
+                          }
+                          options={SI_NO}
+                          labels={SI_NO_LABELS}
+                          value={field.value}
+                          onChange={(val) => {
+                            field.onChange(val)
+                            if (val === 'NO') {
+                              setValue('tiposIncidente', [])
+                              setValue('incidenteOtroDescripcion', '')
+                            }
+                          }}
+                          error={errors.ocurrioIncidente?.message}
+                        />
+                      )}
+                    />
 
-                {/* Q15: Observaciones sobre la Ruta */}
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="observacionesRuta"
-                    className="text-sm font-semibold text-primary"
-                  >
-                    Observaciones sobre la Ruta
-                    <span className="text-error ml-1" aria-hidden="true">*</span>
-                  </label>
-                  <p className="text-xs text-on-surface-variant -mt-0.5">
-                    Ej: &quot;Mucha más nieve de lo esperado&quot;, &quot;derrumbe&quot;,
-                    &quot;Sin agua en el campamento base&quot;
-                  </p>
-                  <textarea
-                    id="observacionesRuta"
-                    maxLength={1000}
-                    rows={4}
-                    placeholder="Describe las condiciones reales de la ruta..."
-                    {...register('observacionesRuta')}
-                    aria-invalid={errors.observacionesRuta ? 'true' : undefined}
-                    className={[
-                      'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                      'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
-                      errors.observacionesRuta
-                        ? 'border-error'
-                        : 'border-secondary/30',
-                    ].join(' ')}
-                  />
-                  <div className="flex justify-between items-center">
-                    {errors.observacionesRuta ? (
-                      <p className="text-xs text-error" role="alert">
-                        {errors.observacionesRuta.message}
-                      </p>
-                    ) : (
-                      <span />
-                    )}
-                    <span
-                      className={[
-                        'text-xs tabular-nums',
-                        observacionesRutaVal.length > 900
-                          ? 'text-error'
-                          : 'text-on-surface-variant',
-                      ].join(' ')}
-                    >
-                      {observacionesRutaVal.length} / 1000
-                    </span>
-                  </div>
-                </div>
+                    {/* Q1 detalle — solo si hubo incidente */}
+                    {ocurrioIncidenteVal === 'SI' && (
+                      <div className="flex flex-col gap-4 pl-7 border-l-2 border-primary/20">
+                        {/* Tipo de incidente */}
+                        <Controller
+                          control={control}
+                          name="tiposIncidente"
+                          render={({ field }) => (
+                            <CheckboxGroup<TipoIncidente>
+                              label="Tipo de incidente — Puedes marcar más de uno"
+                              required
+                              options={TIPOS_INCIDENTE}
+                              labels={TIPO_INCIDENTE_LABELS}
+                              selected={field.value ?? []}
+                              onChange={(next) => {
+                                field.onChange(next)
+                                if (!next.includes('OTRO')) setValue('incidenteOtroDescripcion', '')
+                              }}
+                              error={errors.tiposIncidente?.message}
+                            />
+                          )}
+                        />
 
-                {/* Q16: Precisión del Pronóstico Meteorológico */}
-                <Controller
-                  control={control}
-                  name="precisionPronostico"
-                  render={({ field }) => (
-                    <fieldset className="flex flex-col gap-2">
-                      <legend className="text-sm font-semibold text-primary">
-                        Precisión del Pronóstico Meteorológico
-                        <span className="text-error ml-1" aria-hidden="true">*</span>
-                      </legend>
-                      <div className="flex items-center justify-between gap-1 text-xs text-on-surface-variant mb-1">
-                        <span>1 &mdash; Totalmente errado</span>
-                        <span>5 &mdash; Muy preciso</span>
+                        {/* Descripción del incidente (solo si "Otro") */}
+                        {showIncidenteOtro && (
+                          <div className="flex flex-col gap-1.5">
+                            <label htmlFor="incidenteOtroDescripcion" className="text-sm font-semibold text-primary">
+                              Descripción del incidente
+                              <span className="text-error ml-1" aria-hidden="true">
+                                *
+                              </span>
+                            </label>
+                            <textarea
+                              id="incidenteOtroDescripcion"
+                              maxLength={1000}
+                              rows={4}
+                              placeholder="Describe brevemente qué ocurrió, cómo se resolvió y si hay lecciones aprendidas."
+                              {...register('incidenteOtroDescripcion')}
+                              aria-invalid={errors.incidenteOtroDescripcion ? 'true' : undefined}
+                              className={[
+                                'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
+                                'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                                errors.incidenteOtroDescripcion ? 'border-error' : 'border-secondary/30',
+                              ].join(' ')}
+                            />
+                            <div className="flex justify-between items-center">
+                              {errors.incidenteOtroDescripcion ? (
+                                <p className="text-xs text-error" role="alert">
+                                  {errors.incidenteOtroDescripcion.message}
+                                </p>
+                              ) : (
+                                <span />
+                              )}
+                              <span
+                                className={[
+                                  'text-xs tabular-nums',
+                                  incidenteOtroDescripcionVal.length > 900 ? 'text-error' : 'text-on-surface-variant',
+                                ].join(' ')}
+                              >
+                                {incidenteOtroDescripcionVal.length} / 1000
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex gap-2">
-                        {([1, 2, 3, 4, 5] as const).map((n) => (
-                          <button
-                            key={n}
-                            type="button"
-                            onClick={() => field.onChange(n)}
+                    )}
+
+                    {/* Q2: ¿Hubo un accidente? */}
+                    <Controller
+                      control={control}
+                      name="ocurrioAccidente"
+                      render={({ field }) => (
+                        <RadioGroup<'SI' | 'NO'>
+                          label="¿Hubo un accidente?"
+                          required
+                          labelExtra={
+                            <InfoTooltip text="Un accidente es un evento no deseado que resultó en lesión a persona/s o daño material significativo." />
+                          }
+                          options={SI_NO}
+                          labels={SI_NO_LABELS}
+                          value={field.value}
+                          onChange={(val) => {
+                            field.onChange(val)
+                            if (val === 'NO') {
+                              setValue('tiposAccidente', [])
+                              setValue('accidenteOtroDescripcion', '')
+                            }
+                          }}
+                          error={errors.ocurrioAccidente?.message}
+                        />
+                      )}
+                    />
+
+                    {/* Q2 detalle — solo si hubo accidente */}
+                    {ocurrioAccidenteVal === 'SI' && (
+                      <div className="flex flex-col gap-4 pl-7 border-l-2 border-primary/20">
+                        {/* Tipo de accidente */}
+                        <Controller
+                          control={control}
+                          name="tiposAccidente"
+                          render={({ field }) => (
+                            <CheckboxGroup<TipoAccidente>
+                              label="Tipo de accidente — Puedes marcar más de uno"
+                              required
+                              options={TIPOS_ACCIDENTE}
+                              labels={TIPO_ACCIDENTE_LABELS}
+                              selected={field.value ?? []}
+                              onChange={(next) => {
+                                field.onChange(next)
+                                if (!next.includes('OTRO')) setValue('accidenteOtroDescripcion', '')
+                              }}
+                              error={errors.tiposAccidente?.message}
+                            />
+                          )}
+                        />
+
+                        {/* Descripción del accidente (solo si "Otro") */}
+                        {showAccidenteOtro && (
+                          <div className="flex flex-col gap-1.5">
+                            <label htmlFor="accidenteOtroDescripcion" className="text-sm font-semibold text-primary">
+                              Descripción del accidente
+                              <span className="text-error ml-1" aria-hidden="true">
+                                *
+                              </span>
+                            </label>
+                            <textarea
+                              id="accidenteOtroDescripcion"
+                              maxLength={1000}
+                              rows={4}
+                              placeholder="Describe brevemente qué ocurrió, qué consecuencias tuvo, cómo se resolvió y si hay medidas preventivas o lecciones aprendidas."
+                              {...register('accidenteOtroDescripcion')}
+                              aria-invalid={errors.accidenteOtroDescripcion ? 'true' : undefined}
+                              className={[
+                                'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
+                                'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                                errors.accidenteOtroDescripcion ? 'border-error' : 'border-secondary/30',
+                              ].join(' ')}
+                            />
+                            <div className="flex justify-between items-center">
+                              {errors.accidenteOtroDescripcion ? (
+                                <p className="text-xs text-error" role="alert">
+                                  {errors.accidenteOtroDescripcion.message}
+                                </p>
+                              ) : (
+                                <span />
+                              )}
+                              <span
+                                className={[
+                                  'text-xs tabular-nums',
+                                  accidenteOtroDescripcionVal.length > 900 ? 'text-error' : 'text-on-surface-variant',
+                                ].join(' ')}
+                              >
+                                {accidenteOtroDescripcionVal.length} / 1000
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Navegación */}
+                    <div className="flex justify-between pt-2">
+                      <Button type="button" variant="ghost" onClick={() => setCurrentStep(2)}>
+                        <ChevronLeft size={18} />
+                        Anterior
+                      </Button>
+                      <Button type="button" variant="primary" size="lg" onClick={goToStep4}>
+                        Siguiente
+                        <ChevronRight size={18} />
+                      </Button>
+                    </div>
+                  </>
+                )}
+                {/* ── PASO 4: Análisis Técnico y de Equipamiento ─────────────────── */}
+                {currentStep === 4 && (
+                  <>
+                    {/* Q12: Desempeño del Equipamiento */}
+                    <Controller
+                      control={control}
+                      name="desempenoEquipo"
+                      render={({ field }) => (
+                        <RadioGroup<DesempenoEquipo>
+                          label="Desempeño del Equipamiento"
+                          required
+                          options={DESEMPENO_EQUIPO_OPTIONS}
+                          labels={DESEMPENO_EQUIPO_LABELS}
+                          value={field.value}
+                          onChange={field.onChange}
+                          error={errors.desempenoEquipo?.message}
+                        />
+                      )}
+                    />
+
+                    {/* Q13: Detalle de falla (condicional) */}
+                    {showDetalleFalla && (
+                      <div className="flex flex-col gap-1.5 pl-7 border-l-2 border-error/20">
+                        <label htmlFor="detalleFallaEquipo" className="text-sm font-semibold text-primary">
+                          Detalle de falla de equipamiento
+                          <span className="text-error ml-1" aria-hidden="true">
+                            *
+                          </span>
+                        </label>
+                        <p className="text-xs text-on-surface-variant -mt-0.5">
+                          Ej: Se rompió un crampón, la radio no tenía alcance, etc.
+                        </p>
+                        <textarea
+                          id="detalleFallaEquipo"
+                          maxLength={1000}
+                          rows={3}
+                          placeholder="Describe la falla o daño ocurrido..."
+                          {...register('detalleFallaEquipo')}
+                          aria-invalid={errors.detalleFallaEquipo ? 'true' : undefined}
+                          className={[
+                            'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
+                            'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                            errors.detalleFallaEquipo ? 'border-error' : 'border-secondary/30',
+                          ].join(' ')}
+                        />
+                        <div className="flex justify-between items-center">
+                          {errors.detalleFallaEquipo ? (
+                            <p className="text-xs text-error" role="alert">
+                              {errors.detalleFallaEquipo.message}
+                            </p>
+                          ) : (
+                            <span />
+                          )}
+                          <span
                             className={[
-                              'flex-1 py-3 rounded-xl border text-sm font-bold transition-all duration-150',
-                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
-                              field.value === n
-                                ? 'bg-primary border-primary text-white'
-                                : 'bg-white border-secondary/30 text-slate-700 hover:border-primary/40 hover:bg-surface-container-low',
+                              'text-xs tabular-nums',
+                              detalleFallaEquipoVal.length > 900 ? 'text-error' : 'text-on-surface-variant',
                             ].join(' ')}
                           >
-                            {n}
-                          </button>
-                        ))}
+                            {detalleFallaEquipoVal.length} / 1000
+                          </span>
+                        </div>
                       </div>
-                      {errors.precisionPronostico && (
-                        <p className="text-xs text-error" role="alert">
-                          {errors.precisionPronostico.message}
-                        </p>
-                      )}
-                    </fieldset>
-                  )}
-                />
-
-                {/* Navegación */}
-                <div className="flex justify-between pt-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setCurrentStep(3)}
-                  >
-                    <ChevronLeft size={18} />
-                    Anterior
-                  </Button>
-                  <Button type="button" variant="primary" size="lg" onClick={goToStep5}>
-                    Siguiente
-                    <ChevronRight size={18} />
-                  </Button>
-                </div>
-              </>
-            )}
-
-            {/* ── PASO 5: Lecciones Aprendidas y Recomendaciones ──────── */}
-            {currentStep === 5 && (
-              <>
-                {/* Q17: ¿Qué aprendió la cordada? */}
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="leccionesAprendidas"
-                    className="text-sm font-semibold text-primary"
-                  >
-                    ¿Qué aprendió la cordada en esta salida?
-                    <span className="text-error ml-1" aria-hidden="true">*</span>
-                  </label>
-                  <textarea
-                    id="leccionesAprendidas"
-                    maxLength={1000}
-                    rows={4}
-                    placeholder="Describe los aprendizajes clave de la cordada..."
-                    {...register('leccionesAprendidas')}
-                    aria-invalid={errors.leccionesAprendidas ? 'true' : undefined}
-                    className={[
-                      'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                      'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
-                      errors.leccionesAprendidas ? 'border-error' : 'border-secondary/30',
-                    ].join(' ')}
-                  />
-                  <div className="flex justify-between items-center">
-                    {errors.leccionesAprendidas ? (
-                      <p className="text-xs text-error" role="alert">
-                        {errors.leccionesAprendidas.message}
-                      </p>
-                    ) : (
-                      <span />
                     )}
-                    <span
-                      className={[
-                        'text-xs tabular-nums',
-                        leccionesAprendidasVal.length > 900 ? 'text-error' : 'text-on-surface-variant',
-                      ].join(' ')}
-                    >
-                      {leccionesAprendidasVal.length} / 1000
-                    </span>
-                  </div>
-                </div>
 
-                {/* Q18: Recomendaciones para futuros socios */}
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="recomendacionesFuturos"
-                    className="text-sm font-semibold text-primary"
-                  >
-                    Recomendaciones para futuros socios que realicen esta ruta
-                  </label>
-                  <textarea
-                    id="recomendacionesFuturos"
-                    maxLength={1000}
-                    rows={4}
-                    placeholder="Consejos prácticos para quienes repitan esta ruta..."
-                    {...register('recomendacionesFuturos')}
-                    className={[
-                      'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                      'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
-                      'border-secondary/30',
-                    ].join(' ')}
-                  />
-                  <div className="flex justify-end">
-                    <span
-                      className={[
-                        'text-xs tabular-nums',
-                        recomendacionesFuturosVal.length > 900
-                          ? 'text-error'
-                          : 'text-on-surface-variant',
-                      ].join(' ')}
-                    >
-                      {recomendacionesFuturosVal.length} / 1000
-                    </span>
-                  </div>
-                </div>
+                    {/* Q14: Carga GPX */}
+                    <GpxFilePicker value={gpxFile} onChange={setGpxFile} />
 
-                {/* Q19: Sugerencias para el Club */}
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="sugerenciasClub"
-                    className="text-sm font-semibold text-primary"
-                  >
-                    Sugerencias para el Club
-                  </label>
-                  <p className="text-xs text-on-surface-variant -mt-0.5">
-                    Ej: &quot;Se necesita renovar las cuerdas de 60m&quot;, &quot;Falta
-                    capacitación en uso de GPS&quot;.
-                  </p>
-                  <textarea
-                    id="sugerenciasClub"
-                    maxLength={1000}
-                    rows={4}
-                    placeholder="Comparte tus sugerencias con el Club..."
-                    {...register('sugerenciasClub')}
-                    className={[
-                      'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
-                      'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
-                      'border-secondary/30',
-                    ].join(' ')}
-                  />
-                  <div className="flex justify-end">
-                    <span
-                      className={[
-                        'text-xs tabular-nums',
-                        sugerenciasClubVal.length > 900 ? 'text-error' : 'text-on-surface-variant',
-                      ].join(' ')}
-                    >
-                      {sugerenciasClubVal.length} / 1000
-                    </span>
-                  </div>
-                </div>
+                    {/* Q15: Observaciones sobre la Ruta */}
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="observacionesRuta" className="text-sm font-semibold text-primary">
+                        Observaciones sobre la Ruta
+                        <span className="text-error ml-1" aria-hidden="true">
+                          *
+                        </span>
+                      </label>
+                      <p className="text-xs text-on-surface-variant -mt-0.5">
+                        Ej: &quot;Mucha más nieve de lo esperado&quot;, &quot;derrumbe&quot;, &quot;Sin agua en el
+                        campamento base&quot;
+                      </p>
+                      <textarea
+                        id="observacionesRuta"
+                        maxLength={1000}
+                        rows={4}
+                        placeholder="Describe las condiciones reales de la ruta..."
+                        {...register('observacionesRuta')}
+                        aria-invalid={errors.observacionesRuta ? 'true' : undefined}
+                        className={[
+                          'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
+                          'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                          errors.observacionesRuta ? 'border-error' : 'border-secondary/30',
+                        ].join(' ')}
+                      />
+                      <div className="flex justify-between items-center">
+                        {errors.observacionesRuta ? (
+                          <p className="text-xs text-error" role="alert">
+                            {errors.observacionesRuta.message}
+                          </p>
+                        ) : (
+                          <span />
+                        )}
+                        <span
+                          className={[
+                            'text-xs tabular-nums',
+                            observacionesRutaVal.length > 900 ? 'text-error' : 'text-on-surface-variant',
+                          ].join(' ')}
+                        >
+                          {observacionesRutaVal.length} / 1000
+                        </span>
+                      </div>
+                    </div>
 
-                {/* Error de envío */}
-                {submitError && (
-                  <div
-                    role="alert"
-                    className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container"
-                  >
-                    <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                    <span>{submitError}</span>
-                  </div>
+                    {/* Q16: Precisión del Pronóstico Meteorológico */}
+                    <Controller
+                      control={control}
+                      name="precisionPronostico"
+                      render={({ field }) => (
+                        <fieldset className="flex flex-col gap-2">
+                          <legend className="text-sm font-semibold text-primary">
+                            Precisión del Pronóstico Meteorológico
+                            <span className="text-error ml-1" aria-hidden="true">
+                              *
+                            </span>
+                          </legend>
+                          <div className="flex items-center justify-between gap-1 text-xs text-on-surface-variant mb-1">
+                            <span>1 &mdash; Totalmente errado</span>
+                            <span>5 &mdash; Muy preciso</span>
+                          </div>
+                          <div className="flex gap-2">
+                            {([1, 2, 3, 4, 5] as const).map((n) => (
+                              <button
+                                key={n}
+                                type="button"
+                                onClick={() => field.onChange(n)}
+                                className={[
+                                  'flex-1 py-3 rounded-xl border text-sm font-bold transition-all duration-150',
+                                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                                  field.value === n
+                                    ? 'bg-primary border-primary text-white'
+                                    : 'bg-white border-secondary/30 text-slate-700 hover:border-primary/40 hover:bg-surface-container-low',
+                                ].join(' ')}
+                              >
+                                {n}
+                              </button>
+                            ))}
+                          </div>
+                          {errors.precisionPronostico && (
+                            <p className="text-xs text-error" role="alert">
+                              {errors.precisionPronostico.message}
+                            </p>
+                          )}
+                        </fieldset>
+                      )}
+                    />
+
+                    {/* Navegación */}
+                    <div className="flex justify-between pt-2">
+                      <Button type="button" variant="ghost" onClick={() => setCurrentStep(3)}>
+                        <ChevronLeft size={18} />
+                        Anterior
+                      </Button>
+                      <Button type="button" variant="primary" size="lg" onClick={goToStep5}>
+                        Siguiente
+                        <ChevronRight size={18} />
+                      </Button>
+                    </div>
+                  </>
                 )}
 
-                {/* Navegación */}
-                <div className="flex justify-between pt-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setCurrentStep(4)}
-                    disabled={isSubmitting}
-                  >
-                    <ChevronLeft size={18} />
-                    Anterior
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="lg"
-                    loading={isSubmitting}
-                    disabled={isSubmitting}
-                  >
-                    <Check size={18} />
-                    Registrar cierre
-                  </Button>
-                </div>
-              </>
-            )}
-            </motion.div>
-          </AnimatePresence>
+                {/* ── PASO 5: Lecciones Aprendidas y Recomendaciones ──────── */}
+                {currentStep === 5 && (
+                  <>
+                    {/* Q17: ¿Qué aprendió la cordada? */}
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="leccionesAprendidas" className="text-sm font-semibold text-primary">
+                        ¿Qué aprendió la cordada en esta salida?
+                        <span className="text-error ml-1" aria-hidden="true">
+                          *
+                        </span>
+                      </label>
+                      <textarea
+                        id="leccionesAprendidas"
+                        maxLength={1000}
+                        rows={4}
+                        placeholder="Describe los aprendizajes clave de la cordada..."
+                        {...register('leccionesAprendidas')}
+                        aria-invalid={errors.leccionesAprendidas ? 'true' : undefined}
+                        className={[
+                          'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
+                          'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                          errors.leccionesAprendidas ? 'border-error' : 'border-secondary/30',
+                        ].join(' ')}
+                      />
+                      <div className="flex justify-between items-center">
+                        {errors.leccionesAprendidas ? (
+                          <p className="text-xs text-error" role="alert">
+                            {errors.leccionesAprendidas.message}
+                          </p>
+                        ) : (
+                          <span />
+                        )}
+                        <span
+                          className={[
+                            'text-xs tabular-nums',
+                            leccionesAprendidasVal.length > 900 ? 'text-error' : 'text-on-surface-variant',
+                          ].join(' ')}
+                        >
+                          {leccionesAprendidasVal.length} / 1000
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Q18: Recomendaciones para futuros socios */}
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="recomendacionesFuturos" className="text-sm font-semibold text-primary">
+                        Recomendaciones para futuros socios que realicen esta ruta
+                      </label>
+                      <textarea
+                        id="recomendacionesFuturos"
+                        maxLength={1000}
+                        rows={4}
+                        placeholder="Consejos prácticos para quienes repitan esta ruta..."
+                        {...register('recomendacionesFuturos')}
+                        className={[
+                          'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
+                          'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                          'border-secondary/30',
+                        ].join(' ')}
+                      />
+                      <div className="flex justify-end">
+                        <span
+                          className={[
+                            'text-xs tabular-nums',
+                            recomendacionesFuturosVal.length > 900 ? 'text-error' : 'text-on-surface-variant',
+                          ].join(' ')}
+                        >
+                          {recomendacionesFuturosVal.length} / 1000
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Q19: Sugerencias para el Club */}
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="sugerenciasClub" className="text-sm font-semibold text-primary">
+                        Sugerencias para el Club
+                      </label>
+                      <p className="text-xs text-on-surface-variant -mt-0.5">
+                        Ej: &quot;Se necesita renovar las cuerdas de 60m&quot;, &quot;Falta capacitación en uso de
+                        GPS&quot;.
+                      </p>
+                      <textarea
+                        id="sugerenciasClub"
+                        maxLength={1000}
+                        rows={4}
+                        placeholder="Comparte tus sugerencias con el Club..."
+                        {...register('sugerenciasClub')}
+                        className={[
+                          'w-full px-3 py-2 rounded-xl border bg-white text-sm text-slate-800 resize-none',
+                          'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                          'border-secondary/30',
+                        ].join(' ')}
+                      />
+                      <div className="flex justify-end">
+                        <span
+                          className={[
+                            'text-xs tabular-nums',
+                            sugerenciasClubVal.length > 900 ? 'text-error' : 'text-on-surface-variant',
+                          ].join(' ')}
+                        >
+                          {sugerenciasClubVal.length} / 1000
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Error de envío */}
+                    {submitError && (
+                      <div
+                        role="alert"
+                        className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 p-3 text-sm text-on-error-container"
+                      >
+                        <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                        <span>{submitError}</span>
+                      </div>
+                    )}
+
+                    {/* Navegación */}
+                    <div className="flex justify-between pt-2">
+                      <Button type="button" variant="ghost" onClick={() => setCurrentStep(4)} disabled={isSubmitting}>
+                        <ChevronLeft size={18} />
+                        Anterior
+                      </Button>
+                      <Button type="submit" variant="primary" size="lg" loading={isSubmitting} disabled={isSubmitting}>
+                        <Check size={18} />
+                        Registrar cierre
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            </AnimatePresence>
           </form>
         )}
       </main>

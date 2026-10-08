@@ -40,7 +40,8 @@ describe('selectEmailProvider', () => {
 
   it('EMAIL_PROVIDER=smtp con puerto no numérico lanza nombrando SMTP_PORT', () => {
     assert.throws(
-      () => selectEmailProvider({ emailProvider: 'smtp', ...smtpEnv, smtpPort: 'no-es-un-puerto', nodeEnv: 'development' }),
+      () =>
+        selectEmailProvider({ emailProvider: 'smtp', ...smtpEnv, smtpPort: 'no-es-un-puerto', nodeEnv: 'development' }),
       /SMTP_PORT/,
     );
   });
@@ -116,7 +117,11 @@ describe('resolveEmailProvider', () => {
   it('con proveedor "console" nunca llama a la fábrica smtp', () => {
     const cache = createProviderConnectionCache();
     const { factories, smtp } = fakeFactories();
-    const provider = resolveEmailProvider({ emailProvider: 'console', ...emptySmtpEnv, nodeEnv: 'test' }, cache, factories);
+    const provider = resolveEmailProvider(
+      { emailProvider: 'console', ...emptySmtpEnv, nodeEnv: 'test' },
+      cache,
+      factories,
+    );
     assert.ok(provider);
     assert.equal(smtp.mock.calls.length, 0);
   });
@@ -129,7 +134,11 @@ describe('resolveEmailProvider', () => {
     // propio par de credenciales, ambos cayeron al mismo SMTP_USER/SMTP_PASS
     // global — deben compartir la MISMA conexión en vez de abrir un pool cada
     // uno para exactamente la misma cuenta.
-    const notificacion = resolveEmailProvider({ emailProvider: 'smtp', ...smtpEnv, nodeEnv: 'production' }, cache, factories);
+    const notificacion = resolveEmailProvider(
+      { emailProvider: 'smtp', ...smtpEnv, nodeEnv: 'production' },
+      cache,
+      factories,
+    );
     const alerta = resolveEmailProvider({ emailProvider: 'smtp', ...smtpEnv, nodeEnv: 'production' }, cache, factories);
 
     assert.equal(notificacion, alerta);
@@ -159,8 +168,16 @@ describe('resolveEmailProvider', () => {
     const cache = createProviderConnectionCache();
     const { factories, smtp } = fakeFactories();
 
-    const enPuerto587 = resolveEmailProvider({ emailProvider: 'smtp', ...smtpEnv, smtpPort: '587', nodeEnv: 'production' }, cache, factories);
-    const enPuerto465 = resolveEmailProvider({ emailProvider: 'smtp', ...smtpEnv, smtpPort: '465', nodeEnv: 'production' }, cache, factories);
+    const enPuerto587 = resolveEmailProvider(
+      { emailProvider: 'smtp', ...smtpEnv, smtpPort: '587', nodeEnv: 'production' },
+      cache,
+      factories,
+    );
+    const enPuerto465 = resolveEmailProvider(
+      { emailProvider: 'smtp', ...smtpEnv, smtpPort: '465', nodeEnv: 'production' },
+      cache,
+      factories,
+    );
 
     assert.notEqual(enPuerto587, enPuerto465);
     assert.equal(smtp.mock.calls.length, 2);

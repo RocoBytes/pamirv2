@@ -105,14 +105,26 @@ const editSchema = z
   })
   .superRefine((data, ctx) => {
     if (data.avisosExternos.includes('CARABINEROS') && !data.retenCarabineros?.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'El retén de Carabineros es obligatorio', path: ['retenCarabineros'] })
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'El retén de Carabineros es obligatorio',
+        path: ['retenCarabineros'],
+      })
     }
     if (data.avisosExternos.includes('FAMILIAR_OTRO')) {
       if (!data.nombreFamiliar?.trim()) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'El nombre del familiar es obligatorio', path: ['nombreFamiliar'] })
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'El nombre del familiar es obligatorio',
+          path: ['nombreFamiliar'],
+        })
       }
       if (!data.telefonoFamiliar?.trim()) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'El teléfono del familiar es obligatorio', path: ['telefonoFamiliar'] })
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'El teléfono del familiar es obligatorio',
+          path: ['telefonoFamiliar'],
+        })
       }
     }
   })
@@ -122,7 +134,12 @@ type EditFormValues = z.infer<typeof editSchema>
 // ─── Grupos reutilizables (mismo estilo que el wizard) ───────────────────────
 
 function ChipSingle<T extends string>({
-  label, options, labels, value, onChange, error,
+  label,
+  options,
+  labels,
+  value,
+  onChange,
+  error,
 }: {
   label: string
   options: readonly T[]
@@ -156,13 +173,22 @@ function ChipSingle<T extends string>({
           )
         })}
       </div>
-      {error && <p className="text-xs text-error" role="alert">{error}</p>}
+      {error && (
+        <p className="text-xs text-error" role="alert">
+          {error}
+        </p>
+      )}
     </fieldset>
   )
 }
 
 function ChipMulti<T extends string>({
-  label, options, labels, value, onChange, error,
+  label,
+  options,
+  labels,
+  value,
+  onChange,
+  error,
 }: {
   label: string
   options: readonly T[]
@@ -200,7 +226,11 @@ function ChipMulti<T extends string>({
           )
         })}
       </div>
-      {error && <p className="text-xs text-error" role="alert">{error}</p>}
+      {error && (
+        <p className="text-xs text-error" role="alert">
+          {error}
+        </p>
+      )}
     </fieldset>
   )
 }
@@ -210,7 +240,10 @@ function BoolChips({ label, value, onChange }: { label: string; value: boolean; 
     <fieldset className="flex flex-col gap-2">
       <legend className="text-sm font-semibold text-primary">{label}</legend>
       <div className="flex gap-2">
-        {[{ v: true, l: 'Sí' }, { v: false, l: 'No' }].map(({ v, l }) => {
+        {[
+          { v: true, l: 'Sí' },
+          { v: false, l: 'No' },
+        ].map(({ v, l }) => {
           const selected = value === v
           return (
             <button
@@ -318,7 +351,9 @@ export function SalidaEditForm({ salidaId, onDone, onCancel, shell }: SalidaEdit
       }
     }
     void load()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [salidaId, reset])
 
   const avisos = watch('avisosExternos') ?? []
@@ -340,176 +375,334 @@ export function SalidaEditForm({ salidaId, onDone, onCancel, shell }: SalidaEdit
   }
 
   return (
-    <AppShell
-      shell={shell}
-      active="none"
-      onBack={onCancel}
-      width="narrow"
-      chrome="focused"
-      title="Editar salida"
-    >
-        {/* Identidad de la salida editada: el header compartido solo lleva el
+    <AppShell shell={shell} active="none" onBack={onCancel} width="narrow" chrome="focused" title="Editar salida">
+      {/* Identidad de la salida editada: el header compartido solo lleva el
             título genérico, así que el N° va acá, junto al formulario. */}
-        <div className="mb-5 flex items-center gap-2 min-w-0">
-          <Pencil size={18} className="text-primary shrink-0" aria-hidden="true" />
-          <h1 className="text-headline-md font-bold text-on-surface truncate">Editar salida</h1>
-          {typeof salida?.numeroSalida === 'number' && (
-            <span className="shrink-0 text-label-caps font-bold text-primary bg-primary-fixed px-2 py-0.5 rounded-md tabular-nums">
-              N° {salida.numeroSalida}
-            </span>
-          )}
+      <div className="mb-5 flex items-center gap-2 min-w-0">
+        <Pencil size={18} className="text-primary shrink-0" aria-hidden="true" />
+        <h1 className="text-headline-md font-bold text-on-surface truncate">Editar salida</h1>
+        {typeof salida?.numeroSalida === 'number' && (
+          <span className="shrink-0 text-label-caps font-bold text-primary bg-primary-fixed px-2 py-0.5 rounded-md tabular-nums">
+            N° {salida.numeroSalida}
+          </span>
+        )}
+      </div>
+
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-on-surface-variant">
+          <Loader2 className="animate-spin text-primary" size={28} />
+          <p className="text-sm">Cargando salida...</p>
         </div>
+      )}
 
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-20 gap-3 text-on-surface-variant">
-            <Loader2 className="animate-spin text-primary" size={28} />
-            <p className="text-sm">Cargando salida...</p>
+      {!loading && loadError && (
+        <div className="flex flex-col items-center py-16 gap-4 text-center">
+          <AlertCircle size={32} className="text-error" />
+          <p className="text-sm text-on-surface-variant">{loadError}</p>
+          <Button variant="secondary" size="sm" onClick={onCancel}>
+            Volver
+          </Button>
+        </div>
+      )}
+
+      {!loading && !loadError && salida && (
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
+          {/* Contexto no editable: grupo humano */}
+          <div className="bg-primary-fixed border border-primary/15 rounded-2xl px-4 py-3 text-xs text-primary-hover">
+            Líder de cordada e integrantes <strong>no son editables</strong> desde aquí. Líder:{' '}
+            <strong>{salida.liderCordada}</strong> · {salida.participantes.length} participante(s).
           </div>
-        )}
 
-        {!loading && loadError && (
-          <div className="flex flex-col items-center py-16 gap-4 text-center">
-            <AlertCircle size={32} className="text-error" />
-            <p className="text-sm text-on-surface-variant">{loadError}</p>
-            <Button variant="secondary" size="sm" onClick={onCancel}>Volver</Button>
-          </div>
-        )}
+          <Section title="Clasificación">
+            <Controller
+              name="tipoSalida"
+              control={control}
+              render={({ field }) => (
+                <ChipSingle<TipoSalida>
+                  label="Tipo de salida"
+                  options={TIPOS}
+                  labels={TIPO_SALIDA_LABELS}
+                  value={field.value}
+                  onChange={field.onChange}
+                  error={errors.tipoSalida?.message}
+                />
+              )}
+            />
+            <Controller
+              name="disciplina"
+              control={control}
+              render={({ field }) => (
+                <ChipSingle<Disciplina>
+                  label="Disciplina"
+                  options={DISCIPLINAS}
+                  labels={DISCIPLINA_LABELS}
+                  value={field.value}
+                  onChange={field.onChange}
+                  error={errors.disciplina?.message}
+                />
+              )}
+            />
+            <Controller
+              name="temporada"
+              control={control}
+              render={({ field }) => (
+                <ChipSingle<Temporada>
+                  label="Temporada"
+                  options={TEMPORADAS}
+                  labels={TEMPORADA_LABELS}
+                  value={field.value}
+                  onChange={field.onChange}
+                  error={errors.temporada?.message}
+                />
+              )}
+            />
+            <Input
+              label="Nombre de la actividad / ruta"
+              required
+              error={errors.nombreActividad?.message}
+              {...register('nombreActividad')}
+            />
+            <Input
+              label="Ubicación geográfica"
+              required
+              error={errors.ubicacionGeografica?.message}
+              {...register('ubicacionGeografica')}
+            />
+          </Section>
 
-        {!loading && !loadError && salida && (
-          <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-            {/* Contexto no editable: grupo humano */}
-            <div className="bg-primary-fixed border border-primary/15 rounded-2xl px-4 py-3 text-xs text-primary-hover">
-              Líder de cordada e integrantes <strong>no son editables</strong> desde aquí.
-              Líder: <strong>{salida.liderCordada}</strong> · {salida.participantes.length} participante(s).
+          <Section title="Cronología y seguridad">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Fecha de inicio"
+                type="date"
+                required
+                error={errors.fechaInicio?.message}
+                {...register('fechaInicio')}
+              />
+              <Input
+                label="Fecha estimada de retorno"
+                type="date"
+                required
+                error={errors.fechaRetornoEstimada?.message}
+                {...register('fechaRetornoEstimada')}
+              />
             </div>
-
-            <Section title="Clasificación">
-              <Controller name="tipoSalida" control={control} render={({ field }) => (
-                <ChipSingle<TipoSalida> label="Tipo de salida" options={TIPOS} labels={TIPO_SALIDA_LABELS} value={field.value} onChange={field.onChange} error={errors.tipoSalida?.message} />
-              )} />
-              <Controller name="disciplina" control={control} render={({ field }) => (
-                <ChipSingle<Disciplina> label="Disciplina" options={DISCIPLINAS} labels={DISCIPLINA_LABELS} value={field.value} onChange={field.onChange} error={errors.disciplina?.message} />
-              )} />
-              <Controller name="temporada" control={control} render={({ field }) => (
-                <ChipSingle<Temporada> label="Temporada" options={TEMPORADAS} labels={TEMPORADA_LABELS} value={field.value} onChange={field.onChange} error={errors.temporada?.message} />
-              )} />
-              <Input label="Nombre de la actividad / ruta" required error={errors.nombreActividad?.message} {...register('nombreActividad')} />
-              <Input label="Ubicación geográfica" required error={errors.ubicacionGeografica?.message} {...register('ubicacionGeografica')} />
-            </Section>
-
-            <Section title="Cronología y seguridad">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input label="Fecha de inicio" type="date" required error={errors.fechaInicio?.message} {...register('fechaInicio')} />
-                <Input label="Fecha estimada de retorno" type="date" required error={errors.fechaRetornoEstimada?.message} {...register('fechaRetornoEstimada')} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Controller name="horaRetornoEstimada" control={control} render={({ field }) => (
-                  <TimeInput24 label="Hora de retorno (vehículos)" required value={field.value} onChange={field.onChange} onBlur={field.onBlur} error={errors.horaRetornoEstimada?.message} />
-                )} />
-                <Controller name="horaAlerta" control={control} render={({ field }) => (
-                  <TimeInput24 label="Hora de alerta" required value={field.value} onChange={field.onChange} onBlur={field.onBlur} error={errors.horaAlerta?.message} />
-                )} />
-              </div>
-              <Controller name="avisosExternos" control={control} render={({ field }) => (
-                <ChipMulti<AvisoExterno> label="Avisos a autoridades / terceros" options={AVISOS} labels={AVISO_EXTERNO_LABELS} value={field.value ?? []} onChange={field.onChange} error={errors.avisosExternos?.message} />
-              )} />
-              {showCarabineros && (
-                <Input label="Retén de Carabineros" required error={errors.retenCarabineros?.message} {...register('retenCarabineros')} />
-              )}
-              {showFamiliar && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input label="Nombre del familiar / contacto" required error={errors.nombreFamiliar?.message} {...register('nombreFamiliar')} />
-                  <Input label="Teléfono del familiar / contacto" required error={errors.telefonoFamiliar?.message} {...register('telefonoFamiliar')} />
-                </div>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Controller name="coordinacionGrupal" control={control} render={({ field }) => (
-                  <BoolChips label="¿Coordinación grupal previa?" value={field.value} onChange={field.onChange} />
-                )} />
-                <Controller name="matrizRiesgos" control={control} render={({ field }) => (
-                  <BoolChips label="¿Matriz de riesgos elaborada?" value={field.value} onChange={field.onChange} />
-                )} />
-              </div>
-            </Section>
-
-            <Section title="Comunicaciones y equipo">
-              <Controller name="mediosComunicacion" control={control} render={({ field }) => (
-                <ChipMulti<MedioComunicacion> label="Medios de comunicación" options={MEDIOS} labels={MEDIO_COMUNICACION_LABELS} value={field.value ?? []} onChange={field.onChange} error={errors.mediosComunicacion?.message} />
-              )} />
-              <Input label="ID de dispositivo / frecuencia radial (opcional)" error={errors.idDispositivoFrecuencia?.message} {...register('idDispositivoFrecuencia')} />
-              <Controller name="equipoColectivo" control={control} render={({ field }) => (
-                <ChipMulti<EquipoColectivoSeguridad> label="Equipo colectivo de seguridad" options={EQUIPOS} labels={EQUIPO_COLECTIVO_LABELS} value={field.value ?? []} onChange={field.onChange} error={errors.equipoColectivo?.message} />
-              )} />
-              {showEquipoOtro && (
-                <Input label="Especifica el equipo adicional" error={errors.equipoColectivoOtro?.message} {...register('equipoColectivoOtro')} />
-              )}
-            </Section>
-
-            <Section title="Planificación técnica">
-              <Controller name="riesgosIdentificados" control={control} render={({ field }) => (
-                <ChipMulti<RiesgoIdentificado> label="Riesgos identificados" options={RIESGOS} labels={RIESGO_IDENTIFICADO_LABELS} value={field.value ?? []} onChange={field.onChange} error={errors.riesgosIdentificados?.message} />
-              )} />
-              {showRiesgoOtro && (
-                <Input label="Especifica el otro riesgo" error={errors.riesgosOtro?.message} {...register('riesgosOtro')} />
-              )}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="pronosticoMeteorologico" className="text-sm font-semibold text-primary">
-                  Pronóstico meteorológico<span className="text-error ml-1" aria-hidden="true">*</span>
-                </label>
-                <textarea
-                  id="pronosticoMeteorologico"
-                  rows={3}
-                  maxLength={1000}
-                  {...register('pronosticoMeteorologico')}
-                  className={[
-                    'w-full px-3 py-2.5 rounded-xl border bg-white text-sm text-slate-800 resize-y',
-                    'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
-                    errors.pronosticoMeteorologico ? 'border-error' : 'border-secondary/30',
-                  ].join(' ')}
-                />
-                {errors.pronosticoMeteorologico && (
-                  <p className="text-xs text-error" role="alert">{errors.pronosticoMeteorologico.message}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Controller
+                name="horaRetornoEstimada"
+                control={control}
+                render={({ field }) => (
+                  <TimeInput24
+                    label="Hora de retorno (vehículos)"
+                    required
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    error={errors.horaRetornoEstimada?.message}
+                  />
                 )}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="planEvacuacion" className="text-sm font-semibold text-primary">
-                  Plan de evacuación <span className="text-on-surface-variant font-normal">(opcional)</span>
-                </label>
-                <textarea
-                  id="planEvacuacion"
-                  rows={3}
-                  maxLength={1000}
-                  {...register('planEvacuacion')}
-                  className={[
-                    'w-full px-3 py-2.5 rounded-xl border bg-white text-sm text-slate-800 resize-y',
-                    'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
-                    errors.planEvacuacion ? 'border-error' : 'border-secondary/30',
-                  ].join(' ')}
-                />
-                {errors.planEvacuacion && (
-                  <p className="text-xs text-error" role="alert">{errors.planEvacuacion.message}</p>
+              />
+              <Controller
+                name="horaAlerta"
+                control={control}
+                render={({ field }) => (
+                  <TimeInput24
+                    label="Hora de alerta"
+                    required
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    error={errors.horaAlerta?.message}
+                  />
                 )}
-              </div>
-            </Section>
-
-            {submitError && (
-              <div className="flex items-start gap-2 bg-error-container border border-error/30 rounded-xl px-4 py-3 text-sm text-error">
-                <AlertCircle size={18} className="shrink-0 mt-0.5" />
-                <span>{submitError}</span>
+              />
+            </div>
+            <Controller
+              name="avisosExternos"
+              control={control}
+              render={({ field }) => (
+                <ChipMulti<AvisoExterno>
+                  label="Avisos a autoridades / terceros"
+                  options={AVISOS}
+                  labels={AVISO_EXTERNO_LABELS}
+                  value={field.value ?? []}
+                  onChange={field.onChange}
+                  error={errors.avisosExternos?.message}
+                />
+              )}
+            />
+            {showCarabineros && (
+              <Input
+                label="Retén de Carabineros"
+                required
+                error={errors.retenCarabineros?.message}
+                {...register('retenCarabineros')}
+              />
+            )}
+            {showFamiliar && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="Nombre del familiar / contacto"
+                  required
+                  error={errors.nombreFamiliar?.message}
+                  {...register('nombreFamiliar')}
+                />
+                <Input
+                  label="Teléfono del familiar / contacto"
+                  required
+                  error={errors.telefonoFamiliar?.message}
+                  {...register('telefonoFamiliar')}
+                />
               </div>
             )}
-
-            <div className="flex justify-between gap-3 pt-2 pb-6">
-              <Button type="button" variant="ghost" onClick={onCancel} disabled={isSubmitting}>
-                Cancelar
-              </Button>
-              <Button type="submit" variant="primary" size="lg" disabled={isSubmitting}>
-                {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                Guardar cambios
-              </Button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Controller
+                name="coordinacionGrupal"
+                control={control}
+                render={({ field }) => (
+                  <BoolChips label="¿Coordinación grupal previa?" value={field.value} onChange={field.onChange} />
+                )}
+              />
+              <Controller
+                name="matrizRiesgos"
+                control={control}
+                render={({ field }) => (
+                  <BoolChips label="¿Matriz de riesgos elaborada?" value={field.value} onChange={field.onChange} />
+                )}
+              />
             </div>
-          </form>
-        )}
+          </Section>
+
+          <Section title="Comunicaciones y equipo">
+            <Controller
+              name="mediosComunicacion"
+              control={control}
+              render={({ field }) => (
+                <ChipMulti<MedioComunicacion>
+                  label="Medios de comunicación"
+                  options={MEDIOS}
+                  labels={MEDIO_COMUNICACION_LABELS}
+                  value={field.value ?? []}
+                  onChange={field.onChange}
+                  error={errors.mediosComunicacion?.message}
+                />
+              )}
+            />
+            <Input
+              label="ID de dispositivo / frecuencia radial (opcional)"
+              error={errors.idDispositivoFrecuencia?.message}
+              {...register('idDispositivoFrecuencia')}
+            />
+            <Controller
+              name="equipoColectivo"
+              control={control}
+              render={({ field }) => (
+                <ChipMulti<EquipoColectivoSeguridad>
+                  label="Equipo colectivo de seguridad"
+                  options={EQUIPOS}
+                  labels={EQUIPO_COLECTIVO_LABELS}
+                  value={field.value ?? []}
+                  onChange={field.onChange}
+                  error={errors.equipoColectivo?.message}
+                />
+              )}
+            />
+            {showEquipoOtro && (
+              <Input
+                label="Especifica el equipo adicional"
+                error={errors.equipoColectivoOtro?.message}
+                {...register('equipoColectivoOtro')}
+              />
+            )}
+          </Section>
+
+          <Section title="Planificación técnica">
+            <Controller
+              name="riesgosIdentificados"
+              control={control}
+              render={({ field }) => (
+                <ChipMulti<RiesgoIdentificado>
+                  label="Riesgos identificados"
+                  options={RIESGOS}
+                  labels={RIESGO_IDENTIFICADO_LABELS}
+                  value={field.value ?? []}
+                  onChange={field.onChange}
+                  error={errors.riesgosIdentificados?.message}
+                />
+              )}
+            />
+            {showRiesgoOtro && (
+              <Input
+                label="Especifica el otro riesgo"
+                error={errors.riesgosOtro?.message}
+                {...register('riesgosOtro')}
+              />
+            )}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="pronosticoMeteorologico" className="text-sm font-semibold text-primary">
+                Pronóstico meteorológico
+                <span className="text-error ml-1" aria-hidden="true">
+                  *
+                </span>
+              </label>
+              <textarea
+                id="pronosticoMeteorologico"
+                rows={3}
+                maxLength={1000}
+                {...register('pronosticoMeteorologico')}
+                className={[
+                  'w-full px-3 py-2.5 rounded-xl border bg-white text-sm text-slate-800 resize-y',
+                  'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                  errors.pronosticoMeteorologico ? 'border-error' : 'border-secondary/30',
+                ].join(' ')}
+              />
+              {errors.pronosticoMeteorologico && (
+                <p className="text-xs text-error" role="alert">
+                  {errors.pronosticoMeteorologico.message}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="planEvacuacion" className="text-sm font-semibold text-primary">
+                Plan de evacuación <span className="text-on-surface-variant font-normal">(opcional)</span>
+              </label>
+              <textarea
+                id="planEvacuacion"
+                rows={3}
+                maxLength={1000}
+                {...register('planEvacuacion')}
+                className={[
+                  'w-full px-3 py-2.5 rounded-xl border bg-white text-sm text-slate-800 resize-y',
+                  'placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-shadow',
+                  errors.planEvacuacion ? 'border-error' : 'border-secondary/30',
+                ].join(' ')}
+              />
+              {errors.planEvacuacion && (
+                <p className="text-xs text-error" role="alert">
+                  {errors.planEvacuacion.message}
+                </p>
+              )}
+            </div>
+          </Section>
+
+          {submitError && (
+            <div className="flex items-start gap-2 bg-error-container border border-error/30 rounded-xl px-4 py-3 text-sm text-error">
+              <AlertCircle size={18} className="shrink-0 mt-0.5" />
+              <span>{submitError}</span>
+            </div>
+          )}
+
+          <div className="flex justify-between gap-3 pt-2 pb-6">
+            <Button type="button" variant="ghost" onClick={onCancel} disabled={isSubmitting}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" size="lg" disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              Guardar cambios
+            </Button>
+          </div>
+        </form>
+      )}
     </AppShell>
   )
 }

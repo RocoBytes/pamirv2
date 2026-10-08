@@ -32,9 +32,7 @@ function ConnectionChip({ compact }: { compact: boolean }) {
       className={[
         'inline-flex items-center gap-1.5 rounded-full border font-bold uppercase tracking-[0.05em] text-label-caps',
         compact ? 'px-1.5 py-0.5' : 'px-2.5 py-1',
-        isOnline
-          ? 'bg-pine-container text-pine border-pine/25'
-          : 'bg-amber-50 text-amber-800 border-amber-300',
+        isOnline ? 'bg-pine-container text-pine border-pine/25' : 'bg-amber-50 text-amber-800 border-amber-300',
       ].join(' ')}
     >
       {isOnline ? <Wifi size={12} aria-hidden="true" /> : <WifiOff size={12} aria-hidden="true" />}

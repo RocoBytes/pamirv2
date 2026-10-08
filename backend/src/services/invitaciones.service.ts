@@ -233,9 +233,7 @@ export async function verificarPruebaDeCuentaExistente(
 
 // ─── Resultado discriminado ─────────────────────────────────────────────────────
 
-export type ServiceResult<T> =
-  | { ok: true; status: number; body: T }
-  | { ok: false; status: number; error: string };
+export type ServiceResult<T> = { ok: true; status: number; body: T } | { ok: false; status: number; error: string };
 
 // ─── Vista pública de una invitación (nunca incluye tokenHash) ────────────────
 
@@ -293,7 +291,8 @@ const MENSAJE_ROL_INVALIDO = 'Rol inválido';
 // Usados solo por la rama de "cuenta existente" de aceptarInvitacion (PR
 // "Joining", Task 3) — ver verificarPruebaDeCuentaExistente.
 const MENSAJE_INVITACION_OTRO_CORREO = 'Esta invitación es para otro correo';
-const MENSAJE_CONTRASENA_INCORRECTA = 'Ya tienes una cuenta con este correo. Verifica tu contraseña e inténtalo de nuevo.';
+const MENSAJE_CONTRASENA_INCORRECTA =
+  'Ya tienes una cuenta con este correo. Verifica tu contraseña e inténtalo de nuevo.';
 
 // Nombre que se muestra como "invitado por" cuando la invitación la emitió la
 // plataforma (sin invitador) — ver crearInvitacionPlataforma.
@@ -307,10 +306,7 @@ export interface CrearInvitacionBody {
   emailEnviado: boolean;
 }
 
-async function enviarCorreoInvitacion(
-  deps: InvitacionesDeps,
-  params: SendInvitationEmailParams,
-): Promise<boolean> {
+async function enviarCorreoInvitacion(deps: InvitacionesDeps, params: SendInvitationEmailParams): Promise<boolean> {
   try {
     await deps.sendEmail(params);
     return true;
@@ -404,11 +400,7 @@ export async function listarInvitaciones(
   const now = deps.now();
   const rows = await deps.repo.list(isAdmin(requester) ? {} : { invitadoPorId: requester.id });
   const invitaciones = rows.map((row) =>
-    toPublicView(
-      row,
-      row.invitadoPorId ? { id: row.invitadoPorId, name: row.invitadoPorNombre ?? '' } : null,
-      now,
-    ),
+    toPublicView(row, row.invitadoPorId ? { id: row.invitadoPorId, name: row.invitadoPorNombre ?? '' } : null, now),
   );
 
   return { ok: true, status: 200, body: { invitaciones } };

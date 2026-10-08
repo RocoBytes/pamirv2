@@ -35,8 +35,7 @@ const SECCIONES: Seccion[] = [
         tel: '138',
         nombre: 'Rescate aéreo',
         tag: 'Montaña',
-        descripcion:
-          'Coordinación de evacuación aérea. Para casos donde el terreno impide rescate terrestre.',
+        descripcion: 'Coordinación de evacuación aérea. Para casos donde el terreno impide rescate terrestre.',
       },
       {
         numero: '133',
@@ -81,8 +80,7 @@ const SECCIONES: Seccion[] = [
         numero: '134',
         tel: '134',
         nombre: 'PDI',
-        descripcion:
-          'Policía de Investigaciones. Emergencias policiales, búsqueda de personas desaparecidas.',
+        descripcion: 'Policía de Investigaciones. Emergencias policiales, búsqueda de personas desaparecidas.',
       },
     ],
   },
@@ -109,9 +107,7 @@ const SECCIONES: Seccion[] = [
 
 function ContactoCard({ contacto }: { contacto: Contacto }) {
   const tagStyle =
-    contacto.tag === 'GOPE'
-      ? 'bg-error-container text-on-error-container'
-      : 'bg-primary-fixed text-primary'
+    contacto.tag === 'GOPE' ? 'bg-error-container text-on-error-container' : 'bg-primary-fixed text-primary'
 
   return (
     <a
@@ -119,17 +115,13 @@ function ContactoCard({ contacto }: { contacto: Contacto }) {
       className="flex items-center gap-4 bg-white rounded-2xl border border-secondary/15 shadow-sm p-4 transition-shadow duration-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       <div className="shrink-0 w-14 text-center">
-        <span className="block text-xl font-bold text-primary leading-tight tabular-nums">
-          {contacto.numero}
-        </span>
+        <span className="block text-xl font-bold text-primary leading-tight tabular-nums">{contacto.numero}</span>
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <h3 className="font-semibold text-slate-900 text-sm">{contacto.nombre}</h3>
           {contacto.tag && (
-            <span
-              className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${tagStyle}`}
-            >
+            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${tagStyle}`}>
               {contacto.tag}
             </span>
           )}
@@ -149,44 +141,41 @@ interface ContactosPageProps {
 export function ContactosPage({ onBack, shell }: ContactosPageProps) {
   return (
     <AppShell shell={shell} active="contactos" onBack={onBack} width="narrow">
-        <div className="mb-6">
-          <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
-            <Siren size={14} />
-            Información de seguridad
-          </div>
-          <h1 className="text-xl font-bold text-slate-900">Contactos esenciales</h1>
-          <p className="text-sm text-on-surface-variant mt-0.5">
-            Números de emergencia y rescate en Chile. Toca un número para llamar.
-          </p>
+      <div className="mb-6">
+        <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
+          <Siren size={14} />
+          Información de seguridad
         </div>
+        <h1 className="text-xl font-bold text-slate-900">Contactos esenciales</h1>
+        <p className="text-sm text-on-surface-variant mt-0.5">
+          Números de emergencia y rescate en Chile. Toca un número para llamar.
+        </p>
+      </div>
 
-        <div className="flex flex-col gap-6">
-          {SECCIONES.map((seccion) => (
-            <section key={seccion.titulo}>
-              <h2 className="text-sm font-bold text-primary uppercase tracking-wide mb-2">
-                {seccion.titulo}
-              </h2>
-              <ul className="flex flex-col gap-2">
-                {seccion.contactos.map((contacto) => (
-                  <li key={contacto.tel}>
-                    <ContactoCard contacto={contacto} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
+      <div className="flex flex-col gap-6">
+        {SECCIONES.map((seccion) => (
+          <section key={seccion.titulo}>
+            <h2 className="text-sm font-bold text-primary uppercase tracking-wide mb-2">{seccion.titulo}</h2>
+            <ul className="flex flex-col gap-2">
+              {seccion.contactos.map((contacto) => (
+                <li key={contacto.tel}>
+                  <ContactoCard contacto={contacto} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
 
-        <div className="mt-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4">
-          <AlertCircle size={20} className="text-amber-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-800 leading-relaxed">
-            <span className="font-semibold">Importante: </span>
-            Antes de salir a zona de alta montaña o sin cobertura, se recomienda dejar los números
-            de los organismos locales (comisaría y bomberos del sector más cercano a la ruta) con el
-            contacto de emergencia en tierra del grupo. El GOPE se activa siempre a través del 133;
-            no tiene línea directa pública.
-          </p>
-        </div>
+      <div className="mt-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4">
+        <AlertCircle size={20} className="text-amber-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-amber-800 leading-relaxed">
+          <span className="font-semibold">Importante: </span>
+          Antes de salir a zona de alta montaña o sin cobertura, se recomienda dejar los números de los organismos
+          locales (comisaría y bomberos del sector más cercano a la ruta) con el contacto de emergencia en tierra del
+          grupo. El GOPE se activa siempre a través del 133; no tiene línea directa pública.
+        </p>
+      </div>
     </AppShell>
   )
 }

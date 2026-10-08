@@ -41,11 +41,7 @@ function printReport(): void {
 // fuera de él, así que este script jamás puede pisar datos reales del bucket.
 const TEST_ORG_ID = `test-storage-${randomUUID()}`;
 
-async function expectStatus(
-  storage: ReturnType<typeof getFileStorage>,
-  key: string,
-  expected: number,
-): Promise<void> {
+async function expectStatus(storage: ReturnType<typeof getFileStorage>, key: string, expected: number): Promise<void> {
   const url = await storage.createSignedDownloadUrl(key, { expiresInSeconds: 60, downloadName: 'check' });
   const res = await fetch(url);
   if (res.status !== expected) {

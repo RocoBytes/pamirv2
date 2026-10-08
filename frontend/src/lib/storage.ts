@@ -136,11 +136,7 @@ export function isAuthRemembered(pair?: AuthStoragePair): boolean {
 
 // ─── Draft persistence ────────────────────────────────────────────────────────
 
-export function saveDraft(
-  data: Partial<Omit<SalidaFormData, 'gpxFile'>>,
-  storage?: Storage,
-  clubSlug?: string,
-): void {
+export function saveDraft(data: Partial<Omit<SalidaFormData, 'gpxFile'>>, storage?: Storage, clubSlug?: string): void {
   try {
     resolve(storage).setItem(draftKey(clubSlug), JSON.stringify(data))
   } catch {
@@ -156,10 +152,7 @@ export function saveDraftStep(step: number, storage?: Storage, clubSlug?: string
   }
 }
 
-export function loadDraft(
-  storage?: Storage,
-  clubSlug?: string,
-): Partial<Omit<SalidaFormData, 'gpxFile'>> | null {
+export function loadDraft(storage?: Storage, clubSlug?: string): Partial<Omit<SalidaFormData, 'gpxFile'>> | null {
   try {
     const raw = resolve(storage).getItem(draftKey(clubSlug))
     if (!raw) return null

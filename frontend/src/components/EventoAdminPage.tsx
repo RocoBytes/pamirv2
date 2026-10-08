@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  AlertCircle,
-  AlertTriangle,
-  Ban,
-  CalendarDays,
-  EyeOff,
-  Loader2,
-  Megaphone,
-  Send,
-  Trash2,
-} from 'lucide-react'
+import { AlertCircle, AlertTriangle, Ban, CalendarDays, EyeOff, Loader2, Megaphone, Send, Trash2 } from 'lucide-react'
 import type { EventoDetail, EventoRecord } from '../types/evento'
 import { ESTADO_EVENTO_COLORS, ESTADO_EVENTO_LABELS } from '../types/evento'
 import {
@@ -92,7 +82,11 @@ export function ConfirmDialog({
             <div className="flex flex-col gap-1">
               <label htmlFor="motivo-cancelacion" className="text-sm font-semibold text-primary">
                 Motivo
-                {motivoRequired && <span className="text-error ml-1" aria-hidden="true">*</span>}
+                {motivoRequired && (
+                  <span className="text-error ml-1" aria-hidden="true">
+                    *
+                  </span>
+                )}
               </label>
               <textarea
                 id="motivo-cancelacion"
@@ -108,9 +102,7 @@ export function ConfirmDialog({
                   'w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900',
                   'transition-colors duration-150',
                   'focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary',
-                  motivoError
-                    ? 'border-error focus:ring-error focus:border-error'
-                    : 'border-secondary/40',
+                  motivoError ? 'border-error focus:ring-error focus:border-error' : 'border-secondary/40',
                 ].join(' ')}
               />
               {motivoError && (
@@ -125,12 +117,7 @@ export function ConfirmDialog({
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
             Volver
           </Button>
-          <Button
-            type="button"
-            variant={danger ? 'danger' : 'primary'}
-            onClick={handleConfirm}
-            loading={busy}
-          >
+          <Button type="button" variant={danger ? 'danger' : 'primary'} onClick={handleConfirm} loading={busy}>
             {confirmLabel}
           </Button>
         </div>
@@ -166,9 +153,7 @@ function AvisoEditor({ evento, onSaved }: { evento: EventoDetail; onSaved: (e: E
         <Megaphone size={16} />
         Aviso destacado
       </h2>
-      <p className="text-xs text-on-surface-variant">
-        Un evento finalizado solo permite editar el aviso destacado.
-      </p>
+      <p className="text-xs text-on-surface-variant">Un evento finalizado solo permite editar el aviso destacado.</p>
       <input
         value={aviso}
         maxLength={300}
@@ -285,164 +270,159 @@ export function EventoAdminPage({
 
   return (
     <AppShell shell={shell} active="none" onBack={onCancel} width="narrow" chrome="focused">
-        <div className="mb-5">
-          <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
-            <CalendarDays size={14} />
-            Gestión de eventos
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900">
-              {esCreacion ? 'Crear evento' : (evento?.titulo ?? 'Evento')}
-            </h1>
-            {evento && (
-              <span
-                className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_EVENTO_COLORS[evento.estado]}`}
-              >
-                {ESTADO_EVENTO_LABELS[evento.estado]}
-              </span>
-            )}
-          </div>
+      <div className="mb-5">
+        <div className="flex items-center gap-2 text-secondary text-xs font-semibold uppercase tracking-widest mb-1">
+          <CalendarDays size={14} />
+          Gestión de eventos
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-900">
+            {esCreacion ? 'Crear evento' : (evento?.titulo ?? 'Evento')}
+          </h1>
+          {evento && (
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_EVENTO_COLORS[evento.estado]}`}>
+              {ESTADO_EVENTO_LABELS[evento.estado]}
+            </span>
+          )}
+        </div>
+      </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 border-b border-secondary/15 mb-5">
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-secondary/15 mb-5">
+        <button
+          type="button"
+          onClick={() => setTab('ficha')}
+          className={
+            tab === 'ficha'
+              ? 'px-4 py-2 text-sm font-semibold text-primary border-b-2 border-primary -mb-px'
+              : 'px-4 py-2 text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors'
+          }
+        >
+          Ficha
+        </button>
+        {evento ? (
           <button
             type="button"
-            onClick={() => setTab('ficha')}
+            onClick={() => setTab('postulantes')}
             className={
-              tab === 'ficha'
+              tab === 'postulantes'
                 ? 'px-4 py-2 text-sm font-semibold text-primary border-b-2 border-primary -mb-px'
                 : 'px-4 py-2 text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors'
             }
           >
-            Ficha
+            Postulantes
           </button>
-          {evento ? (
-            <button
-              type="button"
-              onClick={() => setTab('postulantes')}
-              className={
-                tab === 'postulantes'
-                  ? 'px-4 py-2 text-sm font-semibold text-primary border-b-2 border-primary -mb-px'
-                  : 'px-4 py-2 text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors'
-              }
-            >
-              Postulantes
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled
-              title="Guarda el evento primero"
-              className="px-4 py-2 text-sm font-semibold text-on-surface-variant/50 cursor-not-allowed"
-            >
-              Postulantes
-            </button>
-          )}
+        ) : (
+          <button
+            type="button"
+            disabled
+            title="Guarda el evento primero"
+            className="px-4 py-2 text-sm font-semibold text-on-surface-variant/50 cursor-not-allowed"
+          >
+            Postulantes
+          </button>
+        )}
+      </div>
+
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
+          <Loader2 className="animate-spin text-primary" size={28} />
+          <p className="text-sm">Cargando evento...</p>
         </div>
+      )}
 
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-on-surface-variant">
-            <Loader2 className="animate-spin text-primary" size={28} />
-            <p className="text-sm">Cargando evento...</p>
-          </div>
-        )}
+      {loadError && !loading && (
+        <div className="flex flex-col items-center py-12 gap-4 text-center">
+          <AlertCircle size={32} className="text-error" />
+          <p className="text-sm text-on-surface-variant">{loadError}</p>
+          <Button variant="secondary" size="sm" onClick={onCancel}>
+            Volver a eventos
+          </Button>
+        </div>
+      )}
 
-        {loadError && !loading && (
-          <div className="flex flex-col items-center py-12 gap-4 text-center">
-            <AlertCircle size={32} className="text-error" />
-            <p className="text-sm text-on-surface-variant">{loadError}</p>
-            <Button variant="secondary" size="sm" onClick={onCancel}>
-              Volver a eventos
-            </Button>
-          </div>
-        )}
+      {!loading && !loadError && tab === 'postulantes' && evento && (
+        <PostulantesTab eventoId={evento.id} onFinalizado={() => void reloadEvento(evento.id)} />
+      )}
 
-        {!loading && !loadError && tab === 'postulantes' && evento && (
-          <PostulantesTab
-            eventoId={evento.id}
-            onFinalizado={() => void reloadEvento(evento.id)}
-          />
-        )}
-
-        {!loading && !loadError && tab === 'ficha' && (
-          <>
-            {/* Ciclo de vida */}
-            {evento && (
-              <div className="mb-5 flex flex-col gap-3">
-                <div className="flex flex-wrap gap-2">
-                  {evento.estado === 'BORRADOR' && (
-                    <>
-                      <Button size="sm" onClick={() => setConfirmando('publicar')}>
-                        <Send size={15} />
-                        Publicar
-                      </Button>
-                      <Button size="sm" variant="danger" onClick={() => setConfirmando('eliminar')}>
-                        <Trash2 size={15} />
-                        Eliminar borrador
-                      </Button>
-                    </>
-                  )}
-                  {evento.estado === 'PUBLICADO' && (
-                    <>
-                      <Button size="sm" variant="secondary" onClick={() => setConfirmando('despublicar')}>
-                        <EyeOff size={15} />
-                        Despublicar
-                      </Button>
-                      <Button size="sm" variant="danger" onClick={() => setConfirmando('cancelar')}>
-                        <Ban size={15} />
-                        Cancelar evento
-                      </Button>
-                    </>
-                  )}
-                  {evento.estado === 'FINALIZADO' && (
+      {!loading && !loadError && tab === 'ficha' && (
+        <>
+          {/* Ciclo de vida */}
+          {evento && (
+            <div className="mb-5 flex flex-col gap-3">
+              <div className="flex flex-wrap gap-2">
+                {evento.estado === 'BORRADOR' && (
+                  <>
+                    <Button size="sm" onClick={() => setConfirmando('publicar')}>
+                      <Send size={15} />
+                      Publicar
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => setConfirmando('eliminar')}>
+                      <Trash2 size={15} />
+                      Eliminar borrador
+                    </Button>
+                  </>
+                )}
+                {evento.estado === 'PUBLICADO' && (
+                  <>
+                    <Button size="sm" variant="secondary" onClick={() => setConfirmando('despublicar')}>
+                      <EyeOff size={15} />
+                      Despublicar
+                    </Button>
                     <Button size="sm" variant="danger" onClick={() => setConfirmando('cancelar')}>
                       <Ban size={15} />
                       Cancelar evento
                     </Button>
-                  )}
-                </div>
-
-                {actionError && (
-                  <div
-                    className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-4 py-3 text-sm text-on-error-container"
-                    role="alert"
-                  >
-                    <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                    <p>{actionError}</p>
-                  </div>
+                  </>
                 )}
-
-                {guardado && (
-                  <p className="text-xs font-medium text-pine bg-pine-container border border-pine/20 rounded-xl px-3 py-2">
-                    Cambios guardados.
-                  </p>
+                {evento.estado === 'FINALIZADO' && (
+                  <Button size="sm" variant="danger" onClick={() => setConfirmando('cancelar')}>
+                    <Ban size={15} />
+                    Cancelar evento
+                  </Button>
                 )}
               </div>
-            )}
 
-            {evento?.estado === 'CANCELADO' ? (
-              <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-4 py-3 text-sm text-on-error-container">
-                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold">Este evento está cancelado y ya no puede editarse.</p>
-                  {evento.motivoCancelacion && <p className="mt-1">Motivo: {evento.motivoCancelacion}</p>}
+              {actionError && (
+                <div
+                  className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-4 py-3 text-sm text-on-error-container"
+                  role="alert"
+                >
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                  <p>{actionError}</p>
                 </div>
+              )}
+
+              {guardado && (
+                <p className="text-xs font-medium text-pine bg-pine-container border border-pine/20 rounded-xl px-3 py-2">
+                  Cambios guardados.
+                </p>
+              )}
+            </div>
+          )}
+
+          {evento?.estado === 'CANCELADO' ? (
+            <div className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-4 py-3 text-sm text-on-error-container">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Este evento está cancelado y ya no puede editarse.</p>
+                {evento.motivoCancelacion && <p className="mt-1">Motivo: {evento.motivoCancelacion}</p>}
               </div>
-            ) : evento?.estado === 'FINALIZADO' ? (
-              <AvisoEditor evento={evento} onSaved={mergeSaved} />
-            ) : (
-              // Keyed on the prop, not the loaded record: saving a new evento must not remount the form (it would drop the pending attachment).
-              <EventoForm
-                key={eventoId ?? 'nuevo'}
-                evento={evento}
-                esAdminEventos={esAdminEventos}
-                gestorCategoriaIds={gestorCategoriaIds}
-                onSaved={mergeSaved}
-              />
-            )}
-          </>
-        )}
+            </div>
+          ) : evento?.estado === 'FINALIZADO' ? (
+            <AvisoEditor evento={evento} onSaved={mergeSaved} />
+          ) : (
+            // Keyed on the prop, not the loaded record: saving a new evento must not remount the form (it would drop the pending attachment).
+            <EventoForm
+              key={eventoId ?? 'nuevo'}
+              evento={evento}
+              esAdminEventos={esAdminEventos}
+              gestorCategoriaIds={gestorCategoriaIds}
+              onSaved={mergeSaved}
+            />
+          )}
+        </>
+      )}
 
       {confirmando === 'publicar' && (
         <ConfirmDialog

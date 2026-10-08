@@ -92,9 +92,7 @@ function segmentosDeSemana(semana: DiaCelda[], eventos: EventoListItem[]): Segme
 export function EventoCalendar({ eventos, mes, onSelect }: EventoCalendarProps) {
   // Solo lo publicado/realizado va al calendario (spec §7); borradores y
   // cancelados siguen visibles para el admin en la vista de lista.
-  const visibles = eventos.filter(
-    (e) => (e.estado === 'PUBLICADO' || e.estado === 'FINALIZADO') && e.fechaInicio,
-  )
+  const visibles = eventos.filter((e) => (e.estado === 'PUBLICADO' || e.estado === 'FINALIZADO') && e.fechaInicio)
   const semanas = construirSemanas(mes)
   const hoy = hoySantiago()
 
@@ -120,10 +118,7 @@ export function EventoCalendar({ eventos, mes, onSelect }: EventoCalendarProps) 
         {/* Encabezado de días */}
         <div className="grid grid-cols-7 bg-surface-container-low border-b border-secondary/15">
           {DIAS_LARGO.map((dia, i) => (
-            <div
-              key={dia}
-              className="py-2 text-center text-[10px] font-bold tracking-wider text-secondary"
-            >
+            <div key={dia} className="py-2 text-center text-[10px] font-bold tracking-wider text-secondary">
               <span className="hidden sm:inline">{dia}</span>
               <span className="sm:hidden">{DIAS_CORTO[i]}</span>
             </div>
@@ -255,11 +250,7 @@ export function EventoCalendar({ eventos, mes, onSelect }: EventoCalendarProps) 
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
           {categoriasPresentes.map((cat) => (
             <span key={cat.id} className="inline-flex items-center gap-1.5 text-xs text-on-surface-variant">
-              <span
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: cat.color }}
-                aria-hidden="true"
-              />
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} aria-hidden="true" />
               {cat.nombre}
             </span>
           ))}

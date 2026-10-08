@@ -82,9 +82,7 @@ export async function getClubLogo(req: Request, res: Response): Promise<void> {
       // bucket: es una inconsistencia real (huérfano borrado por fuera del
       // flujo normal), no un 404 esperable — se deja registrado además de
       // responder.
-      console.error(
-        `[getClubLogo] logoObjectKey "${org.logoObjectKey}" del club "${slug}" no existe en el storage`,
-      );
+      console.error(`[getClubLogo] logoObjectKey "${org.logoObjectKey}" del club "${slug}" no existe en el storage`);
       res.status(404).json({ error: 'Este club no tiene un logo propio' });
       return;
     }

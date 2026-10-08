@@ -88,9 +88,7 @@ export function requireOrganizationId(): string {
  * contexto que esté vigente en el momento de la invocación (que podría ser
  * distinto al que había en el momento de capturar).
  */
-export function bindTenantContext<Args extends unknown[], R>(
-  fn: (...args: Args) => R,
-): (...args: Args) => R {
+export function bindTenantContext<Args extends unknown[], R>(fn: (...args: Args) => R): (...args: Args) => R {
   const capturedStore = storage.getStore();
   return (...args: Args): R => runInStore(capturedStore, () => fn(...args));
 }

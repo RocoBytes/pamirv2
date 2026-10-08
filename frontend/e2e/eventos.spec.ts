@@ -1,13 +1,6 @@
-import { test, expect, type Page, type Route } from '@playwright/test'
-import {
-  setAuth,
-  mockMe,
-  mockHasIntegrante,
-  mockSalidas,
-  MOCK_USER,
-  MOCK_ADMIN,
-  MOCK_GESTOR,
-} from './helpers'
+import { test, expect } from './fixtures'
+import type { Page, Route } from '@playwright/test'
+import { setAuth, mockMe, mockHasIntegrante, mockSalidas, MOCK_USER, MOCK_ADMIN, MOCK_GESTOR } from './helpers'
 
 const MOCK_CATEGORIA = {
   id: 3,
@@ -88,9 +81,7 @@ async function mockDetalleConInscripcion(page: Page, inicial: MiEstado) {
         ...MOCK_EVENTO,
         declaracionVigente: MOCK_DECLARACION,
         miInscripcion:
-          estado.mi === 'ninguna'
-            ? null
-            : { estado: estado.mi === 'postulado' ? 'POSTULADO' : 'RETIRADO' },
+          estado.mi === 'ninguna' ? null : { estado: estado.mi === 'postulado' ? 'POSTULADO' : 'RETIRADO' },
       },
     })
   })
@@ -105,7 +96,7 @@ async function mockDetalleConInscripcion(page: Page, inicial: MiEstado) {
       estado.mi = 'retirado'
       void route.fulfill({ status: 200, json: { inscripcion: { id: 'insc-001', estado: 'RETIRADO' } } })
     } else {
-      void route.continue()
+      void route.fallback()
     }
   })
 
@@ -192,9 +183,7 @@ test.describe('Eventos del club – inscripción (socio)', () => {
     await expect(modal.getByText('¿Cuento con vehículo propio?')).toBeVisible()
 
     await modal.getByRole('button', { name: 'SÍ' }).click()
-    await expect(
-      modal.getByText('¿Cuántos cupos puedo entregar para otros participantes?'),
-    ).toBeVisible()
+    await expect(modal.getByText('¿Cuántos cupos puedo entregar para otros participantes?')).toBeVisible()
     await modal.getByRole('button', { name: 'Sumar un cupo' }).click()
     await modal.getByRole('button', { name: 'Sumar un cupo' }).click()
     await modal.getByRole('button', { name: 'Continuar' }).click()
@@ -228,9 +217,7 @@ test.describe('Eventos del club – inscripción (socio)', () => {
     await modal.getByRole('button', { name: 'NO', exact: true }).click()
 
     await expect(modal.getByText('Paso 3 de 3')).toBeVisible()
-    await expect(
-      modal.getByText('¿Cuántos cupos puedo entregar para otros participantes?'),
-    ).toHaveCount(0)
+    await expect(modal.getByText('¿Cuántos cupos puedo entregar para otros participantes?')).toHaveCount(0)
     await expect(modal.getByText(/DECLARACIÓN JURADA DEL PARTICIPANTE/)).toBeVisible()
   })
 
@@ -290,9 +277,7 @@ test.describe('Eventos del club – admin (rol ADMIN)', () => {
 
     await expect(page.getByRole('heading', { name: 'Eventos del club' })).toBeVisible()
     await expect(page.getByRole('button', { name: /Crear evento/ })).toBeVisible()
-    await expect(
-      page.getByRole('button', { name: 'Gestionar Trekking Cerro Provincia' }),
-    ).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Gestionar Trekking Cerro Provincia' })).toBeVisible()
   })
 })
 
@@ -321,9 +306,7 @@ const MOCK_POSTULANTES = {
       estado: 'POSTULADO',
       postuladoAt: new Date().toISOString(),
       retiradoAt: null,
-      notificaciones: [
-        { tipo: 'INSCRIPCION_CONFIRMADA', estado: 'ENVIADA', intentos: 0, ultimoError: null },
-      ],
+      notificaciones: [{ tipo: 'INSCRIPCION_CONFIRMADA', estado: 'ENVIADA', intentos: 0, ultimoError: null }],
     },
     {
       id: BENITO_ID,
@@ -335,9 +318,7 @@ const MOCK_POSTULANTES = {
       estado: 'POSTULADO',
       postuladoAt: new Date().toISOString(),
       retiradoAt: null,
-      notificaciones: [
-        { tipo: 'INSCRIPCION_CONFIRMADA', estado: 'ERROR', intentos: 1, ultimoError: 'invalid_grant' },
-      ],
+      notificaciones: [{ tipo: 'INSCRIPCION_CONFIRMADA', estado: 'ERROR', intentos: 1, ultimoError: 'invalid_grant' }],
     },
     {
       id: CARLA_ID,
@@ -349,9 +330,7 @@ const MOCK_POSTULANTES = {
       estado: 'RETIRADO',
       postuladoAt: new Date().toISOString(),
       retiradoAt: new Date().toISOString(),
-      notificaciones: [
-        { tipo: 'INSCRIPCION_CONFIRMADA', estado: 'ENVIADA', intentos: 0, ultimoError: null },
-      ],
+      notificaciones: [{ tipo: 'INSCRIPCION_CONFIRMADA', estado: 'ENVIADA', intentos: 0, ultimoError: null }],
     },
   ],
 }
@@ -494,9 +473,7 @@ test.describe('Eventos del club – gestor de categoría', () => {
 
     await expect(page.getByRole('button', { name: /Crear evento/ })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Gestionar Salida Montaña Uno' })).toBeVisible()
-    await expect(
-      page.getByRole('button', { name: 'Gestionar Trekking Cerro Provincia' }),
-    ).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Gestionar Trekking Cerro Provincia' })).toHaveCount(0)
   })
 
   test('el formulario de creación solo ofrece sus categorías y la exige', async ({ page }) => {
@@ -519,9 +496,7 @@ test.describe('Eventos del club – gestor de categoría', () => {
 
 // ─── Calendario (Fase 6) ─────────────────────────────────────────────────────
 
-const MES_CAL = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' })
-  .format(new Date())
-  .slice(0, 7)
+const MES_CAL = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date()).slice(0, 7)
 
 function shiftMesCal(mes: string, delta: number): string {
   const [anio = 0, mesNum = 1] = mes.split('-').map(Number)
@@ -529,8 +504,18 @@ function shiftMesCal(mes: string, delta: number): string {
 }
 
 const MESES_LABEL = [
-  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
 ]
 
 function labelMesCal(mes: string): string {
@@ -648,9 +633,7 @@ test.describe('Eventos del club – calendario', () => {
     await page.getByRole('button', { name: 'Mes siguiente' }).click()
 
     await expect(page.getByText(labelMesCal(siguiente))).toBeVisible()
-    await expect
-      .poll(() => urls.some((u) => u.includes(`mes=${siguiente}`)))
-      .toBe(true)
+    await expect.poll(() => urls.some((u) => u.includes(`mes=${siguiente}`))).toBe(true)
   })
 
   test('clic en un chip abre el detalle del evento', async ({ page }) => {

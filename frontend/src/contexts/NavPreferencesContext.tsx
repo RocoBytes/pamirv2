@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import {
-  fetchNavPreferences,
-  saveNavPreferences,
-  resetNavPreferences,
-  type NavPreferences,
-} from '../lib/api'
+import { fetchNavPreferences, saveNavPreferences, resetNavPreferences, type NavPreferences } from '../lib/api'
 import { NavPreferencesContext, type NavPreferencesValue } from './nav-preferences-context'
 
 interface NavPreferencesProviderProps {

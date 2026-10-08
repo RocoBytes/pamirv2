@@ -5,3 +5,9 @@ node_modules
 !.env.example
 
 /src/generated/prisma
+
+# Compiled output: built from source by the Dockerfile and CI, never committed
+/dist
+
+# Playwright run artifacts
+/test-results

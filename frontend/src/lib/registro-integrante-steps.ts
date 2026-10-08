@@ -10,47 +10,52 @@ import { z } from 'zod'
 
 const RUT_REGEX = /^\d{1,2}\.\d{3}\.\d{3}-[\dKk]$/
 
-export const registroIntegranteBaseSchema = z
-  .object({
-    // Sección I
-    nombreCompleto: z.string().min(1, 'Campo requerido').max(100, 'Máximo 100 caracteres'),
-    rut: z.string().regex(RUT_REGEX, 'Formato inválido. Ej: 12.345.678-K'),
-    nacionalidad: z.string().min(1, 'Campo requerido'),
-    genero: z.enum(['FEMENINO', 'MASCULINO', 'PREFIERO_NO_DECIRLO'], {
-      error: 'Selecciona una opción',
-    }),
-    fechaNacimiento: z.string().min(1, 'Selecciona tu fecha de nacimiento'),
-    direccion: z.string().min(1, 'Campo requerido').max(100, 'Máximo 100 caracteres'),
-    comuna: z.string().min(1, 'Campo requerido').max(100, 'Máximo 100 caracteres'),
-    region: z.string().min(1, 'Selecciona una región'),
-    telefonoCelular: z.string().min(1, 'Campo requerido').regex(/^\+?[\d\s\-()]{7,15}$/, 'Teléfono inválido'),
-    email: z.string().min(1, 'Campo requerido').email('Email inválido').max(100, 'Máximo 100 caracteres'),
-    previsionSalud: z.string().min(1, 'Selecciona tu previsión de salud'),
+export const registroIntegranteBaseSchema = z.object({
+  // Sección I
+  nombreCompleto: z.string().min(1, 'Campo requerido').max(100, 'Máximo 100 caracteres'),
+  rut: z.string().regex(RUT_REGEX, 'Formato inválido. Ej: 12.345.678-K'),
+  nacionalidad: z.string().min(1, 'Campo requerido'),
+  genero: z.enum(['FEMENINO', 'MASCULINO', 'PREFIERO_NO_DECIRLO'], {
+    error: 'Selecciona una opción',
+  }),
+  fechaNacimiento: z.string().min(1, 'Selecciona tu fecha de nacimiento'),
+  direccion: z.string().min(1, 'Campo requerido').max(100, 'Máximo 100 caracteres'),
+  comuna: z.string().min(1, 'Campo requerido').max(100, 'Máximo 100 caracteres'),
+  region: z.string().min(1, 'Selecciona una región'),
+  telefonoCelular: z
+    .string()
+    .min(1, 'Campo requerido')
+    .regex(/^\+?[\d\s\-()]{7,15}$/, 'Teléfono inválido'),
+  email: z.string().min(1, 'Campo requerido').email('Email inválido').max(100, 'Máximo 100 caracteres'),
+  previsionSalud: z.string().min(1, 'Selecciona tu previsión de salud'),
 
-    // Sección II
-    nombreContacto: z.string().min(1, 'Campo requerido').max(100, 'Máximo 100 caracteres'),
-    parentesco: z.string().min(1, 'Campo requerido').max(100, 'Máximo 100 caracteres'),
-    telefonoContacto: z.string().min(1, 'Campo requerido').regex(/^\+?[\d\s\-()]{7,15}$/, 'Teléfono inválido'),
+  // Sección II
+  nombreContacto: z.string().min(1, 'Campo requerido').max(100, 'Máximo 100 caracteres'),
+  parentesco: z.string().min(1, 'Campo requerido').max(100, 'Máximo 100 caracteres'),
+  telefonoContacto: z
+    .string()
+    .min(1, 'Campo requerido')
+    .regex(/^\+?[\d\s\-()]{7,15}$/, 'Teléfono inválido'),
 
-    // Sección III
-    grupoSanguineo: z.string().min(1, 'Selecciona tu grupo sanguíneo'),
-    alergiasTiene: z.boolean({ error: 'Selecciona una opción' }),
-    alergiasDetalle: z.string().max(200, 'Máximo 200 caracteres').optional(),
-    enfermedadesCronicasTiene: z.boolean({ error: 'Selecciona una opción' }),
-    enfermedadesCronicasDetalle: z.string().max(200, 'Máximo 200 caracteres').optional(),
-    medicamentosTiene: z.boolean({ error: 'Selecciona una opción' }),
-    medicamentosDetalle: z.string().max(200, 'Máximo 200 caracteres').optional(),
-    cirugiasLesionesTiene: z.boolean({ error: 'Selecciona una opción' }),
-    cirugiasLesionesDetalle: z.string().max(200, 'Máximo 200 caracteres').optional(),
-    fuma: z.boolean({ error: 'Selecciona una opción' }),
-    usaLentes: z.boolean({ error: 'Selecciona una opción' }),
+  // Sección III
+  grupoSanguineo: z.string().min(1, 'Selecciona tu grupo sanguíneo'),
+  alergiasTiene: z.boolean({ error: 'Selecciona una opción' }),
+  alergiasDetalle: z.string().max(200, 'Máximo 200 caracteres').optional(),
+  enfermedadesCronicasTiene: z.boolean({ error: 'Selecciona una opción' }),
+  enfermedadesCronicasDetalle: z.string().max(200, 'Máximo 200 caracteres').optional(),
+  medicamentosTiene: z.boolean({ error: 'Selecciona una opción' }),
+  medicamentosDetalle: z.string().max(200, 'Máximo 200 caracteres').optional(),
+  cirugiasLesionesTiene: z.boolean({ error: 'Selecciona una opción' }),
+  cirugiasLesionesDetalle: z.string().max(200, 'Máximo 200 caracteres').optional(),
+  fuma: z.boolean({ error: 'Selecciona una opción' }),
+  usaLentes: z.boolean({ error: 'Selecciona una opción' }),
 
-    // Sección IV
-    declaracionSalud: z.literal(true, { error: 'Debes aceptar esta declaración para continuar' }),
-    aceptacionRiesgo: z.literal(true, { error: 'Debes aceptar esta cláusula para continuar' }),
-    consentimientoDatos: z.literal(true, { error: 'Debes aceptar el consentimiento de uso de datos para continuar' }),
-    derechoImagen: z.literal(true, { error: 'Debes aceptar esta cláusula para continuar' }),
-  })
+  // Sección IV
+  declaracionSalud: z.literal(true, { error: 'Debes aceptar esta declaración para continuar' }),
+  aceptacionRiesgo: z.literal(true, { error: 'Debes aceptar esta cláusula para continuar' }),
+  consentimientoDatos: z.literal(true, { error: 'Debes aceptar el consentimiento de uso de datos para continuar' }),
+  derechoImagen: z.literal(true, { error: 'Debes aceptar esta cláusula para continuar' }),
+})
 
 export type IntegranteFormData = z.infer<typeof registroIntegranteBaseSchema>
 
@@ -79,8 +84,10 @@ type ConditionalDetailData = Pick<
 >
 
 interface ConditionalDetailRule {
-  tieneField: keyof ConditionalDetailData & ('alergiasTiene' | 'enfermedadesCronicasTiene' | 'medicamentosTiene' | 'cirugiasLesionesTiene')
-  detalleField: keyof ConditionalDetailData & ('alergiasDetalle' | 'enfermedadesCronicasDetalle' | 'medicamentosDetalle' | 'cirugiasLesionesDetalle')
+  tieneField: keyof ConditionalDetailData &
+    ('alergiasTiene' | 'enfermedadesCronicasTiene' | 'medicamentosTiene' | 'cirugiasLesionesTiene')
+  detalleField: keyof ConditionalDetailData &
+    ('alergiasDetalle' | 'enfermedadesCronicasDetalle' | 'medicamentosDetalle' | 'cirugiasLesionesDetalle')
   message: string
 }
 
@@ -96,7 +103,11 @@ const CONDITIONAL_DETAIL_RULES: ConditionalDetailRule[] = [
     detalleField: 'medicamentosDetalle',
     message: 'Indica el nombre y dosis del medicamento',
   },
-  { tieneField: 'cirugiasLesionesTiene', detalleField: 'cirugiasLesionesDetalle', message: 'Describe la cirugía o lesión' },
+  {
+    tieneField: 'cirugiasLesionesTiene',
+    detalleField: 'cirugiasLesionesDetalle',
+    message: 'Describe la cirugía o lesión',
+  },
 ]
 
 function applyConditionalDetailRules(
@@ -126,8 +137,7 @@ export const REGISTRO_INTEGRANTE_STEP_IDS = [1, 2, 3, 4] as const
 export type RegistroIntegranteStepId = (typeof REGISTRO_INTEGRANTE_STEP_IDS)[number]
 
 export const FIRST_STEP: RegistroIntegranteStepId = REGISTRO_INTEGRANTE_STEP_IDS[0]
-export const LAST_STEP: RegistroIntegranteStepId =
-  REGISTRO_INTEGRANTE_STEP_IDS[REGISTRO_INTEGRANTE_STEP_IDS.length - 1]
+export const LAST_STEP: RegistroIntegranteStepId = REGISTRO_INTEGRANTE_STEP_IDS[REGISTRO_INTEGRANTE_STEP_IDS.length - 1]
 
 export interface RegistroIntegranteStepMeta {
   id: RegistroIntegranteStepId
@@ -279,4 +289,22 @@ export function validateRegistroStep(
     field: issue.path[0] as IntegranteField,
     message: issue.message,
   }))
+}
+
+// Campos de `stepId` cuyo error pintado ya no corresponde: tienen un error Y
+// su valor actual es válido para ese paso. Es lo único que la revalidación en
+// vivo debe limpiar.
+//
+// El "tienen un error" es la mitad que importa: clearErrors() notifica a TODO
+// suscriptor del formulario aunque no haya nada que limpiar, y el efecto que
+// lo llama corre en cada cambio de valores — llamarlo "por si acaso" provoca
+// un render nuevo, que vuelve a correr el efecto, y así hasta que React corta
+// con "Maximum update depth exceeded".
+export function staleErrorFields(
+  stepId: RegistroIntegranteStepId,
+  values: Partial<IntegranteFormData>,
+  hasError: (field: IntegranteField) => boolean,
+): IntegranteField[] {
+  const stillInvalid = new Set(validateRegistroStep(stepId, values).map((issue) => issue.field))
+  return REGISTRO_INTEGRANTE_STEP_FIELDS[stepId].filter((field) => !stillInvalid.has(field) && hasError(field))
 }

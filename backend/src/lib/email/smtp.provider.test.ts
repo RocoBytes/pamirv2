@@ -29,7 +29,7 @@ describe('buildSmtpTransportOptions', () => {
 
 describe('createSmtpProvider', () => {
   it('mapea los campos del mensaje al transporte y devuelve el messageId', async () => {
-    const sendMail = mock.fn(() => Promise.resolve({ messageId: 'msg-1' }));
+    const sendMail = mock.fn<SmtpTransport['sendMail']>(() => Promise.resolve({ messageId: 'msg-1' }));
     const transport: SmtpTransport = { sendMail };
     const provider = createSmtpProvider({ host: 'smtp.riala.cl', port: 587, user: 'u', pass: 'p', transport });
 
@@ -53,7 +53,7 @@ describe('createSmtpProvider', () => {
   });
 
   it('agrega la cabecera X-Entity-Ref-ID solo cuando hay idempotencyKey', async () => {
-    const sendMail = mock.fn(() => Promise.resolve({ messageId: 'msg-2' }));
+    const sendMail = mock.fn<SmtpTransport['sendMail']>(() => Promise.resolve({ messageId: 'msg-2' }));
     const transport: SmtpTransport = { sendMail };
     const provider = createSmtpProvider({ host: 'smtp.riala.cl', port: 587, user: 'u', pass: 'p', transport });
 
@@ -70,7 +70,7 @@ describe('createSmtpProvider', () => {
   });
 
   it('sanea la clave de idempotencia antes de usarla como cabecera', async () => {
-    const sendMail = mock.fn(() => Promise.resolve({ messageId: 'msg-3' }));
+    const sendMail = mock.fn<SmtpTransport['sendMail']>(() => Promise.resolve({ messageId: 'msg-3' }));
     const transport: SmtpTransport = { sendMail };
     const provider = createSmtpProvider({ host: 'smtp.riala.cl', port: 587, user: 'u', pass: 'p', transport });
 

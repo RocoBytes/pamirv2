@@ -43,9 +43,7 @@ export function describeFileDownloadError(err: unknown): string {
     if (err.status === 403) {
       // El backend nombra el club en el mensaje cuando corresponde. Si no
       // llegó un mensaje real (solo el fallback "HTTP 403"), se usa uno genérico.
-      return /^HTTP \d+$/.test(err.message)
-        ? 'No tienes permiso para descargar este archivo.'
-        : err.message
+      return /^HTTP \d+$/.test(err.message) ? 'No tienes permiso para descargar este archivo.' : err.message
     }
   }
   return 'No se pudo preparar la descarga. Inténtalo de nuevo.'

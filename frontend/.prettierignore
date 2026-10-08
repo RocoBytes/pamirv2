@@ -1,0 +1,7 @@
+# Generated, vendored or machine-written: prettier must never touch these.
+node_modules
+dist
+coverage
+test-results
+playwright-report
+package-lock.json

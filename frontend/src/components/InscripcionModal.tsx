@@ -122,129 +122,129 @@ export function InscripcionModal({ evento, declaracion, onClose, onSuccess }: In
               animate="visible"
               exit="exit"
             >
-          {step === 1 && (
-            <div className="flex flex-col gap-4">
-              <p className="text-sm font-semibold text-slate-900">¿Cuento con vehículo propio?</p>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => elegirVehiculo(true)}
-                  className="flex flex-col items-center gap-2 rounded-2xl border-2 border-secondary/30 hover:border-primary hover:bg-surface-container-low px-4 py-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  <CarFront size={28} className="text-primary" />
-                  <span className="text-sm font-bold text-slate-900">SÍ</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => elegirVehiculo(false)}
-                  className="flex flex-col items-center gap-2 rounded-2xl border-2 border-secondary/30 hover:border-primary hover:bg-surface-container-low px-4 py-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  <Car size={28} className="text-on-surface-variant" />
-                  <span className="text-sm font-bold text-slate-900">NO</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="flex flex-col gap-4">
-              <p className="text-sm font-semibold text-slate-900">
-                ¿Cuántos cupos puedo entregar para otros participantes?
-              </p>
-              <div className="flex items-center justify-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => setCupos((c) => Math.max(0, c - 1))}
-                  aria-label="Restar un cupo"
-                  className="w-10 h-10 flex items-center justify-center rounded-full bg-primary-fixed text-primary hover:bg-surface-container transition-colors disabled:opacity-40"
-                  disabled={cupos <= 0}
-                >
-                  <Minus size={18} />
-                </button>
-                <span className="text-3xl font-bold text-slate-900 w-14 text-center" aria-live="polite">
-                  {cupos}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCupos((c) => Math.min(30, c + 1))}
-                  aria-label="Sumar un cupo"
-                  className="w-10 h-10 flex items-center justify-center rounded-full bg-primary-fixed text-primary hover:bg-surface-container transition-colors disabled:opacity-40"
-                  disabled={cupos >= 30}
-                >
-                  <Plus size={18} />
-                </button>
-              </div>
-              <p className="text-xs text-on-surface-variant text-center">
-                Sin contar al conductor. Puedes dejarlo en 0.
-              </p>
-              <div className="flex justify-between pt-2">
-                <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
-                  <ChevronLeft size={15} />
-                  Atrás
-                </Button>
-                <Button size="sm" onClick={() => setStep(3)}>
-                  Continuar
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="flex flex-col gap-4">
-              <div className="flex items-start gap-2">
-                <ScrollText size={18} className="text-primary shrink-0 mt-0.5" />
-                <p className="text-sm font-semibold text-slate-900">{declaracion.titulo}</p>
-              </div>
-              <p className="text-xs text-on-surface-variant -mt-2">
-                Acepta cada punto individualmente: tu aceptación punto por punto queda registrada.
-              </p>
-              <ul className="flex flex-col gap-2">
-                {declaracion.items.map((item, i) => (
-                  <li key={i}>
-                    <label className="flex items-start gap-3 rounded-xl border border-secondary/20 bg-slate-50 px-3 py-2.5 cursor-pointer hover:bg-surface-container-low transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={aceptados[i] ?? false}
-                        onChange={() => toggleItem(i)}
-                        className="mt-0.5 w-4 h-4 shrink-0 rounded border-secondary/40 text-primary focus:ring-primary"
-                      />
-                      <span className="text-xs text-slate-700 leading-relaxed">{item}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-
-              {error && (
-                <div
-                  className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-3 py-2.5 text-sm text-on-error-container"
-                  role="alert"
-                >
-                  <AlertCircle size={15} className="shrink-0 mt-0.5" />
-                  <p>{error}</p>
+              {step === 1 && (
+                <div className="flex flex-col gap-4">
+                  <p className="text-sm font-semibold text-slate-900">¿Cuento con vehículo propio?</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => elegirVehiculo(true)}
+                      className="flex flex-col items-center gap-2 rounded-2xl border-2 border-secondary/30 hover:border-primary hover:bg-surface-container-low px-4 py-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      <CarFront size={28} className="text-primary" />
+                      <span className="text-sm font-bold text-slate-900">SÍ</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => elegirVehiculo(false)}
+                      className="flex flex-col items-center gap-2 rounded-2xl border-2 border-secondary/30 hover:border-primary hover:bg-surface-container-low px-4 py-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      <Car size={28} className="text-on-surface-variant" />
+                      <span className="text-sm font-bold text-slate-900">NO</span>
+                    </button>
+                  </div>
                 </div>
               )}
 
-              <div className="flex justify-between pt-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setStep(tieneVehiculo ? 2 : 1)}
-                  disabled={submitting}
-                >
-                  <ChevronLeft size={15} />
-                  Atrás
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={!todosAceptados || submitting}
-                  loading={submitting}
-                  onClick={(e) => void confirmar(originFromElement(e.currentTarget))}
-                >
-                  Confirmar inscripción
-                </Button>
-              </div>
-            </div>
-          )}
+              {step === 2 && (
+                <div className="flex flex-col gap-4">
+                  <p className="text-sm font-semibold text-slate-900">
+                    ¿Cuántos cupos puedo entregar para otros participantes?
+                  </p>
+                  <div className="flex items-center justify-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setCupos((c) => Math.max(0, c - 1))}
+                      aria-label="Restar un cupo"
+                      className="w-10 h-10 flex items-center justify-center rounded-full bg-primary-fixed text-primary hover:bg-surface-container transition-colors disabled:opacity-40"
+                      disabled={cupos <= 0}
+                    >
+                      <Minus size={18} />
+                    </button>
+                    <span className="text-3xl font-bold text-slate-900 w-14 text-center" aria-live="polite">
+                      {cupos}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCupos((c) => Math.min(30, c + 1))}
+                      aria-label="Sumar un cupo"
+                      className="w-10 h-10 flex items-center justify-center rounded-full bg-primary-fixed text-primary hover:bg-surface-container transition-colors disabled:opacity-40"
+                      disabled={cupos >= 30}
+                    >
+                      <Plus size={18} />
+                    </button>
+                  </div>
+                  <p className="text-xs text-on-surface-variant text-center">
+                    Sin contar al conductor. Puedes dejarlo en 0.
+                  </p>
+                  <div className="flex justify-between pt-2">
+                    <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
+                      <ChevronLeft size={15} />
+                      Atrás
+                    </Button>
+                    <Button size="sm" onClick={() => setStep(3)}>
+                      Continuar
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {step === 3 && (
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start gap-2">
+                    <ScrollText size={18} className="text-primary shrink-0 mt-0.5" />
+                    <p className="text-sm font-semibold text-slate-900">{declaracion.titulo}</p>
+                  </div>
+                  <p className="text-xs text-on-surface-variant -mt-2">
+                    Acepta cada punto individualmente: tu aceptación punto por punto queda registrada.
+                  </p>
+                  <ul className="flex flex-col gap-2">
+                    {declaracion.items.map((item, i) => (
+                      <li key={i}>
+                        <label className="flex items-start gap-3 rounded-xl border border-secondary/20 bg-slate-50 px-3 py-2.5 cursor-pointer hover:bg-surface-container-low transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={aceptados[i] ?? false}
+                            onChange={() => toggleItem(i)}
+                            className="mt-0.5 w-4 h-4 shrink-0 rounded border-secondary/40 text-primary focus:ring-primary"
+                          />
+                          <span className="text-xs text-slate-700 leading-relaxed">{item}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {error && (
+                    <div
+                      className="flex items-start gap-2 rounded-xl bg-error-container border border-error/30 px-3 py-2.5 text-sm text-on-error-container"
+                      role="alert"
+                    >
+                      <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                      <p>{error}</p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between pt-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setStep(tieneVehiculo ? 2 : 1)}
+                      disabled={submitting}
+                    >
+                      <ChevronLeft size={15} />
+                      Atrás
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={!todosAceptados || submitting}
+                      loading={submitting}
+                      onClick={(e) => void confirmar(originFromElement(e.currentTarget))}
+                    >
+                      Confirmar inscripción
+                    </Button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
         </div>

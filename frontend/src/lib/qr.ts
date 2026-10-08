@@ -37,11 +37,7 @@ export async function renderQrSvg(value: string, opts: RenderQrOptions = {}): Pr
 }
 
 /** Data URL `image/png` del QR de `value`, cuadrado de `size` px de lado. */
-export async function renderQrPngDataUrl(
-  value: string,
-  size = 1024,
-  opts: RenderQrOptions = {},
-): Promise<string> {
+export async function renderQrPngDataUrl(value: string, size = 1024, opts: RenderQrOptions = {}): Promise<string> {
   const QRCode = await loadQrcode()
   return QRCode.toDataURL(value, {
     type: 'image/png',

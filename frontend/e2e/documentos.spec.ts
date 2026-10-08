@@ -1,14 +1,6 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import type { Page, Route } from '@playwright/test'
-import {
-  setAuth,
-  mockMe,
-  mockHasIntegrante,
-  mockSalidas,
-  MOCK_INTEGRANTE,
-  MOCK_ADMIN,
-  MOCK_USER,
-} from './helpers'
+import { setAuth, mockMe, mockHasIntegrante, mockSalidas, MOCK_INTEGRANTE, MOCK_ADMIN, MOCK_USER } from './helpers'
 
 function mockIntegranteNoSocio(page: Page) {
   return page.route('**/api/integrantes/me', (route: Route) => {
@@ -64,7 +56,13 @@ test.describe('Documentación del Club – página', () => {
 
   test('lista documentos agrupados por categoría y descarga vía URL firmada de GCS', async ({ page }) => {
     await mockDocumentos(page, [
-      { id: 'd1', categoria: 'AVISO_EXPEDICION', nombre: 'Aviso Retén San José de Maipo', descripcion: 'Formulario PDF', driveFileId: 'gcs-obj-1' },
+      {
+        id: 'd1',
+        categoria: 'AVISO_EXPEDICION',
+        nombre: 'Aviso Retén San José de Maipo',
+        descripcion: 'Formulario PDF',
+        driveFileId: 'gcs-obj-1',
+      },
       { id: 'd2', categoria: 'CHECKLIST', nombre: 'Check-list Alta Montaña', driveFileId: 'gcs-obj-2' },
       { id: 'd3', categoria: 'MATRIZ_RIESGO', nombre: 'Matriz de Riesgo 3x3', driveFileId: null },
     ])
@@ -127,16 +125,14 @@ test.describe('Documentación del Club – página', () => {
 // La capacidad ya existía en el Panel de Administración; acá se verifica que
 // además esté donde el admin la necesita, y que siga cerrada para quien no lo es.
 test.describe('Documentación – gestión desde la pantalla', () => {
-  async function abrirDocumentos(page: Page, user: Record<string, unknown>) {
+  async function abrirDocumentos(page: Page, user: typeof MOCK_USER) {
     await setAuth(page, user)
     await mockMe(page, user)
     await mockHasIntegrante(page)
     await mockSalidas(page, [])
     await page.route('**/api/eventos*', (r: Route) => void r.fulfill({ status: 200, json: [] }))
     await page.route('**/api/documentos', (r: Route) => void r.fulfill({ status: 200, json: [] }))
-    await page.route('**/api/documentos/admin', (r: Route) =>
-      void r.fulfill({ status: 200, json: [] }),
-    )
+    await page.route('**/api/documentos/admin', (r: Route) => void r.fulfill({ status: 200, json: [] }))
     await page.goto('/')
     await page.getByLabel('Abrir documentación del club').click()
   }

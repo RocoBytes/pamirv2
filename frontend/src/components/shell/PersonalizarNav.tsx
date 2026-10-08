@@ -177,8 +177,8 @@ export function PersonalizarNav({ tabs, quick, onClose }: PersonalizarNavProps) 
             </h3>
             <OrderableList entries={tabOrder} onChange={setTabOrder} pinnedKeys={PINNED_TABS} />
             <p className="text-body-sm text-on-surface-variant mt-2">
-              Inicio y Contacto SOS no se pueden quitar: el acceso a emergencias tiene que estar
-              siempre donde lo buscas.
+              Inicio y Contacto SOS no se pueden quitar: el acceso a emergencias tiene que estar siempre donde lo
+              buscas.
             </p>
           </section>
 

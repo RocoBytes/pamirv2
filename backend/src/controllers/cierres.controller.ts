@@ -11,13 +11,15 @@ import type { OrganizationSummary } from '../types/index.js';
 
 const asJson = (v: unknown): Prisma.InputJsonValue => v as Prisma.InputJsonValue;
 
-async function sendCierreParticipantEmails(salidaId: string, cierre: Cierre, organization: OrganizationSummary): Promise<void> {
+async function sendCierreParticipantEmails(
+  salidaId: string,
+  cierre: Cierre,
+  organization: OrganizationSummary,
+): Promise<void> {
   const salida = await prisma.salida.findUnique({ where: { id: salidaId } });
   if (!salida) return;
 
-  const ruts = (salida.participantes as { rut?: string }[])
-    .map((p) => p.rut)
-    .filter((r): r is string => Boolean(r));
+  const ruts = (salida.participantes as { rut?: string }[]).map((p) => p.rut).filter((r): r is string => Boolean(r));
   if (ruts.length === 0) return;
 
   const integrantes = await prisma.integrante.findMany({
@@ -144,8 +146,9 @@ export async function createCierre(req: Request, res: Response): Promise<void> {
     const silenciarCierre = isAdmin(req.user) && (salida.esRegistroHistorico || retornoStr < cutoffStr);
 
     if (!silenciarCierre) {
-      sendCierreParticipantEmails(data.salidaId, cierre, req.user!.organization)
-        .catch((err) => console.error('[cierre-email]', err));
+      sendCierreParticipantEmails(data.salidaId, cierre, req.user!.organization).catch((err) =>
+        console.error('[cierre-email]', err),
+      );
     }
   } catch (error) {
     console.error('[createCierre]', error);

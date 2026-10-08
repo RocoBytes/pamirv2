@@ -34,7 +34,6 @@ interface StepMeta {
   icon: React.ReactNode
 }
 
-
 const STEPS: StepMeta[] = [
   { id: 1, label: 'Clasificacion de la Salida', shortLabel: 'Clasificacion', icon: <Users size={16} /> },
   { id: 2, label: 'Cronologia y Seguridad', shortLabel: 'Cronologia', icon: <Users size={16} /> },
@@ -123,16 +122,13 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
     setCurrentStep(1)
   }, [])
 
-  const updateFormData = useCallback(
-    (data: Partial<Omit<SalidaFormData, 'gpxFile'>>) => {
-      setFormData((prev) => {
-        const updated = { ...prev, ...data }
-        saveDraft(updated, undefined, clubSlugFromPath() ?? undefined)
-        return updated
-      })
-    },
-    [],
-  )
+  const updateFormData = useCallback((data: Partial<Omit<SalidaFormData, 'gpxFile'>>) => {
+    setFormData((prev) => {
+      const updated = { ...prev, ...data }
+      saveDraft(updated, undefined, clubSlugFromPath() ?? undefined)
+      return updated
+    })
+  }, [])
 
   const handleStepComplete = useCallback(
     (stepId: StepId, data: Partial<Omit<SalidaFormData, 'gpxFile'>>) => {
@@ -189,9 +185,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
         // SuccessReveal cuando la confirmación terminó de leerse, en vez de un
         // reloj a ciegas compitiendo contra la animación.
       } catch (err) {
-        setSubmitError(
-          err instanceof Error ? err.message : 'Error al guardar la salida',
-        )
+        setSubmitError(err instanceof Error ? err.message : 'Error al guardar la salida')
         setIsSubmitting(false)
       }
     },
@@ -201,11 +195,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
   // La pantalla de éxito ya no reemplaza el wizard con un `return` temprano: la
   // onda se superpone y el formulario queda debajo, que es lo que hace que la
   // confirmación parezca nacer de algo en vez de aparecer de la nada.
-  const revealStatus: RevealStatus = submitError
-    ? 'error'
-    : submitSuccess
-      ? 'success'
-      : 'saving'
+  const revealStatus: RevealStatus = submitError ? 'error' : submitSuccess ? 'success' : 'saving'
 
   const currentStepMeta = STEPS[currentStep - 1]
 
@@ -225,9 +215,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
 
           <div className="flex items-center gap-2">
             <ClubLogo alt="" className="w-10 h-10 object-contain" />
-            <span className="font-semibold text-slate-800 text-sm">
-              Nueva Salida
-            </span>
+            <span className="font-semibold text-slate-800 text-sm">Nueva Salida</span>
           </div>
 
           <span className="text-xs text-on-surface-variant font-medium">
@@ -254,8 +242,8 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
                     isCompleted || (isActive && completedSteps.has(step.id))
                       ? 'bg-primary'
                       : isActive
-                      ? 'bg-primary/60'
-                      : 'bg-surface-container',
+                        ? 'bg-primary/60'
+                        : 'bg-surface-container',
                   ].join(' ')}
                 />
               )
@@ -272,9 +260,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
       {showDraftBanner && (
         <div className="bg-[#fef9f0] border-b border-error/30">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-3 text-sm">
-            <p className="text-[#8b5a3a] flex-1">
-              Tienes un borrador guardado. ¿Deseas continuar donde lo dejaste?
-            </p>
+            <p className="text-[#8b5a3a] flex-1">Tienes un borrador guardado. ¿Deseas continuar donde lo dejaste?</p>
             <div className="flex gap-2 shrink-0">
               <Button size="sm" onClick={restoreDraft}>
                 Continuar borrador
@@ -296,9 +282,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
               Paso {currentStep} de {STEPS.length}
             </span>
           </div>
-          <h2 className="text-xl font-bold text-slate-900">
-            {currentStepMeta.label}
-          </h2>
+          <h2 className="text-xl font-bold text-slate-900">{currentStepMeta.label}</h2>
         </div>
 
         {submitError && (
@@ -326,80 +310,80 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
             animate="visible"
             exit="exit"
           >
-        {currentStep === 1 && (
-          <Step1General
-            defaultValues={{
-              tipoSalida: formData.tipoSalida,
-              disciplina: formData.disciplina,
-              temporada: formData.temporada,
-              nombreActividad: formData.nombreActividad,
-              ubicacionGeografica: formData.ubicacionGeografica,
-            }}
-            onSubmit={(data) => handleStepComplete(1, data)}
-          />
-        )}
-        {currentStep === 2 && (
-          <Step2Participants
-            defaultValues={{
-              esRegistroHistorico: formData.esRegistroHistorico ?? false,
-              fechaInicio: formData.fechaInicio,
-              horaInicio: formData.horaInicio,
-              fechaRetornoEstimada: formData.fechaRetornoEstimada,
-              horaRetornoEstimada: formData.horaRetornoEstimada,
-              horaAlerta: formData.horaAlerta,
-              avisosExternos: formData.avisosExternos,
-              retenCarabineros: formData.retenCarabineros ?? '',
-              nombreFamiliar: formData.nombreFamiliar ?? '',
-              telefonoFamiliar: formData.telefonoFamiliar ?? '',
-            }}
-            onSubmit={(data) => handleStepComplete(2, data)}
-            onBack={goBack}
-            isAdmin={isAdmin}
-          />
-        )}
-        {currentStep === 3 && (
-          <Step3HumanTeam
-            defaultValues={{
-              liderCordada: formData.liderCordada,
-              participantes: formData.participantes,
-              coordinacionGrupal: formData.coordinacionGrupal,
-              matrizRiesgos: formData.matrizRiesgos,
-            }}
-            onSubmit={(data) => handleStepComplete(3, data)}
-            onBack={goBack}
-            isAdmin={isAdmin}
-            onCreateIntegrante={onCreateIntegrante}
-          />
-        )}
-        {currentStep === 4 && (
-          <Step4Communications
-            defaultValues={{
-              mediosComunicacion: formData.mediosComunicacion,
-              idDispositivoFrecuencia: formData.idDispositivoFrecuencia,
-              equipoColectivo: formData.equipoColectivo,
-              equipoColectivoOtro: formData.equipoColectivoOtro,
-            }}
-            onSubmit={(data) => handleStepComplete(4, data)}
-            onBack={goBack}
-          />
-        )}
-        {currentStep === 5 && (
-          <Step5Status
-            defaultValues={{
-              pronosticoMeteorologico: formData.pronosticoMeteorologico,
-              riesgosIdentificados: formData.riesgosIdentificados,
-              riesgosOtro: formData.riesgosOtro,
-              planEvacuacion: formData.planEvacuacion,
-            }}
-            gpxFile={gpxFile}
-            pronosticoFile={pronosticoFile}
-            isSubmitting={isSubmitting}
-            onFileChange={setGpxFile}
-            onPronosticoFileChange={setPronosticoFile}
-            onSubmit={handleFinalSubmit}
-            onBack={goBack}
-          />
-        )}
+            {currentStep === 1 && (
+              <Step1General
+                defaultValues={{
+                  tipoSalida: formData.tipoSalida,
+                  disciplina: formData.disciplina,
+                  temporada: formData.temporada,
+                  nombreActividad: formData.nombreActividad,
+                  ubicacionGeografica: formData.ubicacionGeografica,
+                }}
+                onSubmit={(data) => handleStepComplete(1, data)}
+              />
+            )}
+            {currentStep === 2 && (
+              <Step2Participants
+                defaultValues={{
+                  esRegistroHistorico: formData.esRegistroHistorico ?? false,
+                  fechaInicio: formData.fechaInicio,
+                  horaInicio: formData.horaInicio,
+                  fechaRetornoEstimada: formData.fechaRetornoEstimada,
+                  horaRetornoEstimada: formData.horaRetornoEstimada,
+                  horaAlerta: formData.horaAlerta,
+                  avisosExternos: formData.avisosExternos,
+                  retenCarabineros: formData.retenCarabineros ?? '',
+                  nombreFamiliar: formData.nombreFamiliar ?? '',
+                  telefonoFamiliar: formData.telefonoFamiliar ?? '',
+                }}
+                onSubmit={(data) => handleStepComplete(2, data)}
+                onBack={goBack}
+                isAdmin={isAdmin}
+              />
+            )}
+            {currentStep === 3 && (
+              <Step3HumanTeam
+                defaultValues={{
+                  liderCordada: formData.liderCordada,
+                  participantes: formData.participantes,
+                  coordinacionGrupal: formData.coordinacionGrupal,
+                  matrizRiesgos: formData.matrizRiesgos,
+                }}
+                onSubmit={(data) => handleStepComplete(3, data)}
+                onBack={goBack}
+                isAdmin={isAdmin}
+                onCreateIntegrante={onCreateIntegrante}
+              />
+            )}
+            {currentStep === 4 && (
+              <Step4Communications
+                defaultValues={{
+                  mediosComunicacion: formData.mediosComunicacion,
+                  idDispositivoFrecuencia: formData.idDispositivoFrecuencia,
+                  equipoColectivo: formData.equipoColectivo,
+                  equipoColectivoOtro: formData.equipoColectivoOtro,
+                }}
+                onSubmit={(data) => handleStepComplete(4, data)}
+                onBack={goBack}
+              />
+            )}
+            {currentStep === 5 && (
+              <Step5Status
+                defaultValues={{
+                  pronosticoMeteorologico: formData.pronosticoMeteorologico,
+                  riesgosIdentificados: formData.riesgosIdentificados,
+                  riesgosOtro: formData.riesgosOtro,
+                  planEvacuacion: formData.planEvacuacion,
+                }}
+                gpxFile={gpxFile}
+                pronosticoFile={pronosticoFile}
+                isSubmitting={isSubmitting}
+                onFileChange={setGpxFile}
+                onPronosticoFileChange={setPronosticoFile}
+                onSubmit={handleFinalSubmit}
+                onBack={goBack}
+              />
+            )}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -409,11 +393,7 @@ export function WizardLayout({ onDone, onCancel, onCreateIntegrante, isAdmin }: 
           origin={revealOrigin}
           status={revealStatus}
           title="¡Listo!"
-          detail={
-            numeroSalida !== null
-              ? `Salida N° ${numeroSalida} registrada`
-              : 'Salida registrada'
-          }
+          detail={numeroSalida !== null ? `Salida N° ${numeroSalida} registrada` : 'Salida registrada'}
           savingLabel="Guardando salida…"
           onFinished={onDone}
           onRetracted={() => {

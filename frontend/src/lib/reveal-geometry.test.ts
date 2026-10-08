@@ -10,12 +10,7 @@ function reachedRadius(scale: number): number {
 
 /** Distancia real del origen a cada esquina del viewport. */
 function cornerDistances(x: number, y: number, w: number, h: number): number[] {
-  return [
-    Math.hypot(x, y),
-    Math.hypot(w - x, y),
-    Math.hypot(x, h - y),
-    Math.hypot(w - x, h - y),
-  ]
+  return [Math.hypot(x, y), Math.hypot(w - x, y), Math.hypot(x, h - y), Math.hypot(w - x, h - y)]
 }
 
 describe('coverScale', () => {

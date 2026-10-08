@@ -51,7 +51,11 @@ class FakeFile implements GcsFileLike {
       throw Object.assign(new Error('Not Found'), { code: 404 });
     }
     return [
-      { contentType: this.writeStreamOptions?.contentType, size: String(Buffer.concat(this.chunks).length), etag: `etag-${this.key}` },
+      {
+        contentType: this.writeStreamOptions?.contentType,
+        size: String(Buffer.concat(this.chunks).length),
+        etag: `etag-${this.key}`,
+      },
       {},
     ];
   }
@@ -89,7 +93,11 @@ function buildStorage(): { storage: ReturnType<typeof createGcsStorage>; bucket:
 describe('createGcsStorage', () => {
   it('upload canaliza a través del SizeGuard y pasa resumable/contentType', async () => {
     const { storage, bucket } = buildStorage();
-    await storage.upload(streamOf('contenido'), { key: 'orgs/a/gpx/1.gpx', contentType: 'application/gpx+xml', maxBytes: 1024 });
+    await storage.upload(streamOf('contenido'), {
+      key: 'orgs/a/gpx/1.gpx',
+      contentType: 'application/gpx+xml',
+      maxBytes: 1024,
+    });
 
     const file = bucket.file('orgs/a/gpx/1.gpx');
     assert.deepEqual(file.writeStreamOptions, { resumable: true, contentType: 'application/gpx+xml' });
@@ -174,7 +182,11 @@ describe('createGcsStorage', () => {
 
   it('readMetadata devuelve contentType/size/etag de un objeto subido', async () => {
     const { storage, bucket } = buildStorage();
-    await storage.upload(streamOf('logo-bytes'), { key: 'orgs/a/logo/1.png', contentType: 'image/png', maxBytes: 1024 });
+    await storage.upload(streamOf('logo-bytes'), {
+      key: 'orgs/a/logo/1.png',
+      contentType: 'image/png',
+      maxBytes: 1024,
+    });
 
     const metadata = await storage.readMetadata('orgs/a/logo/1.png');
     assert.deepEqual(metadata, {
@@ -191,7 +203,11 @@ describe('createGcsStorage', () => {
 
   it('createReadStream devuelve los bytes subidos', async () => {
     const { storage } = buildStorage();
-    await storage.upload(streamOf('logo-bytes'), { key: 'orgs/a/logo/1.png', contentType: 'image/png', maxBytes: 1024 });
+    await storage.upload(streamOf('logo-bytes'), {
+      key: 'orgs/a/logo/1.png',
+      contentType: 'image/png',
+      maxBytes: 1024,
+    });
 
     const chunks: Buffer[] = [];
     for await (const chunk of storage.createReadStream('orgs/a/logo/1.png')) chunks.push(chunk as Buffer);

@@ -1,7 +1,8 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import type { Route } from '@playwright/test'
 import {
   setAuth,
+  mockMe,
   mockNoIntegrante,
   mockHasIntegrante,
   mockSalidas,
@@ -114,7 +115,9 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
     expect(aceptarLlamado).toBe(false)
   })
 
-  test('cuenta existente: pide solo la contraseña, se une al club y aterriza en /<slug> del club nuevo (no del club primario)', async ({ page }) => {
+  test('cuenta existente: pide solo la contraseña, se une al club y aterriza en /<slug> del club nuevo (no del club primario)', async ({
+    page,
+  }) => {
     await page.route(
       '**/api/auth/invitaciones/consultar',
       mockConsultarInvitacion(200, {
@@ -132,19 +135,25 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
         json: { message: 'Te uniste al club. Ya puedes iniciar sesión.', email: 'existente@example.com' },
       })
     })
+    // El login SIEMPRE devuelve el club PRIMARIO de la cuenta (Pamir en
+    // este fixture) — nunca el club recién unido (Ruling 1 del plan de
+    // esta PR): esto prueba que la pantalla NO confía en este valor para
+    // decidir a dónde navegar.
+    const usuarioExistente = {
+      id: 'user-existente-001',
+      email: 'existente@example.com',
+      name: 'Existente',
+      rol: 'SOCIO',
+      gestorCategorias: [],
+      organization: PAMIR_ORG,
+      clubes: [],
+    }
     await page.route('**/api/auth/login', (route) => {
-      void route.fulfill({
-        status: 200,
-        // El login SIEMPRE devuelve el club PRIMARIO de la cuenta (Pamir en
-        // este fixture) — nunca el club recién unido (Ruling 1 del plan de
-        // esta PR): esto prueba que la pantalla NO confía en este valor para
-        // decidir a dónde navegar.
-        json: {
-          user: { id: 'user-existente-001', email: 'existente@example.com', name: 'Existente', rol: 'SOCIO', gestorCategorias: [], organization: PAMIR_ORG, clubes: [] },
-          token: 'mock-jwt-existente',
-        },
-      })
+      void route.fulfill({ status: 200, json: { user: usuarioExistente, token: 'mock-jwt-existente' } })
     })
+    // La página a la que aterriza el login (/el-montanista) lee su sesión y sus salidas.
+    await mockMe(page, usuarioExistente)
+    await mockSalidas(page, [])
 
     await page.goto('/el-montanista#invite=tokExistente')
 
@@ -181,10 +190,14 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
     await page.getByRole('textbox', { name: 'Contraseña', exact: true }).fill('claveIncorrecta')
     await page.getByRole('button', { name: 'Iniciar sesión y unirme' }).click()
 
-    await expect(page.getByText('Ya tienes una cuenta con este correo. Verifica tu contraseña e inténtalo de nuevo.')).toBeVisible()
+    await expect(
+      page.getByText('Ya tienes una cuenta con este correo. Verifica tu contraseña e inténtalo de nuevo.'),
+    ).toBeVisible()
   })
 
-  test('cuenta existente: sin club resuelto en la invitación, no permite aceptar y muestra error neutral', async ({ page }) => {
+  test('cuenta existente: sin club resuelto en la invitación, no permite aceptar y muestra error neutral', async ({
+    page,
+  }) => {
     await page.route(
       '**/api/auth/invitaciones/consultar',
       mockConsultarInvitacion(200, {
@@ -204,7 +217,9 @@ test.describe('Aceptar invitación (usuario no autenticado)', () => {
 
     await page.goto('/el-montanista#invite=tokSinClub')
 
-    await expect(page.getByText('No pudimos identificar el club de esta invitación. Pide una nueva invitación.')).toBeVisible()
+    await expect(
+      page.getByText('No pudimos identificar el club de esta invitación. Pide una nueva invitación.'),
+    ).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Contraseña', exact: true })).toBeDisabled()
     await expect(page.getByRole('button', { name: 'Iniciar sesión y unirme' })).toBeDisabled()
 
@@ -248,7 +263,7 @@ test.describe('Invitar — LIDER', () => {
       if (route.request().method() === 'GET') {
         void route.fulfill({ status: 200, json: { invitaciones: [] } })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
 
@@ -261,7 +276,9 @@ test.describe('Invitar — LIDER', () => {
     await expect(page.getByText('Se invitará como Socio.')).toBeVisible()
   })
 
-  test('invita por email; cuando el correo no se envía, ofrece copiar el enlace y la invitación queda en la lista', async ({ page }) => {
+  test('invita por email; cuando el correo no se envía, ofrece copiar el enlace y la invitación queda en la lista', async ({
+    page,
+  }) => {
     let invitaciones: unknown[] = []
     await page.route('**/api/invitaciones', async (route) => {
       const req = route.request()
@@ -289,7 +306,7 @@ test.describe('Invitar — LIDER', () => {
         })
         return
       }
-      await route.continue()
+      await route.fallback()
     })
 
     await page.goto('/')
@@ -298,9 +315,7 @@ test.describe('Invitar — LIDER', () => {
     await page.getByLabel('Email').fill('candidato@example.com')
     await page.getByRole('button', { name: 'Enviar invitación' }).click()
 
-    await expect(
-      page.getByText('No se pudo enviar el correo. Comparte el enlace manualmente.'),
-    ).toBeVisible()
+    await expect(page.getByText('No se pudo enviar el correo. Comparte el enlace manualmente.')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Copiar enlace' })).toBeVisible()
     await expect(page.getByRole('cell', { name: 'candidato@example.com', exact: true })).toBeVisible()
     // El QR codifica el mismo enlace de un solo uso que ya se muestra arriba.
@@ -349,7 +364,7 @@ test.describe('Panel de Administración — usuarios e invitaciones', () => {
       if (route.request().method() === 'GET') {
         void route.fulfill({ status: 200, json: { invitaciones: [] } })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
   })
@@ -379,7 +394,7 @@ test.describe('Panel de Administración — usuarios e invitaciones', () => {
           ],
         })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
 

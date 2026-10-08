@@ -3,13 +3,20 @@ import assert from 'node:assert/strict';
 import { parseTenantArgs } from './tenant-args.js';
 
 const CREATE_VALIDO = [
-  '--slug', 'el-montanista',
-  '--name', 'Club El Montañista',
-  '--membresia', 'SOCIO_EL_MONTANISTA',
-  '--alert-email', 'alertas@elmontanista.cl',
-  '--contact-name', 'Contacto Club',
-  '--contact-email', 'contacto@elmontanista.cl',
-  '--admin-email', 'admin@elmontanista.cl',
+  '--slug',
+  'el-montanista',
+  '--name',
+  'Club El Montañista',
+  '--membresia',
+  'SOCIO_EL_MONTANISTA',
+  '--alert-email',
+  'alertas@elmontanista.cl',
+  '--contact-name',
+  'Contacto Club',
+  '--contact-email',
+  'contacto@elmontanista.cl',
+  '--admin-email',
+  'admin@elmontanista.cl',
 ];
 
 describe('parseTenantArgs — comando desconocido', () => {
@@ -67,13 +74,20 @@ describe('parseTenantArgs — create', () => {
   it('normaliza el slug y los emails a minúsculas, y recorta espacios', () => {
     const result = parseTenantArgs([
       'create',
-      '--slug', '  El-Montanista  ',
-      '--name', 'Club El Montañista',
-      '--membresia', 'SOCIO_EL_MONTANISTA',
-      '--alert-email', '  Alertas@ElMontanista.cl  ',
-      '--contact-name', 'Contacto Club',
-      '--contact-email', 'Contacto@ElMontanista.cl',
-      '--admin-email', 'Admin@ElMontanista.cl',
+      '--slug',
+      '  El-Montanista  ',
+      '--name',
+      'Club El Montañista',
+      '--membresia',
+      'SOCIO_EL_MONTANISTA',
+      '--alert-email',
+      '  Alertas@ElMontanista.cl  ',
+      '--contact-name',
+      'Contacto Club',
+      '--contact-email',
+      'Contacto@ElMontanista.cl',
+      '--admin-email',
+      'Admin@ElMontanista.cl',
     ]);
     assert.equal(result.success, true);
     if (result.success && result.data.command === 'create') {
@@ -85,7 +99,13 @@ describe('parseTenantArgs — create', () => {
   });
 
   for (const flag of [
-    '--slug', '--name', '--membresia', '--alert-email', '--contact-name', '--contact-email', '--admin-email',
+    '--slug',
+    '--name',
+    '--membresia',
+    '--alert-email',
+    '--contact-name',
+    '--contact-email',
+    '--admin-email',
   ]) {
     it(`rechaza "create" sin ${flag}`, () => {
       const args = [...CREATE_VALIDO];
@@ -130,8 +150,18 @@ describe('parseTenantArgs — create', () => {
   });
 
   for (const slugReservado of [
-    'iso-test-foo', 'ISO-TEST-FOO', 'platform', 'plataforma', 'admin', 'api', 'www', 'app', 'riala',
-    'assets', 'auth', 'brand',
+    'iso-test-foo',
+    'ISO-TEST-FOO',
+    'platform',
+    'plataforma',
+    'admin',
+    'api',
+    'www',
+    'app',
+    'riala',
+    'assets',
+    'auth',
+    'brand',
   ]) {
     it(`rechaza el slug reservado "${slugReservado}"`, () => {
       const args = [...CREATE_VALIDO];
@@ -190,7 +220,8 @@ describe('parseTenantArgs — invite', () => {
   it('camino feliz', () => {
     const result = parseTenantArgs(['invite', '--slug', 'pamir', '--admin-email', 'admin@pamir.cl']);
     assert.equal(result.success, true);
-    if (result.success) assert.deepEqual(result.data, { command: 'invite', slug: 'pamir', adminEmail: 'admin@pamir.cl' });
+    if (result.success)
+      assert.deepEqual(result.data, { command: 'invite', slug: 'pamir', adminEmail: 'admin@pamir.cl' });
   });
 
   it('normaliza slug y email', () => {
@@ -238,10 +269,14 @@ describe('parseTenantArgs — update', () => {
   it('varios campos a la vez', () => {
     const result = parseTenantArgs([
       'update',
-      '--slug', 'pamir',
-      '--name', 'Nuevo Nombre',
-      '--contact-name', 'Nuevo Contacto',
-      '--contact-email', 'nuevo@pamir.cl',
+      '--slug',
+      'pamir',
+      '--name',
+      'Nuevo Nombre',
+      '--contact-name',
+      'Nuevo Contacto',
+      '--contact-email',
+      'nuevo@pamir.cl',
     ]);
     assert.equal(result.success, true);
     if (result.success && result.data.command === 'update') {
@@ -314,9 +349,12 @@ describe('parseTenantArgs — update', () => {
   it('normaliza el slug y los emails a minúsculas, y recorta espacios', () => {
     const result = parseTenantArgs([
       'update',
-      '--slug', '  PAMIR  ',
-      '--contact-email', '  Nuevo@Pamir.cl  ',
-      '--alert-email', '  Alertas@Pamir.cl  ',
+      '--slug',
+      '  PAMIR  ',
+      '--contact-email',
+      '  Nuevo@Pamir.cl  ',
+      '--alert-email',
+      '  Alertas@Pamir.cl  ',
     ]);
     assert.equal(result.success, true);
     if (result.success && result.data.command === 'update') {

@@ -42,7 +42,17 @@ describe('parseCreateUserArgs', () => {
   });
 
   it('parses --rol ADMIN and --force', () => {
-    const result = parseCreateUserArgs(['--email', 'a@b.com', '--name', 'Ada', '--rol', 'ADMIN', '--force', '--org', 'pamir']);
+    const result = parseCreateUserArgs([
+      '--email',
+      'a@b.com',
+      '--name',
+      'Ada',
+      '--rol',
+      'ADMIN',
+      '--force',
+      '--org',
+      'pamir',
+    ]);
     assert.equal(result.success, true);
     if (result.success) {
       assert.equal(result.data.rol, 'ADMIN');

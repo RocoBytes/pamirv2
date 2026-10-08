@@ -352,7 +352,11 @@ describe('purgeAllDrafts', () => {
     )
     saveDraft({ nombreActividad: 'Riala' }, storage, 'riala')
     saveDraftStep(4, storage, 'riala')
-    saveIntegrante({ id: 'int-riala', nombreCompleto: 'R', rut: '3-5', email: 'r@x.cl', createdAt: '' }, storage, 'riala')
+    saveIntegrante(
+      { id: 'int-riala', nombreCompleto: 'R', rut: '3-5', email: 'r@x.cl', createdAt: '' },
+      storage,
+      'riala',
+    )
 
     purgeAllDrafts(storage)
 
@@ -401,33 +405,33 @@ describe('purgeAllDrafts', () => {
 
 describe('decideDraftOwnership', () => {
   it('misma marca de dueño → keep', () => {
-    expect(
-      decideDraftOwnership({ storedOwnerId: 'user-a', previousAuthUserId: 'user-a', nextUserId: 'user-a' }),
-    ).toBe('keep')
+    expect(decideDraftOwnership({ storedOwnerId: 'user-a', previousAuthUserId: 'user-a', nextUserId: 'user-a' })).toBe(
+      'keep',
+    )
   })
 
   it('marca de dueño distinta → purge, sin importar previousAuthUserId', () => {
-    expect(
-      decideDraftOwnership({ storedOwnerId: 'user-a', previousAuthUserId: 'user-b', nextUserId: 'user-b' }),
-    ).toBe('purge')
+    expect(decideDraftOwnership({ storedOwnerId: 'user-a', previousAuthUserId: 'user-b', nextUserId: 'user-b' })).toBe(
+      'purge',
+    )
   })
 
   it('sin marca: mismo usuario que el último pamir_auth → keep', () => {
-    expect(
-      decideDraftOwnership({ storedOwnerId: null, previousAuthUserId: 'user-a', nextUserId: 'user-a' }),
-    ).toBe('keep')
+    expect(decideDraftOwnership({ storedOwnerId: null, previousAuthUserId: 'user-a', nextUserId: 'user-a' })).toBe(
+      'keep',
+    )
   })
 
   it('sin marca: usuario distinto al último pamir_auth → purge', () => {
-    expect(
-      decideDraftOwnership({ storedOwnerId: undefined, previousAuthUserId: 'user-a', nextUserId: 'user-b' }),
-    ).toBe('purge')
+    expect(decideDraftOwnership({ storedOwnerId: undefined, previousAuthUserId: 'user-a', nextUserId: 'user-b' })).toBe(
+      'purge',
+    )
   })
 
   it('sin marca y sin pamir_auth previo → purge (nunca se puede probar la misma titularidad)', () => {
-    expect(
-      decideDraftOwnership({ storedOwnerId: null, previousAuthUserId: undefined, nextUserId: 'user-a' }),
-    ).toBe('purge')
+    expect(decideDraftOwnership({ storedOwnerId: null, previousAuthUserId: undefined, nextUserId: 'user-a' })).toBe(
+      'purge',
+    )
   })
 })
 

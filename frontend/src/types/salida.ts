@@ -68,12 +68,7 @@ export interface AuthState {
 
 export type AvisoExterno = 'CARABINEROS' | 'SOCORRO_ANDINO' | 'FAMILIAR_OTRO'
 
-export type MedioComunicacion =
-  | 'RADIO_VHF_UHF'
-  | 'TELEFONO_SATELITAL'
-  | 'INREACH_SPOT'
-  | 'CELULAR'
-  | 'NINGUNO'
+export type MedioComunicacion = 'RADIO_VHF_UHF' | 'TELEFONO_SATELITAL' | 'INREACH_SPOT' | 'CELULAR' | 'NINGUNO'
 
 export type EquipoColectivoSeguridad =
   | 'CUERDAS'
@@ -95,10 +90,7 @@ export type RiesgoIdentificado =
   | 'CALOR_EXTREMO'
   | 'OTRO'
 
-export type TipoSalida =
-  | 'OFICIAL_CLUB'
-  | 'NO_OFICIAL'
-  | 'EXPEDICION_PARTICULAR'
+export type TipoSalida = 'OFICIAL_CLUB' | 'NO_OFICIAL' | 'EXPEDICION_PARTICULAR'
 
 export type Disciplina =
   | 'TREKKING'
@@ -111,13 +103,7 @@ export type Disciplina =
 
 export type Temporada = 'estival' | 'invernal'
 
-export type SalidaStatus =
-  | 'BORRADOR'
-  | 'CONFIRMADA'
-  | 'EN_CURSO'
-  | 'COMPLETADA'
-  | 'CANCELADA'
-  | 'INCIDENTE'
+export type SalidaStatus = 'BORRADOR' | 'CONFIRMADA' | 'EN_CURSO' | 'COMPLETADA' | 'CANCELADA' | 'INCIDENTE'
 
 export type MembresiaClub =
   | 'SOCIO_ANDINO_PAMIR'
@@ -362,10 +348,7 @@ export const EQUIPO_COLECTIVO_LABELS: Record<EquipoColectivoSeguridad, string> =
 
 // ─── Ficha de Cierre ──────────────────────────────────────────────────────────
 
-export type EstadoCierre =
-  | 'COMPLETADA_SEGUN_PLAN'
-  | 'COMPLETADA_CON_VARIACIONES'
-  | 'ABORTADA_INCOMPLETA'
+export type EstadoCierre = 'COMPLETADA_SEGUN_PLAN' | 'COMPLETADA_CON_VARIACIONES' | 'ABORTADA_INCOMPLETA'
 
 export type MotivoAbandono =
   | 'METEOROLOGIA'
@@ -495,4 +478,3 @@ export const DESEMPENO_EQUIPO_LABELS: Record<DesempenoEquipo, string> = {
   TODO_FUNCIONO: 'Todo funcionó correctamente',
   FALLO_EQUIPO: 'Algún equipamiento falló o se dañó',
 }
-

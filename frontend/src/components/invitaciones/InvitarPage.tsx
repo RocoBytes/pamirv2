@@ -34,7 +34,11 @@ export function InvitarPage({ rolActual, onBack, shell }: InvitarPageProps) {
         </p>
       </div>
 
-      <div role="tablist" aria-label="Forma de invitar" className="flex gap-1 mb-5 bg-surface-container-low rounded-xl p-1">
+      <div
+        role="tablist"
+        aria-label="Forma de invitar"
+        className="flex gap-1 mb-5 bg-surface-container-low rounded-xl p-1"
+      >
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -46,9 +50,7 @@ export function InvitarPage({ rolActual, onBack, shell }: InvitarPageProps) {
             onClick={() => setTab(key)}
             className={[
               'flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors',
-              tab === key
-                ? 'bg-white text-primary shadow-sm'
-                : 'text-on-surface-variant hover:text-slate-700',
+              tab === key ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant hover:text-slate-700',
             ].join(' ')}
           >
             <Icon size={15} aria-hidden="true" />

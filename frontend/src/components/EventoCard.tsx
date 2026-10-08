@@ -48,9 +48,7 @@ export function EventoCard({ evento, onClick }: EventoCardProps) {
               {evento.categoria.nombre}
             </span>
           )}
-          <span
-            className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_VISIBLE_COLORS[visible.tone]}`}
-          >
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_VISIBLE_COLORS[visible.tone]}`}>
             {visible.badge}
           </span>
           {evento.miInscripcion?.estado === 'POSTULADO' && (
@@ -60,9 +58,7 @@ export function EventoCard({ evento, onClick }: EventoCardProps) {
           )}
         </div>
 
-        <h3 className="font-semibold text-slate-900 text-base leading-tight mb-3">
-          {evento.titulo}
-        </h3>
+        <h3 className="font-semibold text-slate-900 text-base leading-tight mb-3">{evento.titulo}</h3>
 
         <div className="grid gap-1.5 text-xs text-on-surface-variant">
           {rango && (

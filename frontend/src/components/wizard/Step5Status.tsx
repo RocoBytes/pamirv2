@@ -1,4 +1,4 @@
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ChevronLeft, Send } from 'lucide-react'
@@ -27,9 +27,7 @@ const step5Schema = z.object({
     .trim()
     .min(1, 'Describe el pronóstico meteorológico')
     .max(1000, 'Máximo 1000 caracteres'),
-  riesgosIdentificados: z
-    .array(z.enum(RIESGOS))
-    .min(1, 'Selecciona al menos un riesgo'),
+  riesgosIdentificados: z.array(z.enum(RIESGOS)).min(1, 'Selecciona al menos un riesgo'),
   riesgosOtro: z.string().max(100, 'Máximo 100 caracteres'),
   planEvacuacion: z.string().max(1000, 'Máximo 1000 caracteres'),
 })
@@ -89,18 +87,11 @@ function CheckboxGroup<T extends string>({
                   : 'bg-white border-secondary/25 text-slate-700 hover:border-primary/40 hover:bg-surface-container-low',
               ].join(' ')}
             >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => toggle(opt)}
-                className="sr-only"
-              />
+              <input type="checkbox" checked={checked} onChange={() => toggle(opt)} className="sr-only" />
               <span
                 className={[
                   'flex items-center justify-center w-4 h-4 rounded border shrink-0 transition-colors',
-                  checked
-                    ? 'bg-primary border-primary'
-                    : 'bg-white border-secondary/50',
+                  checked ? 'bg-primary border-primary' : 'bg-white border-secondary/50',
                 ].join(' ')}
                 aria-hidden="true"
               >
@@ -160,14 +151,13 @@ export function Step5Status({
     register,
     control,
     handleSubmit,
-    watch,
     formState: { errors },
   } = useForm<Step5Data>({
     resolver: zodResolver(step5Schema),
     defaultValues,
   })
 
-  const riesgosSeleccionados = watch('riesgosIdentificados')
+  const riesgosSeleccionados = useWatch({ control, name: 'riesgosIdentificados' })
   const showOtroRiesgo = riesgosSeleccionados?.includes('OTRO')
 
   return (
@@ -187,12 +177,11 @@ export function Step5Status({
     >
       {/* Pronóstico Meteorológico (descripción obligatoria) */}
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="pronosticoMeteorologico"
-          className="text-sm font-semibold text-primary"
-        >
+        <label htmlFor="pronosticoMeteorologico" className="text-sm font-semibold text-primary">
           Pronóstico Meteorológico
-          <span className="text-error ml-1" aria-hidden="true">*</span>
+          <span className="text-error ml-1" aria-hidden="true">
+            *
+          </span>
         </label>
         <textarea
           id="pronosticoMeteorologico"
@@ -218,8 +207,7 @@ export function Step5Status({
       <FilePicker
         label={
           <>
-            Archivo del Pronóstico{' '}
-            <span className="text-on-surface-variant font-normal">(opcional)</span>
+            Archivo del Pronóstico <span className="text-on-surface-variant font-normal">(opcional)</span>
           </>
         }
         hint="Opcionalmente sube una foto o documento (PDF, JPG, PNG) del pronóstico meteorológico."
@@ -249,10 +237,7 @@ export function Step5Status({
 
         {showOtroRiesgo && (
           <div className="flex flex-col gap-1.5 pl-7">
-            <label
-              htmlFor="riesgosOtro"
-              className="text-xs font-semibold text-primary"
-            >
+            <label htmlFor="riesgosOtro" className="text-xs font-semibold text-primary">
               Especifica el riesgo
             </label>
             <input
@@ -278,12 +263,8 @@ export function Step5Status({
 
       {/* Plan de Evacuación / Ruta Alternativa */}
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="planEvacuacion"
-          className="text-sm font-semibold text-primary"
-        >
-          Plan de Evacuación / Ruta Alternativa{' '}
-          <span className="text-on-surface-variant font-normal">(opcional)</span>
+        <label htmlFor="planEvacuacion" className="text-sm font-semibold text-primary">
+          Plan de Evacuación / Ruta Alternativa <span className="text-on-surface-variant font-normal">(opcional)</span>
         </label>
         <textarea
           id="planEvacuacion"
@@ -309,8 +290,7 @@ export function Step5Status({
       <FilePicker
         label={
           <>
-            Archivo de Ruta GPX{' '}
-            <span className="text-on-surface-variant font-normal">(opcional)</span>
+            Archivo de Ruta GPX <span className="text-on-surface-variant font-normal">(opcional)</span>
           </>
         }
         hint="Selecciona un archivo .gpx desde tu dispositivo. Se subirá automáticamente al guardar la salida."
@@ -322,22 +302,11 @@ export function Step5Status({
 
       {/* Navigation */}
       <div className="flex justify-between pt-2">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onBack}
-          disabled={isSubmitting}
-        >
+        <Button type="button" variant="ghost" onClick={onBack} disabled={isSubmitting}>
           <ChevronLeft size={18} />
           Anterior
         </Button>
-        <Button
-          type="submit"
-          variant="primary"
-          size="lg"
-          loading={isSubmitting}
-          disabled={isSubmitting}
-        >
+        <Button type="submit" variant="primary" size="lg" loading={isSubmitting} disabled={isSubmitting}>
           <Send size={18} />
           Guardar salida
         </Button>

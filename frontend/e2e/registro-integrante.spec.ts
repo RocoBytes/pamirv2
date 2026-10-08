@@ -1,12 +1,6 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import type { Page } from '@playwright/test'
-import {
-  setAuth,
-  mockNoIntegrante,
-  mockSalidas,
-  mockCreateIntegrante,
-  MOCK_INTEGRANTE,
-} from './helpers'
+import { setAuth, mockNoIntegrante, mockSalidas, mockCreateIntegrante, MOCK_INTEGRANTE } from './helpers'
 
 async function goToRegistroIntegrante(page: Page) {
   await setAuth(page)
@@ -257,7 +251,7 @@ test.describe('RegistroIntegrante – flujo de éxito', () => {
         capturedBody = route.request().postDataJSON() as Record<string, unknown>
         void route.fulfill({ status: 201, json: MOCK_INTEGRANTE })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
 
@@ -291,15 +285,13 @@ test.describe('RegistroIntegrante – flujo de éxito', () => {
 })
 
 test.describe('RegistroIntegrante – error del servidor', () => {
-  test('un POST fallido deja al usuario en el wizard con el mensaje visible y sus datos intactos', async ({
-    page,
-  }) => {
+  test('un POST fallido deja al usuario en el wizard con el mensaje visible y sus datos intactos', async ({ page }) => {
     await goToRegistroIntegrante(page)
     await page.route('**/api/integrantes', (route) => {
       if (route.request().method() === 'POST') {
         void route.fulfill({ status: 500, json: { error: 'No se pudo registrar el integrante' } })
       } else {
-        void route.continue()
+        void route.fallback()
       }
     })
 
@@ -321,6 +313,71 @@ test.describe('RegistroIntegrante – error del servidor', () => {
     await page.getByRole('button', { name: 'Atrás' }).click()
     await expect(page.getByText('Paso 1 de 4')).toBeVisible()
     await expect(page.getByPlaceholder('Ej: Juan Andrés Pérez González')).toHaveValue('Dato Que No Se Pierde')
+  })
+})
+
+test.describe('RegistroIntegrante – revalidación en vivo', () => {
+  test('un error se limpia solo al corregir el campo, sin volver a tocar "Siguiente"', async ({ page }) => {
+    await goToRegistroIntegrante(page)
+    await siguiente(page)
+    const requeridos = page.getByText('Campo requerido')
+    await expect(requeridos.first()).toBeVisible()
+    const antes = await requeridos.count()
+    expect(antes).toBeGreaterThan(1)
+
+    await page.getByPlaceholder('Ej: Juan Andrés Pérez González').fill('María Paz López')
+    // Solo se va el error del campo corregido; los demás siguen visibles.
+    await expect(requeridos).toHaveCount(antes - 1)
+  })
+
+  test('pintar y corregir un error en cada paso no dispara "Maximum update depth exceeded"', async ({ page }) => {
+    // React solo avisa de un bucle de renderizado con console.error: no rompe
+    // nada a la vista (React corta el bucle), así que el único modo de
+    // atraparlo es escuchar la consola.
+    const loopErrors: string[] = []
+    page.on('console', (msg) => {
+      if (msg.type() === 'error' && msg.text().includes('Maximum update depth exceeded')) {
+        loopErrors.push(msg.text())
+      }
+    })
+
+    await goToRegistroIntegrante(page)
+
+    // En cada paso se pinta un error y luego se corrige: eso hace que el efecto
+    // de revalidación llame a clearErrors, que es justo lo que antes disparaba
+    // el bucle.
+    // Paso 1: formulario vacío.
+    await siguiente(page)
+    await expect(page.getByText('Campo requerido').first()).toBeVisible()
+    await fillStep1(page)
+    await expect(page.getByText('Campo requerido')).toHaveCount(0)
+    await siguiente(page)
+    await expectAtStep(page, 2)
+
+    // Paso 2: igual.
+    await siguiente(page)
+    await expect(page.getByText('Campo requerido').first()).toBeVisible()
+    await fillStep2(page)
+    await expect(page.getByText('Campo requerido')).toHaveCount(0)
+    await siguiente(page)
+    await expectAtStep(page, 3)
+
+    // Paso 3: "Sí" sin detalle lo exige; escribirlo limpia el error.
+    await fillStep3(page, { alergiasSi: true })
+    await siguiente(page)
+    await expect(page.getByText('Describe las alergias conocidas')).toBeVisible()
+    await page.getByPlaceholder(/Penicilina/i).fill('Penicilina')
+    await expect(page.getByText('Describe las alergias conocidas')).toHaveCount(0)
+    await siguiente(page)
+    await expectAtStep(page, 4)
+
+    // Paso 4: registrar sin aceptar las cláusulas las marca; aceptarlas limpia el error.
+    await page.getByRole('button', { name: /Registrar Integrante/i }).click()
+    await expect(page.getByText('Debes aceptar esta declaración para continuar')).toBeVisible()
+    await checkAllClauses(page)
+    await expect(page.getByText('Debes aceptar esta declaración para continuar')).toHaveCount(0)
+
+    expect(loopErrors).toEqual([])
   })
 })
 
