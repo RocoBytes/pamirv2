@@ -39,6 +39,16 @@ import { STATUS_LABELS } from '../../types/salida'
  * y contraste ≥3:1 contra la superficie clara): los seis checks en PASS.
  * El orden es FIJO — nunca se cicla ni se reasigna según cuántas series haya.
  */
+/*
+ * Recharts arranca cada ResponsiveContainer con un tamaño inicial de -1×-1 y, en
+ * su primer render, avisa por consola ("The width(-1) and height(-1) of chart
+ * should be greater than 0") antes de medir el contenedor, lo que hace justo
+ * después de montarlo. Un tamaño inicial positivo evita el aviso; el medido lo
+ * reemplaza de inmediato y es 1×1 a propósito, para que ese primer cuadro no
+ * dibuje nada visible.
+ */
+const CHART_INITIAL_DIMENSION = { width: 1, height: 1 }
+
 const CHART_COLORS = [
   '#3366d6', // azul
   '#e85400', // naranja
@@ -214,7 +224,7 @@ export const WIDGETS: WidgetDef[] = [
         .map((e) => ({ label: STATUS_LABEL[e.estado] ?? e.estado, total: e.total }))
       return (
         <ChartCard title="Salidas por estado" empty={estadoData.length === 0}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
             <PieChart>
               <Pie data={estadoData} dataKey="total" nameKey="label" innerRadius={55} outerRadius={85} paddingAngle={2}>
                 {estadoData.map((_, i) => (
@@ -237,7 +247,7 @@ export const WIDGETS: WidgetDef[] = [
       const mesData = (d.porMes ?? []).map((m) => ({ label: formatMes(m.mes), total: m.total }))
       return (
         <ChartCard title="Salidas por mes" empty={mesData.length === 0}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
             <LineChart data={mesData}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -262,7 +272,7 @@ export const WIDGETS: WidgetDef[] = [
       }))
       return (
         <ChartCard title="Incidentes y accidentes por mes" empty={incidentesData.length === 0}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
             <BarChart data={incidentesData}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -288,7 +298,7 @@ export const WIDGETS: WidgetDef[] = [
       ].filter((x) => x.total > 0)
       return (
         <ChartCard title="Participantes por tipo" empty={participantesData.length === 0}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
             <PieChart>
               <Pie
                 data={participantesData}
@@ -321,7 +331,7 @@ export const WIDGETS: WidgetDef[] = [
       }))
       return (
         <ChartCard title="Calidad de experiencia (distribución)" empty={d.calidad.totalRespuestas === 0}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
             <BarChart data={calidadDistData}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -345,7 +355,7 @@ export const WIDGETS: WidgetDef[] = [
       }))
       return (
         <ChartCard title="Evolución de la calidad" empty={calidadMesData.length === 0}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
             <LineChart data={calidadMesData}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -366,7 +376,7 @@ export const WIDGETS: WidgetDef[] = [
       const liderData = (d.porLider ?? []).map((l) => ({ lider: l.lider, total: l.total }))
       return (
         <ChartCard title="Salidas por líder" empty={liderData.length === 0}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
             <BarChart data={liderData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
               <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
@@ -393,7 +403,7 @@ export const WIDGETS: WidgetDef[] = [
       ]
       return (
         <ChartCard title="Comparación salida vs cierre" empty={salidaVsCierreData.every((x) => x.total === 0)}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" initialDimension={CHART_INITIAL_DIMENSION}>
             <BarChart data={salidaVsCierreData}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
               <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} />
