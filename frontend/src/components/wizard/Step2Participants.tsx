@@ -1,4 +1,4 @@
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowRight, ChevronLeft } from 'lucide-react'
@@ -166,17 +166,16 @@ export function Step2Participants({ defaultValues, onSubmit, onBack, isAdmin = f
     register,
     control,
     handleSubmit,
-    watch,
     formState: { errors },
   } = useForm<Step2Data>({
     resolver: zodResolver(step2Schema),
     defaultValues,
   })
 
-  const avisosSeleccionados = watch('avisosExternos') ?? []
+  const avisosSeleccionados = useWatch({ control, name: 'avisosExternos' }) ?? []
   const showCarabineros = avisosSeleccionados.includes('CARABINEROS')
   const showFamiliar = avisosSeleccionados.includes('FAMILIAR_OTRO')
-  const esHistorico = watch('esRegistroHistorico') ?? false
+  const esHistorico = useWatch({ control, name: 'esRegistroHistorico' }) ?? false
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">

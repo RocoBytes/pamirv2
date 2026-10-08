@@ -1,4 +1,4 @@
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowRight, ChevronLeft, X, UserPlus, UserCheck, Loader2, ChevronDown } from 'lucide-react'
@@ -427,14 +427,13 @@ export function Step3HumanTeam({ defaultValues, isAdmin, onSubmit, onBack, onCre
     handleSubmit,
     formState: { errors },
     setValue,
-    watch,
   } = useForm<Step3Data>({
     resolver: zodResolver(step3Schema),
     defaultValues,
   })
 
-  const participantes = watch('participantes')
-  const liderCordada = watch('liderCordada')
+  const participantes = useWatch({ control, name: 'participantes' })
+  const liderCordada = useWatch({ control, name: 'liderCordada' })
 
   function addParticipante(p: Participante) {
     if (!participantes.some((existing) => existing.rut === p.rut)) {

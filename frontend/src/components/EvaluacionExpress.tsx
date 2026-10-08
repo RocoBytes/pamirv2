@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -129,14 +129,13 @@ export function EvaluacionExpress({ token }: EvaluacionExpressProps) {
     control,
     register,
     handleSubmit,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<EvaluacionFormValues>({
     resolver: zodResolver(evaluacionSchema),
     defaultValues: { comentario: '' },
   })
 
-  const comentarioVal = watch('comentario') ?? ''
+  const comentarioVal = useWatch({ control, name: 'comentario' }) ?? ''
 
   useEffect(() => {
     fetchEvaluacion(token)

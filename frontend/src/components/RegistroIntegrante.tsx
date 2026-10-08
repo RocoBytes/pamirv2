@@ -1,4 +1,4 @@
-import { useForm, Controller, type FieldErrors } from 'react-hook-form'
+import { useForm, useWatch, Controller, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AnimatePresence, motion } from 'motion/react'
 import { ChevronLeft, User } from 'lucide-react'
@@ -350,7 +350,6 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
     register,
     control,
     handleSubmit,
-    watch,
     setValue,
     getValues,
     getFieldState,
@@ -360,10 +359,12 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
     formState: { errors, isSubmitting, isDirty },
   } = form
 
-  // Un solo watch() para TODOS los campos: alimenta tanto el render (los
+  // Valores de TODOS los campos: alimentan tanto el render (los
   // YesNoWithDetail de abajo leen de `values`) como el efecto de
-  // revalidación en vivo del paso actual, más abajo.
-  const values = watch()
+  // revalidación en vivo del paso actual, más abajo. useWatch (y no watch())
+  // porque el compilador de React no puede memoizar watch(); además, `values`
+  // solo cambia de identidad cuando el formulario notifica un cambio.
+  const values = useWatch({ control })
 
   // La ficha contiene datos médicos: el progreso del wizard vive SOLO EN
   // MEMORIA (el estado de React), nunca en localStorage/sessionStorage — a
@@ -409,10 +410,9 @@ export function RegistroIntegrante({ onBack, defaultEmail, onComplete }: Registr
   //
   // Solo llama a clearErrors() para un campo que TIENE un error pintado
   // (staleErrorFields): clearErrors notifica a todo el formulario aunque no
-  // haya nada que limpiar, y este efecto corre en cada render (`values` es un
-  // objeto nuevo cada vez) — antes, llamarlo para todo campo válido
-  // re-renderizaba, volvía a correr el efecto y repetía hasta "Maximum update
-  // depth exceeded".
+  // haya nada que limpiar, y `values` (useWatch) cambia de identidad con cada
+  // notificación — antes, llamarlo para todo campo válido re-renderizaba, volvía
+  // a correr este efecto y repetía hasta "Maximum update depth exceeded".
   useEffect(() => {
     for (const field of staleErrorFields(currentStep, values, (f) => getFieldState(f).error !== undefined)) {
       clearErrors(field)

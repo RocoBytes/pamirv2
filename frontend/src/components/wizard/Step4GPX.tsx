@@ -1,4 +1,4 @@
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ArrowRight, ChevronLeft } from 'lucide-react'
@@ -164,14 +164,13 @@ export function Step4Communications({
     control,
     register,
     handleSubmit,
-    watch,
     formState: { errors },
   } = useForm<Step4Data>({
     resolver: zodResolver(step4Schema),
     defaultValues,
   })
 
-  const equipoColectivo = watch('equipoColectivo')
+  const equipoColectivo = useWatch({ control, name: 'equipoColectivo' })
   const showOtroInput = equipoColectivo?.includes('OTRO')
 
   return (

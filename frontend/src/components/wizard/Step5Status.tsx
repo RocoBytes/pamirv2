@@ -1,4 +1,4 @@
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, useWatch, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { ChevronLeft, Send } from 'lucide-react'
@@ -160,14 +160,13 @@ export function Step5Status({
     register,
     control,
     handleSubmit,
-    watch,
     formState: { errors },
   } = useForm<Step5Data>({
     resolver: zodResolver(step5Schema),
     defaultValues,
   })
 
-  const riesgosSeleccionados = watch('riesgosIdentificados')
+  const riesgosSeleccionados = useWatch({ control, name: 'riesgosIdentificados' })
   const showOtroRiesgo = riesgosSeleccionados?.includes('OTRO')
 
   return (
