@@ -53,6 +53,9 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
+      # The Playwright specs and playwright.config.ts are not part of `tsc -b`
+      # (and so of `npm run build`): the Docker build context excludes them.
+      - run: npm run typecheck:e2e
       - run: npm test
       - run: npm run build
 

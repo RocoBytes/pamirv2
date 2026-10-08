@@ -22,7 +22,10 @@ export const EL_MONTANISTA_ORG = {
   membresiaPropia: 'SOCIO_EL_MONTANISTA',
 }
 
-interface MockUser {
+// A type alias, not an interface: only aliases are assignable to the
+// Record<string, unknown> that mockMe accepts (interfaces lack the implicit
+// index signature).
+type MockUser = {
   id: string
   email: string
   name: string

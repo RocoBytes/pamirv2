@@ -127,7 +127,7 @@ test.describe('Documentación del Club – página', () => {
 // La capacidad ya existía en el Panel de Administración; acá se verifica que
 // además esté donde el admin la necesita, y que siga cerrada para quien no lo es.
 test.describe('Documentación – gestión desde la pantalla', () => {
-  async function abrirDocumentos(page: Page, user: Record<string, unknown>) {
+  async function abrirDocumentos(page: Page, user: typeof MOCK_USER) {
     await setAuth(page, user)
     await mockMe(page, user)
     await mockHasIntegrante(page)
